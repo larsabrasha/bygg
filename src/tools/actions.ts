@@ -1,6 +1,14 @@
 import { faceBounds, faceFrame, GROUND_FRAME, rotateFrame, toLocal2D, toWorld } from '../model/frame'
 import { isConstant } from '../model/expr'
-import { bodyCenter, bodyExtents, circleRect, pushPullMin, rectFromCorners, rectSize } from '../model/geometry'
+import {
+  bodyCenter,
+  bodyExtents,
+  circleRect,
+  faceAxis,
+  pushPullMin,
+  rectFromCorners,
+  rectSize,
+} from '../model/geometry'
 import { evaluateIn } from '../model/params'
 import { rulerPointOn, type RulerPoint } from '../model/ruler'
 import { resolveBodies } from '../model/resolve'
@@ -14,7 +22,7 @@ import {
   snapValue,
   type PlaneTargets,
 } from '../model/snapping'
-import type { Body, DimExprs, Face, Frame, Rect, Vec2, Vec3 } from '../model/types'
+import type { Body, DimExpr, DimExprs, Face, Frame, Rect, Vec2, Vec3 } from '../model/types'
 import { arrowDir, isHeadOn } from '../model/arrowDir'
 import { add, closestParamOnLine, cross, dot, length, scale, sub } from '../model/vec'
 import { useDocumentStore, type Selection } from '../store/documentStore'
@@ -28,6 +36,7 @@ import {
   type LastOp,
   type MoveOp,
   type Op,
+  type PushPullOp,
   type PushPullTarget,
   type RectOp,
   type RotateOp,
@@ -608,7 +617,7 @@ export function moveDeltaWorld(op: Extract<Op, { kind: 'move' }>): Vec3 {
 }
 
 /** Avslutar operationen med nuvarande förhandsvisning. */
-export function commit(op: Op | null = tools().op, exprs: { dims?: DimExprs; depth?: string } = {}) {
+export function commit(op: Op | null = tools().op, exprs: { dims?: DimExprs; depth?: string; dim?: DimExpr } = {}) {
   if (!op) return
   const d = docs()
   const before = d.doc
@@ -627,7 +636,7 @@ export function commit(op: Op | null = tools().op, exprs: { dims?: DimExprs; dep
     else if (step?.kind === 'rotate') d.rotateInstance(op.instanceId, step.center, step.axis, step.degrees)
   } else {
     if (op.target.kind === 'sketch') d.pushPullSketch(op.target.id, op.distance, exprs.depth, op.mode)
-    else d.pushPullBody(op.target.id, op.target.face, op.distance)
+    else d.pushPullBody(op.target.id, op.target.face, op.distance, exprs.dim)
     if (op.distance !== 0 && docs().doc !== before) {
       tools().setLastPushPull({ distance: op.distance, ...(exprs.depth && { expr: exprs.depth }) })
       // Efter en utdragning är man i Välj, med delen vald: ett tryck utanför avmarkerar i
@@ -755,6 +764,7 @@ export function repeatLastPushPull(): boolean {
   if (op?.kind !== 'pushpull' || !lastPushPull) return false
   if (lastPushPull.distance < (op.min ?? -Infinity)) return false
   commit({ ...op, distance: lastPushPull.distance }, { depth: lastPushPull.expr })
+  markSaved()
   return true
 }
 
@@ -825,6 +835,18 @@ export function liveMeasure(op: Op): number[] {
  * Returnerar false om något fält inte går att beräkna.
  */
 export function applyMeasure(): boolean {
+  const done = applyMeasureNow()
+  if (done) markSaved()
+  return done
+}
+
+/** Senaste operationen avslutades med en knapp (OK, Enter, Som förra), inte ett drag: måttrutan stängs. */
+function markSaved() {
+  const last = tools().lastOp
+  if (last) tools().setLastOp({ ...last, saved: true })
+}
+
+function applyMeasureNow(): boolean {
   const { op, measure } = tools()
   const { params } = docs().doc
   if (!op) {
@@ -891,8 +913,65 @@ export function applyMeasure(): boolean {
     return true
   }
 
-  const distance = signed(measure[0], value, Math.sign(op.distance))
-  if (distance < (op.min ?? -Infinity)) return false
-  commit({ ...op, distance }, { depth: exprOf(measure[0]) })
+  // En sida på en del: ett tal utan tecken är hela måttet längs sidans axel (det man vill att
+  // delen ska bli), med + eller − en ändring (se typedPushPull). Tomt: som man dragit.
+  const text = measure[0].trim()
+  const base = op.target.kind === 'body' ? (faceDimension(op.target)?.extent ?? null) : null
+  const typed = text === '' ? { distance: op.distance, total: null, whole: false } : typedPushPull(op, text, base)
+  if (!typed || typed.distance < (op.min ?? -Infinity)) return false
+  if (typed.whole && op.target.kind === 'body') {
+    // Sidan man drog i flyttas; den motsatta står kvar. En parameter styr sedan måttet.
+    const anchor = op.target.face[1] === '+' ? 'min' : 'max'
+    commit({ ...op, distance: typed.distance }, isConstant(text) ? {} : { dim: { expr: text, anchor } })
+    return true
+  }
+  commit({ ...op, distance: typed.distance }, { depth: exprOf(measure[0]) })
   return true
+}
+
+/**
+ * Vad ett skrivet mått blir för en push/pull. Med + eller − först är det en
+ * ändring; annars, för en sida på en del (base = måttet längs sidans axel före),
+ * hela måttet efteråt, och för en skiss djupet åt det håll man dragit.
+ * distance = hur långt ytan flyttas, total = måttet efteråt (null för en skiss).
+ * Null om texten inte går att räkna ut.
+ */
+export function typedPushPull(
+  op: Pick<PushPullOp, 'distance'>,
+  text: string,
+  base: number | null,
+): { distance: number; total: number | null; whole: boolean } | null {
+  const t = text.trim()
+  const r = t === '' ? null : evaluateIn(t, docs().doc.params)
+  if (!r?.ok) return null
+  const whole = base !== null && !/^[+\-−]/.test(t)
+  const distance = whole
+    ? Math.abs(r.value) - base
+    : /^\+/.test(t)
+      ? Math.abs(r.value)
+      : /^[-−]/.test(t)
+        ? r.value
+        : (Math.sign(op.distance) || 1) * Math.abs(r.value)
+  return { distance, total: base === null ? null : base + distance, whole }
+}
+
+/**
+ * Måttet längs axeln för en sida på en del, i dokumentet som det är (före en
+ * pågående push/pull), och vad det heter i kaplistan: längd, bredd eller tjocklek
+ * (diameter för en cylinders runda sida).
+ */
+export function faceDimension(target: { id: string; face: Face }): { label: string; extent: number } | null {
+  const b = findBody(target.id)
+  if (!b) return null
+  const axis = faceAxis(target.face)
+  const extent = bodyExtents(b)[axis === 'u' ? 0 : axis === 'v' ? 1 : 2]
+  const label =
+    b.shape === 'circle' && axis !== 'n'
+      ? 'Diameter'
+      : axis === b.grainAxis
+        ? 'Längd'
+        : axis === b.thicknessAxis
+          ? 'Tjocklek'
+          : 'Bredd'
+  return { label, extent }
 }

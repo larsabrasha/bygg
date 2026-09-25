@@ -18,10 +18,14 @@ import { useLibraryStore } from './store/libraryStore'
 import { useViewStore } from './store/viewStore'
 import { useShortcuts } from './tools/useShortcuts'
 import { usePenFieldGuard } from './panel/usePenFieldGuard'
+import { useKeyboardInset } from './panel/useKeyboardInset'
+import { usePreventPageZoom } from './panel/usePreventPageZoom'
 
 export function App() {
   useShortcuts()
   usePenFieldGuard()
+  useKeyboardInset()
+  usePreventPageZoom()
   const screen = useLibraryStore((s) => s.screen)
   const panelOpen = useViewStore((s) => s.panelOpen)
   const focusMode = useViewStore((s) => s.focusMode)
@@ -32,9 +36,11 @@ export function App() {
           Vid utskrift döljs appen och bara kaplistan skrivs ut. */}
       {/* inert: under startvyn går 3D-vyns knappar inte att nå med Tab eller skärmläsare. */}
       {/* Dold detaljpanel (bara bred skärm): 3D-vyn tar hela bredden. Fokusläge: bara 3D-vyn. */}
+      {/* --keyboard: tangentbordet på iPhone och iPad (useKeyboardInset); appen blir lägre, så att det
+          som ligger längst ner (måttrutan, bladet) hamnar ovanför det. */}
       <div
         inert={screen === 'gallery'}
-        className={`grid h-dvh print:hidden ${
+        className={`grid h-[calc(100dvh-var(--keyboard,0px))] print:hidden ${
           focusMode
             ? "grid-cols-[minmax(0,1fr)] grid-rows-[minmax(0,1fr)] [grid-template-areas:'viewport']"
             : `grid-rows-[auto_minmax(0,1fr)] narrow:grid-cols-[minmax(0,1fr)] narrow:grid-rows-[auto_minmax(0,1fr)_auto] narrow:[grid-template-areas:'toolbar''viewport''sidebar'] ${

@@ -127,6 +127,11 @@ export interface LastOp {
   op: Op
   doc: ModelDocument
   selection: Selection | null
+  /**
+   * Avslutad med OK, Enter eller Som förra: då stängs måttrutan. Efter ett drag
+   * ligger den kvar med värdet, så att man kan skriva ett exakt mått i stället.
+   */
+  saved?: boolean
 }
 
 /** Var första hörnet skulle hamna (rektangelverktyget, bara mus). */

@@ -22,6 +22,7 @@ import { resolveBodies } from '../model/resolve'
 import type {
   Axis,
   Combine,
+  DimExpr,
   DimExprs,
   Face,
   Frame,
@@ -63,7 +64,8 @@ interface DocumentState extends Snapshot {
   /** Drar ut en skiss till en ny del. Skissen försvinner. Returnerar kopians id. */
   pushPullSketch: (sketchId: string, distance: number, depthExpr?: string, mode?: SketchMode) => string | null
   /** Flyttar en sida på en del (och alla dess kopior). False om resultatet blir ogiltigt. */
-  pushPullBody: (instanceId: string, face: Face, distance: number) => boolean
+  /** dim: måttet längs sidans axel ska styras av ett uttryck (hela måttet skrevs som en parameter). */
+  pushPullBody: (instanceId: string, face: Face, distance: number, dim?: DimExpr) => boolean
   moveInstance: (instanceId: string, delta: Vec3) => void
   /** Vrider en kopia degrees grader runt en axel (enhetsvektor) genom center. */
   rotateInstance: (instanceId: string, center: Vec3, axis: Vec3, degrees: number) => void
@@ -256,12 +258,13 @@ export const useDocumentStore = create<DocumentState>()((set, get) => {
       return instance.id
     },
 
-    pushPullBody: (instanceId, face, distance) => {
+    pushPullBody: (instanceId, face, distance, dim) => {
       const found = findInstance(instanceId)
       const next = found && pushPullBody(found.def, face, distance)
       if (!next) return false
-      // Handpåläggning vinner: axeln slutar styras av sitt uttryck.
-      const def = withDims(next, withoutAxis(next.dims, faceAxis(face), next))
+      // Handpåläggning vinner: axeln slutar styras av sitt uttryck, om man inte skrev ett nytt.
+      const rest = withoutAxis(next.dims, faceAxis(face), next)
+      const def = withDims(next, dim ? { ...rest, [faceAxis(face)]: dim } : rest)
       // Flyttas hörnet närmast origo (sidan närmast origo, eller en cylinder som
       // blir tjockare åt båda håll), slutar läget längs den axeln att styras av
       // sitt uttryck, annars skulle delen flytta tillbaka och växa åt andra hållet.

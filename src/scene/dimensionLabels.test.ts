@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { GROUND_FRAME } from '../model/frame'
 import type { ModelDocument } from '../model/types'
 import type { PushPullOp } from '../store/toolStore'
-import { dimensionsFor } from './dimensionLabels'
+import { dimensionsFor, shownDimensionsOf } from './dimensionLabels'
 
 const doc: ModelDocument = {
   sketches: [],
@@ -23,8 +23,14 @@ const doc: ModelDocument = {
 }
 
 describe('dimensionsFor', () => {
-  it('visar måtten för den valda delen i Välj', () => {
-    expect(dimensionsFor(doc, { kind: 'body', id: 'i1' }, 'select', null)?.def.id).toBe('d1')
+  it('visar inga mått när en del bara är vald, utom med måtten påslagna', () => {
+    expect(dimensionsFor(doc, null)).toBeNull()
+    expect(dimensionsFor(doc, null, 'i1')).toMatchObject({ live: false, changing: null, def: { id: 'd1' } })
+    // Knappen gäller i Välj, när inget pågår.
+    expect(shownDimensionsOf(true, 'select', null, { kind: 'body', id: 'i1' })).toBe('i1')
+    expect(shownDimensionsOf(false, 'select', null, { kind: 'body', id: 'i1' })).toBeNull()
+    expect(shownDimensionsOf(true, 'move', null, { kind: 'body', id: 'i1' })).toBeNull()
+    expect(shownDimensionsOf(true, 'select', null, { kind: 'sketch', id: 's1' })).toBeNull()
   })
 
   it('visar delen som den blir under push/pull, med axeln som ändras', () => {
@@ -38,7 +44,7 @@ describe('dimensionsFor', () => {
       distance: 200,
       onTarget: false,
     } satisfies PushPullOp
-    const t = dimensionsFor(doc, null, 'pushpull', op)
+    const t = dimensionsFor(doc, op)
     expect(t).toMatchObject({ live: true, changing: 'u', body: { profile: { x1: 1000 } } })
   })
 
@@ -57,15 +63,12 @@ describe('dimensionsFor', () => {
       distance: 18,
       onTarget: false,
     } satisfies PushPullOp
-    const t = dimensionsFor(withSketch, { kind: 'sketch', id: 's1' }, 'select', op)
+    const t = dimensionsFor(withSketch, op)
     expect(t).toMatchObject({ live: true, changing: 'n', body: { z1: 18 } })
   })
 
-  it('visar inga mått i andra verktyg, under en operation eller för en skiss', () => {
-    expect(dimensionsFor(doc, { kind: 'body', id: 'i1' }, 'move', null)).toBeNull()
-    expect(dimensionsFor(doc, { kind: 'sketch', id: 's1' }, 'select', null)).toBeNull()
-    expect(dimensionsFor(doc, null, 'select', null)).toBeNull()
+  it('visar inga mått under andra operationer', () => {
     const op = { kind: 'rotate', instanceId: 'i1', axis: 1, plane: GROUND_FRAME, radius: 1, grab: 0, angle: 0 } as const
-    expect(dimensionsFor(doc, { kind: 'body', id: 'i1' }, 'select', op)).toBeNull()
+    expect(dimensionsFor(doc, op)).toBeNull()
   })
 })

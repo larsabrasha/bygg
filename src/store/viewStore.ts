@@ -38,6 +38,9 @@ export interface ViewState {
    */
   penMode: boolean
   setPenMode: (on: boolean) => void
+  /** Längd, bredd och tjocklek visas vid den valda delen (knappen Mått). Av från början; sparas inte. */
+  showDims: boolean
+  toggleDims: () => void
   /**
    * Som i Shapr3D: dolda delar (hidden) ritas inte. Är isolated satt ritas allt
    * utom de isolerade genomskinligt och går inte att trycka på; man ser det och
@@ -100,6 +103,8 @@ export const useViewStore = create<ViewState>()((set) => ({
     ),
   isolate: (ids) => set({ isolated: ids }),
   showAll: () => set({ hidden: [], isolated: null }),
+  showDims: false,
+  toggleDims: () => set((s) => ({ showDims: !s.showDims })),
   penMode: false,
   setPenMode: (penMode) => set({ penMode }),
   focusMode: false,

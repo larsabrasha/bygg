@@ -1,8 +1,7 @@
 import { faceAxis } from '../model/geometry'
 import { resolveBodies } from '../model/resolve'
 import type { Axis, Body, ModelDocument, PartDef } from '../model/types'
-import type { Selection } from '../store/documentStore'
-import type { Op, Tool } from '../store/toolStore'
+import type { Op } from '../store/toolStore'
 import { PREVIEW_ID, previewDoc } from '../tools/preview'
 import type { LabelBox, Segment } from './labelPlacement'
 
@@ -128,14 +127,15 @@ export interface DimensionTarget {
 }
 
 /**
- * Den valda delen i Välj när inget annat pågår, eller delen som växer under
- * push/pull (också en ny del från en skiss), så att man ser det slutliga måttet.
+ * Delen som växer under push/pull (också en ny del från en skiss), så att man
+ * ser det slutliga måttet medan man drar. När en del bara är vald bara om man
+ * slagit på måtten (selected, knappen Mått): annars visar måttrutan måttet för
+ * den valda sidan och Egenskaper alla tre, och etiketterna skymde bara delen.
  */
 export function dimensionsFor(
   doc: ModelDocument,
-  selection: Selection | null,
-  tool: Tool,
   op: Op | null,
+  selected: string | null = null,
 ): DimensionTarget | null {
   const find = (d: ModelDocument, id: string) => {
     const body = resolveBodies(d).find((b) => b.id === id)
@@ -148,7 +148,17 @@ export function dimensionsFor(
     const found = preview && find(preview.doc, t.kind === 'body' ? t.id : PREVIEW_ID)
     return found ? { ...found, live: true, changing: t.kind === 'body' ? faceAxis(t.face) : 'n' } : null
   }
-  if (op || tool !== 'select' || selection?.kind !== 'body') return null
-  const found = find(doc, selection.id)
+  if (op || !selected) return null
+  const found = find(doc, selected)
   return found ? { ...found, live: false, changing: null } : null
+}
+
+/** Delen vars alla mått visas när man slagit på måtten: den valda, i Välj, när inget pågår. */
+export function shownDimensionsOf(
+  showDims: boolean,
+  tool: string,
+  op: Op | null,
+  selection: { kind: string; id: string } | null,
+): string | null {
+  return showDims && tool === 'select' && !op && selection?.kind === 'body' ? selection.id : null
 }

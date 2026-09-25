@@ -15,7 +15,7 @@ import { BodyMesh } from './BodyMesh'
 import { HOME } from './camera'
 import { CameraRig } from './CameraRig'
 import { DimensionGuides } from './DimensionGuides'
-import { dimensionsFor } from './dimensionLabels'
+import { dimensionsFor, shownDimensionsOf } from './dimensionLabels'
 import { AXIS_COLORS, SCENE } from './colors'
 import { MoveGizmo } from './MoveGizmo'
 import { HoverMarker, OpOverlay } from './OpPreview'
@@ -43,6 +43,7 @@ function Scene() {
   const tool = useToolStore((s) => s.tool)
   // Under glidningen ut och in står delarna också isär; läget att titta slutar när de är ihop igen.
   const explodeShown = useViewStore((s) => s.explodeShown)
+  const showDims = useViewStore((s) => s.showDims)
   const exploded = useViewStore((s) => s.exploded) || explodeShown > 0
 
   // Under en operation ritas dokumentet som det skulle bli; berörda delar halvgenomskinliga.
@@ -67,7 +68,7 @@ function Scene() {
   // I Flytta-läget får den valda delen tre färgade pilar i stället.
   const gizmoAt = !op && !exploded && tool === 'move' && selectedBody ? bodyCenter(selectedBody) : null
   // I Välj visas den valda delens mått vid kanterna (etiketterna i panel/DimensionLabels).
-  const dims = exploded ? null : dimensionsFor(doc, selection, tool, op)
+  const dims = exploded ? null : dimensionsFor(doc, op, shownDimensionsOf(showDims, tool, op, selection))
 
   // Verktyg (tillägg och urskärningar) syns som spöken när deras värd, eller de själva, är valda.
   const shownHost = selectedBody?.tool?.host ?? selectedBody?.id

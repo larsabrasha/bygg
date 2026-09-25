@@ -1,4 +1,7 @@
-import { Boxes, House, Maximize2, Minimize2 } from 'lucide-react'
+import { Boxes, Eye, House, Maximize2, Minimize2, RulerDimensionLine } from 'lucide-react'
+import { useCallback, useRef, useState } from 'react'
+import { MenuItem } from './MenuItem'
+import { useDismiss } from './useDismiss'
 import { useViewStore } from '../store/viewStore'
 import { setExploded } from '../tools/actions'
 import { Tip } from './Tip'
@@ -7,14 +10,16 @@ import { useCoversView } from './useCoversView'
 /**
  * Knappar ovanpå 3D-vyn för kameran. Uppe till höger, så att de inte krockar med måttfältet på mobil.
  * Visa allt har text på desktop, så att den inte ser ut som fullskärm; på smal skärm bara huset.
- * Till höger om den (under den på smal skärm, där raden uppe till vänster behöver bredden): sprängskissen (E)
- * och fokusläget (Tab), bara 3D-vyn. Knapparna behövs där det inte finns något tangentbord.
+ * Till höger om den: måtten (D), sprängskissen (E) och fokusläget (Tab), bara 3D-vyn. Knapparna behövs där
+ * det inte finns något tangentbord. På smal skärm ligger de tre i menyn Vy under Visa allt (ViewMenu).
  */
 export function ViewButtons() {
   const requestFit = useViewStore((s) => s.requestFit)
   const focusMode = useViewStore((s) => s.focusMode)
   const toggleFocusMode = useViewStore((s) => s.toggleFocusMode)
   const exploded = useViewStore((s) => s.exploded)
+  const showDims = useViewStore((s) => s.showDims)
+  const toggleDims = useViewStore((s) => s.toggleDims)
   const FocusIcon = focusMode ? Minimize2 : Maximize2
   const cover = useCoversView<HTMLDivElement>()
   return (
@@ -29,26 +34,86 @@ export function ViewButtons() {
           <span className="narrow:hidden">Visa allt</span>
         </button>
       </Tip>
-      <Tip label={exploded ? 'Stäng sprängskissen' : 'Sprängskiss: delarna isär'} keys="E">
-        <button
-          aria-label="Sprängskiss"
-          aria-pressed={exploded}
-          onClick={() => setExploded(!exploded)}
-          className="grid size-9 cursor-pointer place-items-center rounded-lg bg-panel/95 shadow-md hover:bg-hover aria-pressed:bg-accent-soft aria-pressed:text-accent narrow:size-11"
-        >
-          <Boxes size={18} strokeWidth={1.75} aria-hidden />
-        </button>
-      </Tip>
-      <Tip label={focusMode ? 'Visa panelerna igen' : 'Fokusläge: bara 3D-vyn'} keys="Tab">
-        <button
-          aria-label={focusMode ? 'Avsluta fokusläge' : 'Fokusläge'}
-          aria-pressed={focusMode}
-          onClick={toggleFocusMode}
-          className="grid size-9 cursor-pointer place-items-center rounded-lg bg-panel/95 shadow-md hover:bg-hover aria-pressed:bg-accent-soft aria-pressed:text-accent narrow:size-11"
-        >
-          <FocusIcon size={18} strokeWidth={1.75} aria-hidden />
-        </button>
-      </Tip>
+      {/* På smal skärm i en meny (ViewMenu): två kolumner med knappar får inte plats när bladet är öppet. */}
+      <div className="flex gap-1 narrow:hidden">
+        <Tip label={showDims ? 'Dölj måtten' : 'Visa längd, bredd och tjocklek på det valda'} keys="D">
+          <button
+            aria-label="Mått"
+            aria-pressed={showDims}
+            onClick={toggleDims}
+            className="grid size-9 cursor-pointer place-items-center rounded-lg bg-panel/95 shadow-md hover:bg-hover aria-pressed:bg-accent-soft aria-pressed:text-accent narrow:size-11"
+          >
+            <RulerDimensionLine size={18} strokeWidth={1.75} aria-hidden />
+          </button>
+        </Tip>
+        <Tip label={exploded ? 'Stäng sprängskissen' : 'Sprängskiss: delarna isär'} keys="E">
+          <button
+            aria-label="Sprängskiss"
+            aria-pressed={exploded}
+            onClick={() => setExploded(!exploded)}
+            className="grid size-9 cursor-pointer place-items-center rounded-lg bg-panel/95 shadow-md hover:bg-hover aria-pressed:bg-accent-soft aria-pressed:text-accent narrow:size-11"
+          >
+            <Boxes size={18} strokeWidth={1.75} aria-hidden />
+          </button>
+        </Tip>
+        <Tip label={focusMode ? 'Visa panelerna igen' : 'Fokusläge: bara 3D-vyn'} keys="Tab">
+          <button
+            aria-label={focusMode ? 'Avsluta fokusläge' : 'Fokusläge'}
+            aria-pressed={focusMode}
+            onClick={toggleFocusMode}
+            className="grid size-9 cursor-pointer place-items-center rounded-lg bg-panel/95 shadow-md hover:bg-hover aria-pressed:bg-accent-soft aria-pressed:text-accent narrow:size-11"
+          >
+            <FocusIcon size={18} strokeWidth={1.75} aria-hidden />
+          </button>
+        </Tip>
+      </div>
+      <ViewMenu />
+    </div>
+  )
+}
+
+/**
+ * Mått, sprängskiss och fokusläge på smal skärm: en knapp med en meny, så att
+ * kameraknapparna och verktygslisten får plats ovanför varandra vid högerkanten
+ * också när vyn är låg (bladet öppet).
+ */
+function ViewMenu() {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+  const close = useCallback(() => setOpen(false), [])
+  useDismiss(ref, open, close)
+  const focusMode = useViewStore((s) => s.focusMode)
+  const toggleFocusMode = useViewStore((s) => s.toggleFocusMode)
+  const exploded = useViewStore((s) => s.exploded)
+  const showDims = useViewStore((s) => s.showDims)
+  const toggleDims = useViewStore((s) => s.toggleDims)
+  const pick = (fn: () => void) => () => {
+    close()
+    fn()
+  }
+  return (
+    <div ref={ref} className="relative hidden narrow:block">
+      <button
+        aria-label="Vy"
+        aria-expanded={open}
+        onClick={() => setOpen((o) => !o)}
+        className="grid size-11 cursor-pointer place-items-center rounded-lg bg-panel/95 shadow-md hover:bg-hover aria-expanded:bg-accent-soft aria-expanded:text-accent"
+      >
+        <Eye size={18} strokeWidth={1.75} aria-hidden />
+      </button>
+      {open && (
+        <div className="absolute top-0 right-full z-50 mr-1 w-max min-w-44 rounded-lg border border-line bg-panel p-1 shadow-lg">
+          <MenuItem Icon={RulerDimensionLine} checked={showDims} onClick={pick(toggleDims)}>
+            Mått
+          </MenuItem>
+          <MenuItem Icon={Boxes} checked={exploded} onClick={pick(() => setExploded(!exploded))}>
+            Sprängskiss
+          </MenuItem>
+          <MenuItem Icon={focusMode ? Minimize2 : Maximize2} checked={focusMode} onClick={pick(toggleFocusMode)}>
+            Fokusläge
+          </MenuItem>
+        </div>
+      )}
     </div>
   )
 }

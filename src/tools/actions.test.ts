@@ -29,6 +29,7 @@ import {
   setExploded,
   startReadyPushPull,
   tap,
+  typedPushPull,
   undoLast,
 } from './actions'
 import { COPY_PREVIEW_ID, previewDoc } from './preview'
@@ -155,10 +156,10 @@ describe('cirkelverktyget', () => {
     expect(s.rect).toEqual({ x0: -20, y0: -20, x1: 20, y1: 20 })
     const leg = extrude(s.id, '800')
     expect(leg).toMatchObject({ shape: 'circle', z0: 0, z1: 800 })
-    // Den runda sidan: push/pull ändrar diametern, och delen förblir rund.
+    // Den runda sidan: push/pull ändrar diametern (hela måttet skrivs), och delen förblir rund.
     tools().setTool('pushpull')
     tap({ point: [20, 400, 0], target: { kind: 'body', id: leg.id, face: 'u+' } }, 0)
-    tools().setMeasure(0, '10')
+    tools().setMeasure(0, '50')
     applyMeasure()
     expect(bodies()[0]!.profile).toEqual({ x0: -20, y0: -25, x1: 30, y1: 25 })
   })
@@ -253,11 +254,56 @@ describe('push/pull', () => {
     expect(tools().op).toMatchObject({ distance: 700, onTarget: true })
   })
 
+  it('på en dels sida är ett tal hela måttet; med + eller − en ändring', () => {
+    const b = extrude(drawGroundRect(), '22')
+    const side = () => {
+      tools().setTool('pushpull')
+      tap({ point: [600, 11, -200], target: { kind: 'body', id: b.id, face: 'u+' } }, 0)
+    }
+    side()
+    tools().setMeasure(0, '+100')
+    applyMeasure()
+    expect(bodies()[0]!.profile.x1).toBe(700)
+    side()
+    tools().setMeasure(0, '−50')
+    applyMeasure()
+    expect(bodies()[0]!.profile.x1).toBe(650)
+    // Sidan närmast origo: hela måttet, och den bortre sidan står kvar.
+    tools().setTool('pushpull')
+    tap({ point: [0, 11, -200], target: { kind: 'body', id: b.id, face: 'u-' } }, 0)
+    tools().setMeasure(0, '500')
+    applyMeasure()
+    expect(bodies()[0]!.profile).toMatchObject({ x0: 150, x1: 650 })
+  })
+
+  it('det skrivna räknas likadant för förhandsvisningen: ändring med tecken, annars hela måttet', () => {
+    const op = { distance: 30 }
+    expect(typedPushPull(op, '+ 50', 600)).toEqual({ distance: 50, total: 650, whole: false })
+    expect(typedPushPull(op, '−20', 600)).toEqual({ distance: -20, total: 580, whole: false })
+    expect(typedPushPull(op, '700', 600)).toEqual({ distance: 100, total: 700, whole: true })
+    // En skiss: djupet, åt det håll man dragit.
+    expect(typedPushPull({ distance: -5 }, '18', null)).toEqual({ distance: -18, total: null, whole: false })
+    expect(typedPushPull(op, '2 +', 600)).toBeNull()
+  })
+
+  it('hela måttet som en parameter styr sedan måttet', () => {
+    const b = extrude(drawGroundRect(), '22')
+    const id = docs().addParam()
+    docs().updateParam(id, { name: 'langd', expr: '800' })
+    tools().setTool('pushpull')
+    tap({ point: [600, 11, -200], target: { kind: 'body', id: b.id, face: 'u+' } }, 0)
+    tools().setMeasure(0, 'langd')
+    applyMeasure()
+    expect(bodies()[0]!.profile).toMatchObject({ x0: 0, x1: 800 })
+    docs().updateParam(id, { expr: '900' })
+    expect(bodies()[0]!.profile).toMatchObject({ x0: 0, x1: 900 })
+  })
+
   it('ändrar en befintlig dels sida, och det går att ångra', () => {
     const b = extrude(drawGroundRect(), '22')
     tools().setTool('pushpull')
     tap({ point: [600, 11, -200], target: { kind: 'body', id: b.id, face: 'u+' } }, 0)
-    tools().setMeasure(0, '100')
+    tools().setMeasure(0, '700')
     applyMeasure()
     expect(bodies()[0]!.profile.x1).toBe(700)
     docs().undo()
@@ -635,7 +681,7 @@ describe('pilen på det valda', () => {
     tap({ point: [600, 11, -200], target: { kind: 'body', id: b.id, face: 'u+' } }, 0)
     tap(handle, 0)
     expect(tools().op).toMatchObject({ kind: 'pushpull', anchor: [600, 11, -200], normal: [1, 0, 0] })
-    tools().setMeasure(0, '50')
+    tools().setMeasure(0, '650')
     applyMeasure()
     expect(bodies()[0]!.profile.x1).toBe(650)
     expect(docs().selection).toEqual({ kind: 'body', id: b.id, face: 'u+' })
@@ -648,7 +694,7 @@ describe('pilen på det valda', () => {
     tap({ point: [600, 11, -200], target: { kind: 'body', id: b.id, face: 'u+' } }, 0)
     expect(readyPushPull()).toEqual({ kind: 'body', id: b.id, face: 'u+' })
     expect(startReadyPushPull()).toBe(true)
-    tools().setMeasure(0, '50')
+    tools().setMeasure(0, '650')
     applyMeasure()
     expect(bodies()[0]!.profile.x1).toBe(650)
   })
@@ -872,6 +918,24 @@ describe('kopia i Flytta-läget', () => {
 })
 
 describe('ändra efteråt', () => {
+  it('efter ett drag går det att skriva ett exakt mått; sparat med OK är det klart', () => {
+    const b = extrude(drawGroundRect(), '22')
+    // extrude skriver måttet och trycker OK: sparat.
+    expect(tools().lastOp?.saved).toBe(true)
+    // Ett drag i pilen, utan att skriva något.
+    tools().setTool('select')
+    tap({ point: [600, 11, -200], target: { kind: 'body', id: b.id, face: 'u+' } }, 0)
+    tap({ point: [600, 11, -200], target: { kind: 'handle' } }, 0)
+    move({ origin: [650, 11, 3000], dir: [0, 0, -1] }, 0)
+    commit()
+    expect(tools().lastOp?.saved).toBeFalsy()
+    // Skriver man ett mått då ändras draget, och det är sparat.
+    tools().setMeasure(0, '700')
+    applyMeasure()
+    expect(bodies()[0]!.profile.x1).toBe(700)
+    expect(tools().lastOp?.saved).toBe(true)
+  })
+
   it('en utdragen skiss kan få ett annat djup efteråt, i ett steg i historiken', () => {
     const b = extrude(drawGroundRect(), '22')
     expect(amendableOp()).not.toBeNull()

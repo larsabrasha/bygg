@@ -44,8 +44,8 @@ export function ToolButtons({ tipSide = 'bottom' }: { tipSide?: 'bottom' | 'left
  * tummen når och där de inte trängs med namnet i raden överst. I fokusläget
  * syns den också på bred skärm, eftersom raden överst då är dold.
  * Mitt på höjden, men aldrig högre än att den börjar under kameraknapparna
- * uppe till höger (13,5rem = deras höjd plus halva listens); annars täckte den
- * dem när vyn är låg.
+ * uppe till höger (Visa allt och Vy; 15,5rem = deras höjd plus halva listens,
+ * med pennknappen); annars täckte den dem när vyn är låg.
  */
 export function ToolRail() {
   const focusMode = useViewStore((s) => s.focusMode)
@@ -56,7 +56,7 @@ export function ToolRail() {
       role="toolbar"
       aria-label="Verktyg"
       aria-orientation="vertical"
-      className={`absolute top-[max(50%,13.5rem)] right-2 -translate-y-1/2 flex-col gap-1 rounded-xl border border-line bg-panel/95 p-1 shadow-md narrow:flex ${focusMode ? 'flex' : 'hidden'}`}
+      className={`absolute top-[max(50%,15.5rem)] right-2 -translate-y-1/2 flex-col gap-1 rounded-xl border border-line bg-panel/95 p-1 shadow-md narrow:flex ${focusMode ? 'flex' : 'hidden'}`}
     >
       <ToolButtons tipSide="left" />
     </div>

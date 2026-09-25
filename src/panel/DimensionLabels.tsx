@@ -1,7 +1,7 @@
 import { useCallback, useRef, useState } from 'react'
 import { AXES, extent, widthAxis } from '../model/partAxes'
 import type { Axis, Body, PartDef } from '../model/types'
-import { dimensionsFor, registerLabel } from '../scene/dimensionLabels'
+import { dimensionsFor, registerLabel, shownDimensionsOf } from '../scene/dimensionLabels'
 import { useDocumentStore } from '../store/documentStore'
 import { useToolStore } from '../store/toolStore'
 import { useViewStore } from '../store/viewStore'
@@ -131,34 +131,40 @@ function labelOf(def: PartDef, axis: Axis): [string, string] {
 }
 
 /**
- * Längd, bredd och tjocklek på den valda delen, vid kanterna i 3D-vyn (som i
- * Shapr3D). Tryck på ett mått för att skriva ett nytt; det tar uttryck med
- * parametrar, som fälten i detaljpanelen. Under push/pull visas delen som den
- * blir, utan att gå att ändra. Placeras av scene/DimensionGuides.
+ * Måttet som ändras under push/pull, vid kanten i 3D-vyn, som det blir. Med
+ * måtten påslagna (knappen Mått) också längd, bredd och tjocklek på den valda
+ * delen; tryck på ett för att skriva ett nytt, med uttryck som i detaljpanelen.
+ * Placeras av scene/DimensionGuides.
  */
 export function DimensionLabels() {
   const doc = useDocumentStore((s) => s.doc)
-  const selection = useDocumentStore((s) => s.selection)
-  const tool = useToolStore((s) => s.tool)
   const op = useToolStore((s) => s.op)
   // I sprängskissen står delen inte där måtten skulle sitta.
   const exploded = useViewStore((s) => s.exploded || s.explodeShown > 0)
-  const target = exploded ? null : dimensionsFor(doc, selection, tool, op)
+  const showDims = useViewStore((s) => s.showDims)
+  const selection = useDocumentStore((s) => s.selection)
+  const tool = useToolStore((s) => s.tool)
+  const target = exploded ? null : dimensionsFor(doc, op, shownDimensionsOf(showDims, tool, op, selection))
   if (!target) return null
   const round = target.def.shape === 'circle'
   return (
     <div key={target.body.id}>
       {/* En cirkel har ett mått för diametern, på u (v är samma mått). */}
-      {AXES.filter((axis) => !(round && axis === 'v')).map((axis) => (
-        <DimensionLabel
-          key={axis}
-          body={target.body}
-          def={target.def}
-          axis={axis}
-          live={target.live}
-          changing={target.changing === axis || (round && axis === 'u' && target.changing === 'v')}
-        />
-      ))}
+      {/* Medan man drar bara måttet som ändras; med måtten påslagna alla tre, och de går att ändra. */}
+      {AXES.filter((axis) => !(round && axis === 'v'))
+        .filter(
+          (axis) => !target.live || target.changing === axis || (round && axis === 'u' && target.changing === 'v'),
+        )
+        .map((axis) => (
+          <DimensionLabel
+            key={axis}
+            body={target.body}
+            def={target.def}
+            axis={axis}
+            live={target.live}
+            changing={target.live}
+          />
+        ))}
     </div>
   )
 }

@@ -66,9 +66,16 @@
     height: 100%;
   }
 
+  html {
+    touch-action: pan-x pan-y;
+  }
+
   body {
     @apply bg-canvas font-sans text-sm text-ink;
     overscroll-behavior: none;
+    /* Scrolla, men inte zooma sidan (nyp eller dubbeltryck); 3D-vyn har egen touch-action från kameran.
+       Se också usePreventPageZoom, för Safari. */
+    touch-action: pan-x pan-y;
     /* En app, inte en webbsida: text markeras inte när man drar eller dubbelklickar,
        och iOS visar ingen meny vid långt tryck. */
     user-select: none;

@@ -29,7 +29,7 @@ function isEditable(t: EventTarget | null) {
 
 /**
  * Kortkommandon som i SketchUp: R, P, M, T (Mät), mellanslag, Esc, Delete, ⌘Z / ⇧⌘Z, ⇧Z (visa allt),
- * Alt/Option (Kopia i Flytta-läget), Tab (fokusläge), E (sprängskiss), H / ⇧H / I (dölj, visa alla, isolera),
+ * Alt/Option (Kopia i Flytta-läget), Tab (fokusläge), D (mått), E (sprängskiss), H / ⇧H / I (dölj, visa alla, isolera),
  * mellanslag + dra (panorera).
  * P och M har ingen knapp i verktygsraden; där görs push/pull med pilen och flytt med dubbeltryck på delen.
  * Under en operation går siffror direkt till måttfältet utan att man klickar i det;
@@ -112,6 +112,10 @@ export function useShortcuts() {
           if (op) cancel()
           else if (useViewStore.getState().exploded) setExploded(false)
           else tools.setTool('select')
+          break
+        case 'd':
+        case 'D':
+          useViewStore.getState().toggleDims()
           break
         case 'e':
         case 'E':

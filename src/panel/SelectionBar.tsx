@@ -115,7 +115,7 @@ function VisibilityMenu({ id }: { id: string }) {
         <span className="text-[13px] narrow:hidden">Visa</span>
       </button>
       {open && (
-        <div className="absolute top-full left-0 z-50 mt-1 w-60 rounded-lg border border-line bg-panel p-1 shadow-lg">
+        <div className="absolute top-full right-0 z-50 mt-1 w-max min-w-40 rounded-lg border border-line bg-panel p-1 shadow-lg">
           <MenuItem
             Icon={ScanEye}
             onClick={() => {
@@ -123,7 +123,7 @@ function VisibilityMenu({ id }: { id: string }) {
               isolateSelection(id)
             }}
           >
-            Isolera: de andra blir genomskinliga
+            Isolera
           </MenuItem>
           <MenuItem
             Icon={EyeOff}
