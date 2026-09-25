@@ -78,6 +78,14 @@ export interface RotateOp {
   grab: number
   /** Vridningen hittills i grader, positiv moturs sett från axelns spets. */
   angle: number
+  /** Där man tog i bågen (på träffytan), för när bågen ses från kanten. */
+  at?: Vec3
+  /**
+   * Satt när bågen ses nästan från kanten: då följer pekaren en linje längs
+   * bågens tangent där man tog tag (from, dir), och vinkeln är sträckan
+   * delad med radien. Annars räknas vinkeln där strålen skär planet.
+   */
+  line?: { from: Vec3; dir: Vec3; radius: number }
 }
 
 export type Op = RectOp | PushPullOp | MoveOp | RotateOp

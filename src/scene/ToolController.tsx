@@ -84,6 +84,12 @@ export function ToolController() {
     let gesture = { start: 0, fingers: 0, moved: 0 }
     /** Trycket som startade pågående operation, för dubbeltryck. */
     let startTap: TapPoint | null = null
+    /**
+     * Operationen som den såg ut när den började. Följer den musen (klicka,
+     * flytta, klicka) och musen lämnar vyn, t.ex. för att skriva i måttrutan,
+     * går den tillbaka hit. Annars drar vägen dit ytan eller delen långt iväg.
+     */
+    let opAtStart = useToolStore.getState().op
 
     const castRay = (x: number, y: number): Ray => {
       const r = el.getBoundingClientRect()
@@ -273,6 +279,7 @@ export function ToolController() {
         // Greppunkten räknas från pekarens stråle, som dragningen. Träffpunkten
         // på pilens tjocka träffyta ligger närmare kameran och skulle ge ett hopp.
         regrab(rayOf(e))
+        if (press.startedOp) opAtStart = useToolStore.getState().op
       }
     }
 
@@ -371,12 +378,19 @@ export function ToolController() {
 
     const onLeave = () => {
       const t = useToolStore.getState()
+      // Ingen knapp nere: operationen följde bara musen. Med en dragning pågår den till släppet.
+      if (t.op && !press && opAtStart) t.setOp(opAtStart)
       t.setHover(null)
       t.setHoverPoint(null)
       if (t.rulerHover) t.setRulerHover(null)
     }
 
     // Handen visar att man kan panorera medan mellanslaget är nere.
+    const unsubscribeOp = useToolStore.subscribe((s, prev) => {
+      if (!s.op) opAtStart = null
+      else if (!prev.op) opAtStart = s.op
+    })
+
     const unsubscribePan = useViewStore.subscribe((s, prev) => {
       if (s.spacePan.held !== prev.spacePan.held) el.style.cursor = s.spacePan.held ? 'grab' : ''
     })
@@ -393,6 +407,7 @@ export function ToolController() {
       el.removeEventListener('pointercancel', onCancel)
       el.removeEventListener('pointerleave', onLeave)
       unsubscribePan()
+      unsubscribeOp()
       cancel()
     }
   }, [camera, gl, scene, raycaster, controls])

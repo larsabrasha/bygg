@@ -6,15 +6,15 @@ import {
   amendableOp,
   applyMeasure,
   cancel,
-  dismissLast,
   extendableCopy,
   liveMeasure,
   repeatLastPushPull,
   setCopy,
+  undoLast,
 } from '../tools/actions'
 import { ExprInput } from './ExprInput'
 import { rulerResult, type RulerPoint } from '../model/ruler'
-import { ghostButton, secondaryButton, toggleButton } from './ui'
+import { ghostButton, toggleButton } from './ui'
 import { Tip } from './Tip'
 import { numberFormat } from '../model/numberFormat'
 
@@ -22,6 +22,18 @@ const fmt = numberFormat(1)
 
 /** Kvadratisk ikonknapp för Avbryt och OK. */
 const iconAction = 'grid size-10 shrink-0 cursor-pointer place-items-center rounded-lg narrow:size-11'
+const okButton = `${iconAction} bg-accent text-on-accent hover:opacity-90`
+
+/** Klar: lämna verktyget och gå tillbaka till Välj. Samma bock som OK, som överallt i rutan. */
+function DoneButton({ onClick }: { onClick: () => void }) {
+  return (
+    <Tip label="Klar" keys="Esc" side="top">
+      <button type="button" aria-label="Klar" onClick={onClick} className={okButton}>
+        <Check size={18} strokeWidth={2.25} aria-hidden />
+      </button>
+    </Tip>
+  )
+}
 
 /**
  * Måttfält som SketchUps "Measurements": visar aktuella mått under en
@@ -154,11 +166,11 @@ export function MeasureBox() {
             {copyToggle}
             <span aria-hidden className="mx-0.5 h-6 w-px bg-line" />
             {(op || amend) && (
-              <Tip label={op ? 'Avbryt' : 'Stäng utan att ändra'} keys={op ? 'Esc' : undefined} side="top">
+              <Tip label={op ? 'Avbryt' : 'Ångra'} keys={op ? 'Esc' : '⌘Z'} side="top">
                 <button
                   type="button"
-                  aria-label={op ? 'Avbryt' : 'Stäng'}
-                  onClick={op ? cancel : dismissLast}
+                  aria-label={op ? 'Avbryt' : 'Ångra'}
+                  onClick={op ? cancel : undoLast}
                   className={`${iconAction} text-muted hover:bg-hover`}
                 >
                   <X size={18} strokeWidth={2} aria-hidden />
@@ -166,11 +178,7 @@ export function MeasureBox() {
               </Tip>
             )}
             <Tip label="OK" keys="Enter" side="top">
-              <button
-                type="submit"
-                aria-label="OK"
-                className={`${iconAction} bg-accent text-on-accent hover:opacity-90`}
-              >
+              <button type="submit" aria-label="OK" className={okButton}>
                 <Check size={18} strokeWidth={2.25} aria-hidden />
               </button>
             </Tip>
@@ -181,11 +189,7 @@ export function MeasureBox() {
           <p className="max-w-96 px-1 text-[13px] text-muted">{hint}</p>
           {copyToggle}
           {/* Push/pull- och Flytta-läget har ingen knapp i verktygsraden att gå tillbaka med. */}
-          {(tool === 'pushpull' || tool === 'move') && (
-            <button type="button" className={secondaryButton} onClick={() => setTool('select')}>
-              Klar
-            </button>
-          )}
+          {(tool === 'pushpull' || tool === 'move') && <DoneButton onClick={() => setTool('select')} />}
         </div>
       )}
     </div>
@@ -233,9 +237,7 @@ function RulerBox({ ruler, hover, onDone }: { ruler: RulerPoint[]; hover: RulerP
             </span>
           ))}
         <span aria-hidden className="mx-0.5 h-6 w-px bg-line" />
-        <button type="button" className={secondaryButton} onClick={onDone}>
-          Klar
-        </button>
+        <DoneButton onClick={onDone} />
       </div>
     </div>
   )

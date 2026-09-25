@@ -7,7 +7,7 @@ import { resolveBodies } from '../model/resolve'
 import { bodyKeyPoints, offsetTargets, planeTargets, snapDelta, snapValue, type PlaneTargets } from '../model/snapping'
 import type { Body, DimExprs, Face, Frame, Rect, Vec2, Vec3 } from '../model/types'
 import { arrowDir } from '../model/arrowDir'
-import { add, closestParamOnLine, dot, length, scale, sub } from '../model/vec'
+import { add, closestParamOnLine, cross, dot, length, scale, sub } from '../model/vec'
 import { useDocumentStore, type Selection } from '../store/documentStore'
 import {
   useToolStore,
@@ -144,7 +144,7 @@ export function tap(hit: Hit | null, tol: number) {
     return
   }
   if (hit?.target.kind === 'rotate') {
-    beginRotate(hit.target.axis)
+    beginRotate(hit.target.axis, hit.point)
     return
   }
 
@@ -287,7 +287,7 @@ function rotatePlane(axis: Axis, center: Vec3): Frame {
 }
 
 /** Startar en vridning av den valda delen runt en världsaxel genom dess mitt. */
-export function beginRotate(axis: Axis) {
+export function beginRotate(axis: Axis, at?: Vec3) {
   const sel = docs().selection
   const b = sel?.kind === 'body' ? findBody(sel.id) : undefined
   if (!b) return
@@ -299,11 +299,41 @@ export function beginRotate(axis: Axis) {
     radius: Math.max(...bodyExtents(b)) * 0.6,
     grab: 0,
     angle: 0,
+    ...(at && { at }),
   })
 }
 
-/** Vinkeln i grader för där strålen skär vridplanet, räknad från u mot v. Null om den inte skär. */
+/**
+ * Under den här vinkeln mellan vridplanet och siktlinjen ses bågen från
+ * kanten. Strålen skär då planet så snett att en liten rörelse ger ett stort
+ * hopp i vinkel, så pekaren följer i stället bågens tangent (RotateOp.line).
+ */
+const EDGE_ON = Math.sin((20 * Math.PI) / 180)
+
+/**
+ * Linjen att dra längs när bågen ses från kanten, eller undefined om planet
+ * syns tillräckligt. Tangenten där man tog tag, lutad så att den syns (arrowDir).
+ */
+function rotateLine(op: RotateOp, ray: Ray): RotateOp['line'] {
+  const { origin: center, n } = op.plane
+  const toCamera = sub(ray.origin, center)
+  if (Math.abs(dot(n, toCamera)) >= EDGE_ON * length(toCamera)) return undefined
+  const from = op.line?.from ?? (op.at && sub(op.at, scale(n, dot(sub(op.at, center), n))))
+  const r = from && sub(from, center)
+  const radius = r ? length(r) : 0
+  if (!from || !r || radius < 1e-6) return undefined
+  return { from, dir: dragLine(from, cross(n, scale(r, 1 / radius)), ray), radius }
+}
+
+/**
+ * Vinkeln i grader som pekaren anger, räknad från u mot v: där strålen skär
+ * vridplanet, eller sträckan längs op.line delad med radien. Null om den inte går att räkna.
+ */
 function angleOf(op: RotateOp, ray: Ray): number | null {
+  if (op.line) {
+    const s = closestParamOnLine(op.line.from, op.line.dir, ray.origin, ray.dir)
+    return s === null ? null : (s / op.line.radius) * (180 / Math.PI)
+  }
   const p = intersectPlane(ray, op.plane)
   if (!p || Math.hypot(p[0], p[1]) < 1e-6) return null
   return (Math.atan2(p[1], p[0]) * 180) / Math.PI
@@ -433,8 +463,10 @@ export function regrab(ray: Ray): boolean {
     return true
   }
   if (op?.kind === 'rotate') {
-    const a = angleOf(op, ray)
-    if (a !== null) setOp({ ...op, grab: a - op.angle })
+    // Läget (plan eller linje) väljs när man tar tag och ligger kvar under dragningen, så att vinkeln inte hoppar.
+    const next = { ...op, line: rotateLine(op, ray) }
+    const a = angleOf(next, ray)
+    if (a !== null) setOp({ ...next, grab: a - op.angle })
     return true
   }
   return false
@@ -513,6 +545,16 @@ export function amendLast(): boolean {
 /** Stänger måttrutan efter en avslutad operation utan att ändra något. */
 export function dismissLast() {
   tools().setLastOp(null)
+}
+
+/**
+ * Krysset i måttrutan efter en avslutad operation: ångrar den, som Avbryt
+ * gör medan den pågår. Samma knapp på samma ställe ska göra samma sak.
+ */
+export function undoLast() {
+  if (!amendableOp()) return
+  tools().setLastOp(null)
+  docs().undo()
 }
 
 /** Vad en flytt eller vridning gör, som ett steg som går att upprepa. Null om den inte gör något. */

@@ -18,6 +18,7 @@ import {
   repeatLastPushPull,
   setCopy,
   tap,
+  undoLast,
 } from './actions'
 import { COPY_PREVIEW_ID, previewDoc } from './preview'
 
@@ -295,6 +296,30 @@ describe('flyttpilarna', () => {
     regrab(front(1100, 11))
     move(front(1100 - 393, 11), 10)
     expect(tools().op).toMatchObject({ delta: [-400, 0], onTarget: [true, false] })
+  })
+
+  it('bågen går att dra också när den ses från kanten', () => {
+    const b = extrude(drawGroundRect(), '22')
+    docs().select({ kind: 'body', id: b.id })
+    tools().setTool('move')
+    // Kameran i höjd med mitten (300, 11, −200): planet runt Y ses exakt från kanten.
+    const camera: Vec3 = [300, 11, 3000]
+    const toward = (x: number) => {
+      const d: Vec3 = [x - camera[0], 0, -200 - camera[2]]
+      const l = Math.hypot(...d)
+      return { origin: camera, dir: [d[0] / l, 0, d[2] / l] as Vec3, up: [0, 1, 0] as Vec3 }
+    }
+    // Tag i bågen mellan +Z och +X, 60 mm från mitten.
+    const at: Vec3 = [300 + 60 * Math.SQRT1_2, 11, -200 + 60 * Math.SQRT1_2]
+    tap({ point: at, target: { kind: 'rotate', axis: 1 } }, 0)
+    regrab(toward(at[0]))
+    expect(tools().op).toMatchObject({ angle: 0 })
+    move(toward(at[0] + 30), 0)
+    const right = (tools().op as { angle: number }).angle
+    expect(right).toBeGreaterThan(0)
+    expect(right % 15).toBe(0)
+    move(toward(at[0] - 30), 0)
+    expect((tools().op as { angle: number }).angle).toBeLessThan(0)
   })
 
   it('bågen vrider delen runt Y i steg om 15°, och Flytta-läget står kvar', () => {
@@ -620,6 +645,18 @@ describe('ändra efteråt', () => {
     expect(docs().past.length).toBe(steps)
     // Rutan ligger kvar med det nya värdet.
     expect(amendableOp()?.op).toMatchObject({ distance: 44 })
+  })
+
+  it('krysset efteråt ångrar operationen, och rutan kommer inte tillbaka med Gör om', () => {
+    extrude(drawGroundRect(), '22')
+    expect(bodies()).toHaveLength(1)
+    undoLast()
+    expect(bodies()).toHaveLength(0)
+    expect(doc().sketches).toHaveLength(1)
+    expect(amendableOp()).toBeNull()
+    docs().redo()
+    expect(bodies()).toHaveLength(1)
+    expect(amendableOp()).toBeNull()
   })
 
   it('en rektangel kan få andra mått efteråt; tomt fält behåller värdet', () => {
