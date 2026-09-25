@@ -202,9 +202,24 @@ export function commit(op: Op | null = tools().op, exprs: { dims?: DimExprs; dep
   if (op.kind === 'rect') d.addSketch(op.frame, rectFromCorners(op.first, op.current), exprs.dims)
   else if (op.kind === 'move') {
     if (op.delta[0] !== 0 || op.delta[1] !== 0) d.moveInstance(op.instanceId, moveDeltaWorld(op))
-  } else if (op.target.kind === 'sketch') d.pushPullSketch(op.target.id, op.distance, exprs.depth)
-  else d.pushPullBody(op.target.id, op.target.face, op.distance)
+  } else {
+    if (op.target.kind === 'sketch') d.pushPullSketch(op.target.id, op.distance, exprs.depth)
+    else d.pushPullBody(op.target.id, op.target.face, op.distance)
+    if (op.distance !== 0) tools().setLastPushPull({ distance: op.distance, ...(exprs.depth && { expr: exprs.depth }) })
+  }
   tools().setOp(null)
+}
+
+/**
+ * Avslutar en push/pull med samma djup som förra gången (som dubbelklick i
+ * SketchUp). Var förra djupet ett uttryck följer den nya delen också parametern.
+ * Returnerar false om det inte finns något förra djup.
+ */
+export function repeatLastPushPull(): boolean {
+  const { op, lastPushPull } = tools()
+  if (op?.kind !== 'pushpull' || !lastPushPull) return false
+  commit({ ...op, distance: lastPushPull.distance }, { depth: lastPushPull.expr })
+  return true
 }
 
 export function cancel() {

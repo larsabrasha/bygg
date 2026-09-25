@@ -5,8 +5,27 @@ import { Raycaster, Vector2, type Intersection, type Object3D } from 'three'
 import { FACES, type Vec3 } from '../model/types'
 import { useDocumentStore } from '../store/documentStore'
 import { useToolStore, type Op } from '../store/toolStore'
-import { cancel, commit, hoverAt, move, tap, type Hit, type PickTarget, type Ray } from '../tools/actions'
-import { cameraButtons, fingerTap, pressOwner, TAP_SLOP, type Owner, type PointerKind } from '../tools/gestures'
+import {
+  cancel,
+  commit,
+  hoverAt,
+  move,
+  repeatLastPushPull,
+  tap,
+  type Hit,
+  type PickTarget,
+  type Ray,
+} from '../tools/actions'
+import {
+  cameraButtons,
+  fingerTap,
+  isDoubleTap,
+  pressOwner,
+  TAP_SLOP,
+  type Owner,
+  type PointerKind,
+  type TapPoint,
+} from '../tools/gestures'
 import { applyCameraButtons } from './camera'
 
 /**
@@ -52,6 +71,8 @@ export function ToolController() {
     /** Alla nedtryckta pekare med startpunkt och hur långt de rört sig, för flerfingertryck. */
     const pointers = new Map<number, { x: number; y: number; moved: number }>()
     let gesture = { start: 0, fingers: 0, moved: 0 }
+    /** Trycket som startade pågående operation, för dubbeltryck. */
+    let startTap: TapPoint | null = null
 
     const castRay = (x: number, y: number): Ray => {
       const r = el.getBoundingClientRect()
@@ -257,8 +278,14 @@ export function ToolController() {
 
       if (useToolStore.getState().op) {
         if (wasMulti || p.owner !== 'tool') return
+        const here = { x: e.clientX, y: e.clientY, time: e.timeStamp }
         // Ett tryck som startade operationen väntar på nästa tryck; en dragning avslutar den.
-        if (isTap && p.startedOp) return
+        if (isTap && p.startedOp) {
+          startTap = here
+          return
+        }
+        // Dubbeltryck på en yta: samma djup som förra gången.
+        if (isTap && isDoubleTap(startTap, here, p.slop) && repeatLastPushPull()) return
         move(rayOf(e), tolForRay())
         commit()
         return

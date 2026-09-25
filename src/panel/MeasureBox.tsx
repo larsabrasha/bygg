@@ -1,4 +1,4 @@
-import { applyMeasure, cancel, liveMeasure } from '../tools/actions'
+import { applyMeasure, cancel, liveMeasure, repeatLastPushPull } from '../tools/actions'
 import { useToolStore } from '../store/toolStore'
 import { primaryButton, secondaryButton } from './ui'
 
@@ -14,6 +14,7 @@ export function MeasureBox() {
   const op = useToolStore((s) => s.op)
   const measure = useToolStore((s) => s.measure)
   const setMeasure = useToolStore((s) => s.setMeasure)
+  const last = useToolStore((s) => s.lastPushPull)
 
   if (tool === 'select') return null
 
@@ -66,6 +67,16 @@ export function MeasureBox() {
           <button type="button" className={secondaryButton} onClick={cancel}>
             Avbryt
           </button>
+          {op.kind === 'pushpull' && last && (
+            <button
+              type="button"
+              className={secondaryButton}
+              title="Samma djup som förra gången (eller dubbeltryck på ytan)"
+              onClick={repeatLastPushPull}
+            >
+              Som förra: {last.expr ?? `${fmt.format(last.distance)} mm`}
+            </button>
+          )}
         </form>
       )}
     </div>

@@ -63,6 +63,8 @@ interface ToolSnapshot {
   /** Inskrivna mått. Två fält för rektangel (längd, bredd), annars ett. */
   measure: [string, string]
   measureField: 0 | 1
+  /** Senaste push/pull-djupet (med tecken), och uttrycket om det skrevs som ett. Glöms inte vid byte av verktyg. */
+  lastPushPull: { distance: number; expr?: string } | null
 }
 
 interface ToolState extends ToolSnapshot {
@@ -72,6 +74,7 @@ interface ToolState extends ToolSnapshot {
   setHoverPoint: (p: HoverPoint | null) => void
   setMeasure: (field: 0 | 1, text: string) => void
   setMeasureField: (field: 0 | 1) => void
+  setLastPushPull: (last: { distance: number; expr?: string }) => void
 }
 
 const idle = { op: null, measure: ['', ''] as [string, string], measureField: 0 as const }
@@ -79,8 +82,14 @@ const idle = { op: null, measure: ['', ''] as [string, string], measureField: 0 
 const previous = import.meta.hot?.data.toolStore as StoreApi<ToolState> | undefined
 const initial: ToolSnapshot = previous
   ? // Pågående operation kastas vid HMR; dess form kan ha ändrats i koden.
-    { tool: previous.getState().tool, hover: null, hoverPoint: null, ...idle }
-  : { tool: 'select', hover: null, hoverPoint: null, ...idle }
+    {
+      tool: previous.getState().tool,
+      hover: null,
+      hoverPoint: null,
+      lastPushPull: previous.getState().lastPushPull ?? null,
+      ...idle,
+    }
+  : { tool: 'select', hover: null, hoverPoint: null, lastPushPull: null, ...idle }
 
 export const useToolStore = create<ToolState>()((set) => ({
   ...initial,
@@ -95,6 +104,7 @@ export const useToolStore = create<ToolState>()((set) => ({
       return { measure, measureField: field }
     }),
   setMeasureField: (measureField) => set({ measureField }),
+  setLastPushPull: (lastPushPull) => set({ lastPushPull }),
 }))
 
 if (import.meta.hot) import.meta.hot.data.toolStore = useToolStore

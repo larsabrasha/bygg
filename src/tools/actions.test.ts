@@ -3,7 +3,7 @@ import { resolveBodies } from '../model/resolve'
 import type { Vec3 } from '../model/types'
 import { resetDocumentStore, useDocumentStore } from '../store/documentStore'
 import { useToolStore } from '../store/toolStore'
-import { applyMeasure, commit, hoverAt, move, tap } from './actions'
+import { applyMeasure, commit, hoverAt, move, repeatLastPushPull, tap } from './actions'
 
 const docs = () => useDocumentStore.getState()
 const doc = () => docs().doc
@@ -16,6 +16,7 @@ const down = (x: number, z: number) => ({ origin: [x, 5000, z] as Vec3, dir: [0,
 beforeEach(() => {
   resetDocumentStore()
   useToolStore.getState().setTool('select')
+  useToolStore.setState({ lastPushPull: null })
 })
 
 function drawGroundRect(x0 = 0, z0 = 0, x1 = 600, z1 = -400) {
@@ -121,6 +122,27 @@ describe('push/pull', () => {
     expect(extrude(drawGroundRect(), '-18')).toMatchObject({ z0: -18, z1: 0 })
   })
 
+  it('upprepar förra djupet på nästa skiss', () => {
+    extrude(drawGroundRect(), '22')
+    const s = drawGroundRect(1000, 0, 1400, -400)
+    tools().setTool('pushpull')
+    tap({ point: [1100, 0, -100], target: { kind: 'sketch', id: s } }, 0)
+    expect(repeatLastPushPull()).toBe(true)
+    expect(bodies()[1]).toMatchObject({ z0: 0, z1: 22 })
+    expect(tools().op).toBeNull()
+  })
+
+  it('upprepar inte utan förra djup, och sparar inte ett nolldrag', () => {
+    const s = drawGroundRect()
+    tools().setTool('pushpull')
+    tap({ point: [100, 0, -100], target: { kind: 'sketch', id: s } }, 0)
+    commit()
+    expect(tools().lastPushPull).toBeNull()
+    tap({ point: [100, 0, -100], target: { kind: 'sketch', id: s } }, 0)
+    expect(repeatLastPushPull()).toBe(false)
+    expect(tools().op).not.toBeNull()
+  })
+
   it('startar inte på golvet', () => {
     tools().setTool('pushpull')
     tap({ point: [0, 0, 0], target: { kind: 'ground' } }, 0)
@@ -183,6 +205,18 @@ describe('uttryck i måttfälten', () => {
     expect(b.z1).toBe(22)
     docs().updateParam(id, { expr: '18' })
     expect(bodies()[0]).toMatchObject({ z0: 0, z1: 18 })
+  })
+
+  it('förra djupet följer parametern om det var ett uttryck', () => {
+    const id = docs().addParam()
+    docs().updateParam(id, { name: 't', expr: '22' })
+    extrude(drawGroundRect(), 't')
+    const s = drawGroundRect(1000, 0, 1400, -400)
+    tools().setTool('pushpull')
+    tap({ point: [1100, 0, -100], target: { kind: 'sketch', id: s } }, 0)
+    repeatLastPushPull()
+    docs().updateParam(id, { expr: '18' })
+    expect(bodies().map((b) => b.z1)).toEqual([18, 18])
   })
 
   it('rektangelns mått kan vara uttryck', () => {
