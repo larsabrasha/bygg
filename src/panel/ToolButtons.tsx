@@ -1,4 +1,4 @@
-import { Circle, MousePointer2, Ruler, Square, type LucideIcon } from 'lucide-react'
+import { Circle, MousePointer2, PenLine, Ruler, Square, type LucideIcon } from 'lucide-react'
 import { useToolStore, type Tool } from '../store/toolStore'
 import { useViewStore } from '../store/viewStore'
 import { Tip } from './Tip'
@@ -16,13 +16,27 @@ const TOOLS: { tool: Tool; label: string; key: string; Icon: LucideIcon }[] = [
 export function ToolButtons({ tipSide = 'bottom' }: { tipSide?: 'bottom' | 'left' }) {
   const tool = useToolStore((s) => s.tool)
   const setTool = useToolStore((s) => s.setTool)
-  return TOOLS.map(({ tool: t, label, key, Icon }) => (
-    <Tip key={t} label={label} keys={key} side={tipSide}>
-      <button aria-pressed={tool === t} aria-label={label} onClick={() => setTool(t)} className={iconButton}>
-        <Icon {...ICON} />
-      </button>
-    </Tip>
-  ))
+  const penMode = useViewStore((s) => s.penMode)
+  const setPenMode = useViewStore((s) => s.setPenMode)
+  return (
+    <>
+      {TOOLS.map(({ tool: t, label, key, Icon }) => (
+        <Tip key={t} label={label} keys={key} side={tipSide}>
+          <button aria-pressed={tool === t} aria-label={label} onClick={() => setTool(t)} className={iconButton}>
+            <Icon {...ICON} />
+          </button>
+        </Tip>
+      ))}
+      {/* Pennläget: syns bara när det är på (pennan slog på det). Ett tryck slår av det, så att fingrarna ritar igen. */}
+      {penMode && (
+        <Tip label="Pennläge: fingrarna ritar inte. Tryck för att slå av." side={tipSide}>
+          <button aria-pressed aria-label="Slå av pennläge" onClick={() => setPenMode(false)} className={iconButton}>
+            <PenLine {...ICON} />
+          </button>
+        </Tip>
+      )}
+    </>
+  )
 }
 
 /**

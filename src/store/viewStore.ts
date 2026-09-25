@@ -2,7 +2,7 @@ import { create } from 'zustand'
 
 export type FitTarget = 'all' | 'selection'
 
-interface ViewState {
+export interface ViewState {
   /** Senaste begäran att zooma så att något syns. n ändras vid varje begäran, även till samma mål. */
   fit: { target: FitTarget; n: number } | null
   requestFit: (target: FitTarget) => void
@@ -31,6 +31,31 @@ interface ViewState {
   setExploded: (on: boolean) => void
   setExplodeAmount: (amount: number) => void
   setExplodeShown: (shown: number) => void
+  /**
+   * Pennläget: fingrarna styr bara kameran och pennan ritar (se fingerOnlyCamera).
+   * Slås på varje gång pennan nuddar skärmen, och av med knappen i verktygen.
+   * Sparas inte.
+   */
+  penMode: boolean
+  setPenMode: (on: boolean) => void
+  /**
+   * Som i Shapr3D: dolda delar (hidden) ritas inte. Är isolated satt ritas allt
+   * utom de isolerade genomskinligt och går inte att trycka på; man ser det och
+   * kan snäppa mot det. Så når man sidor som annars skyms av andra delar. Bara
+   * för att titta: kaplistan räknar dem som vanligt. Sparas inte, och nollställs
+   * när en annan modell öppnas.
+   */
+  hidden: string[]
+  isolated: string[] | null
+  hide: (ids: string[]) => void
+  isolate: (ids: string[]) => void
+  showAll: () => void
+}
+
+/** Om kopian id ritas som vanligt (inte dold, och inte genomskinlig för att något annat är isolerat). host = kopian ett verktyg sitter på, som det följer. */
+export function isShown(view: Pick<ViewState, 'hidden' | 'isolated'>, id: string, host?: string): boolean {
+  const key = host ?? id
+  return view.isolated ? view.isolated.includes(key) : !view.hidden.includes(key)
 }
 
 const PANEL_KEY = 'bygg.panelOpen'
@@ -64,6 +89,19 @@ export const useViewStore = create<ViewState>()((set) => ({
   setExploded: (exploded) => set({ exploded }),
   setExplodeAmount: (explodeAmount) => set({ explodeAmount }),
   setExplodeShown: (explodeShown) => set({ explodeShown }),
+  hidden: [],
+  isolated: null,
+  // Isolerat: dölj tar bort ur de isolerade (Shapr3D visar annars allt igen, vilket är förvirrande).
+  hide: (ids) =>
+    set((s) =>
+      s.isolated
+        ? { isolated: s.isolated.filter((x) => !ids.includes(x)) }
+        : { hidden: [...new Set([...s.hidden, ...ids])] },
+    ),
+  isolate: (ids) => set({ isolated: ids }),
+  showAll: () => set({ hidden: [], isolated: null }),
+  penMode: false,
+  setPenMode: (penMode) => set({ penMode }),
   focusMode: false,
   toggleFocusMode: () => set((s) => ({ focusMode: !s.focusMode })),
   panelOpen: readPanelOpen(),

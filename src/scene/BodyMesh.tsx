@@ -11,6 +11,9 @@ import { cylinderGeometry } from './cylinder'
 import { frameQuaternion } from './frameTransform'
 
 /** Formens låda, för att räkna ut vilken sida en träff på resultatet ligger på (faceOnBox). */
+/** Hur synlig en del är när en annan är isolerad. */
+const FADED_OPACITY = 0.18
+
 const boxOf = (b: Body): Box => ({ profile: b.profile, ...(b.shape && { shape: b.shape }), z0: b.z0, z1: b.z1 })
 
 interface Props {
@@ -25,6 +28,12 @@ interface Props {
   ghost?: boolean
   /** Hur långt delen flyttats i sprängskissen, i världen. */
   offset?: Vec3
+  /**
+   * En annan del är isolerad: den här syns genomskinlig och går inte att trycka
+   * på, men man ser var den är och kan snäppa mot den (snäppningen räknar med
+   * alla delar). Kameran kan vrida runt den.
+   */
+  faded?: boolean
 }
 
 function BodyMeshImpl({
@@ -35,6 +44,7 @@ function BodyMeshImpl({
   preview = false,
   ghost = false,
   offset,
+  faded = false,
 }: Props) {
   const quaternion = useMemo(() => frameQuaternion(body.frame), [body.frame])
   const [w, h, d] = bodyExtents(body)
@@ -72,14 +82,15 @@ function BodyMeshImpl({
         color: ghost ? ACCENT : color,
         emissive: lit ? ACCENT : '#000000',
         emissiveIntensity: marked ? 0.45 : lit ? 0.2 : 0,
-        transparent: preview || ghost,
-        opacity: ghost ? (selected ? 0.3 : 0.15) : preview ? 0.8 : 1,
+        transparent: preview || ghost || faded,
+        opacity: ghost ? (selected ? 0.3 : 0.15) : faded ? FADED_OPACITY : preview ? 0.8 : 1,
         // Ett spöke skymmer inte det bakom sig, och syns genom det framför (en tapp inne i ett ben).
-        depthWrite: !ghost,
+        // En genomskinlig del (isolerat) skymmer inte heller den isolerade.
+        depthWrite: !ghost && !faded,
         depthTest: !ghost,
       })
     })
-  }, [solid, round, color, selected, highlightFace, preview, ghost])
+  }, [solid, round, color, selected, highlightFace, preview, ghost, faded])
   useEffect(() => () => materials.forEach((m) => m.dispose()), [materials])
 
   // Cylinderns axel längs n (three.js lägger den längs y). Ändarnas kanter blir cirklar;
@@ -100,7 +111,7 @@ function BodyMeshImpl({
         material={solid ? materials[0] : materials}
         geometry={solid ?? own}
         userData={
-          preview
+          preview || faded
             ? { pivot: true }
             : { pick: { kind: 'body', id: body.id, round, tool: ghost, ...(solid && { box: boxOf(body) }) } }
         }
@@ -115,6 +126,8 @@ function BodyMeshImpl({
             depthTest={false}
             renderOrder={3}
           />
+        ) : faded ? (
+          <Edges color={edge} lineWidth={1} transparent opacity={FADED_OPACITY * 2} depthWrite={false} />
         ) : (
           <Edges color={edge} lineWidth={selected ? 2.5 : sibling ? 1.8 : 1} />
         )}
@@ -172,5 +185,6 @@ export const BodyMesh = memo(
     a.highlightFace === b.highlightFace &&
     a.preview === b.preview &&
     a.ghost === b.ghost &&
-    a.offset?.join() === b.offset?.join(),
+    a.offset?.join() === b.offset?.join() &&
+    a.faded === b.faded,
 )

@@ -3,7 +3,17 @@ import { useDocumentStore } from '../store/documentStore'
 import { useLibraryStore } from '../store/libraryStore'
 import { useToolStore, type Op } from '../store/toolStore'
 import { useViewStore } from '../store/viewStore'
-import { amendableOp, applyMeasure, cancel, extendableCopy, setCopy, setExploded, startReadyPushPull } from './actions'
+import {
+  amendableOp,
+  applyMeasure,
+  cancel,
+  extendableCopy,
+  setCopy,
+  setExploded,
+  startReadyPushPull,
+  hideSelection,
+  isolateSelection,
+} from './actions'
 
 /** Rektangeln har två fält (längd och bredd), som Tab växlar mellan; en cirkel bara diametern. */
 const hasTwoFields = (op: Op | null | undefined) => op?.kind === 'rect' && op.shape !== 'circle'
@@ -19,7 +29,8 @@ function isEditable(t: EventTarget | null) {
 
 /**
  * Kortkommandon som i SketchUp: R, P, M, T (Mät), mellanslag, Esc, Delete, ⌘Z / ⇧⌘Z, ⇧Z (visa allt),
- * Alt/Option (Kopia i Flytta-läget), Tab (fokusläge), E (sprängskiss), mellanslag + dra (panorera).
+ * Alt/Option (Kopia i Flytta-läget), Tab (fokusläge), E (sprängskiss), H / ⇧H / I (dölj, visa alla, isolera),
+ * mellanslag + dra (panorera).
  * P och M har ingen knapp i verktygsraden; där görs push/pull med pilen och flytt med dubbeltryck på delen.
  * Under en operation går siffror direkt till måttfältet utan att man klickar i det;
  * ; eller Tab byter fält.
@@ -105,6 +116,17 @@ export function useShortcuts() {
         case 'e':
         case 'E':
           setExploded(!useViewStore.getState().exploded)
+          break
+        // H döljer det valda, ⇧H visar allt igen, I visar bara det valda (som i Shapr3D).
+        case 'h':
+          if (docs.selection?.kind === 'body') hideSelection(docs.selection.id)
+          break
+        case 'H':
+          useViewStore.getState().showAll()
+          break
+        case 'i':
+        case 'I':
+          if (docs.selection?.kind === 'body') isolateSelection(docs.selection.id)
           break
         case ' ':
           // Hålls det nere kan man panorera med musen; Välj först när det släpps utan att man gjort det (onKeyUp).

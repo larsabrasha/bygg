@@ -783,6 +783,19 @@ export function startReadyPushPull(): boolean {
   return target !== null
 }
 
+/** Döljer delen (se ViewState.hidden) och avmarkerar den: det dolda går inte att se eller trycka på. */
+export function hideSelection(id: string) {
+  useViewStore.getState().hide([id])
+  if (docs().selection?.id === id) docs().select(null)
+}
+
+/** Isolerar delen (de andra blir genomskinliga), eller visar allt igen om den redan är isolerad. Kameran står kvar. */
+export function isolateSelection(id: string) {
+  const view = useViewStore.getState()
+  if (view.isolated?.length === 1 && view.isolated[0] === id) view.showAll()
+  else view.isolate([id])
+}
+
 /**
  * Slår av eller på sprängskissen. Det som pågår avbryts och verktyget blir
  * Välj: i sprängskissen står delarna inte där de är, så man ändrar inget då.

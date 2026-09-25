@@ -1,6 +1,17 @@
 import { describe, expect, it } from 'vitest'
 import type { Op } from '../store/toolStore'
-import { afterTapStart, cameraButtons, fingerTap, isDoubleTap, pickable, pressOwner, snapPx } from './gestures'
+import {
+  afterTapStart,
+  cameraButtons,
+  fingerOnlyCamera,
+  fingerTap,
+  hovers,
+  movesCamera,
+  isDoubleTap,
+  pickable,
+  pressOwner,
+  snapPx,
+} from './gestures'
 
 describe('pressOwner', () => {
   it('ger alltid verktyget trycket under en operation', () => {
@@ -122,5 +133,28 @@ describe('afterTapStart', () => {
   it('en rektangel och push/pull med verktyget P följer musen till nästa klick', () => {
     expect(afterTapStart('ground', op('rect'))).toBe('follow')
     expect(afterTapStart('body', op('pushpull'))).toBe('follow')
+  })
+})
+
+describe('penna', () => {
+  it('när pennan använts styr fingrarna bara kameran; pennan och musen som förut', () => {
+    expect(fingerOnlyCamera('touch', false)).toBe(false)
+    expect(fingerOnlyCamera('touch', true)).toBe(true)
+    expect(fingerOnlyCamera('pen', true)).toBe(false)
+    expect(fingerOnlyCamera('mouse', true)).toBe(false)
+  })
+
+  it('pennan rör aldrig kameran när pennläget är på; fingrar och mus gör det', () => {
+    expect(movesCamera('pen', true)).toBe(false)
+    expect(movesCamera('pen', false)).toBe(true)
+    expect(movesCamera('touch', true)).toBe(true)
+    expect(movesCamera('mouse', true)).toBe(true)
+  })
+
+  it('en penna som svävar visar hover som musen, ett finger aldrig', () => {
+    expect(hovers('pen', 0)).toBe(true)
+    expect(hovers('mouse', 0)).toBe(true)
+    expect(hovers('pen', 1)).toBe(false)
+    expect(hovers('touch', 0)).toBe(false)
   })
 })

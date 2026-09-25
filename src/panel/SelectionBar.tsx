@@ -1,6 +1,9 @@
 import {
   ArrowUpFromLine,
   Copy,
+  Eye,
+  EyeOff,
+  ScanEye,
   Focus,
   SquareMinus,
   Puzzle,
@@ -16,7 +19,7 @@ import type { Combine } from '../model/types'
 import { useDocumentStore } from '../store/documentStore'
 import { useToolStore } from '../store/toolStore'
 import { useViewStore } from '../store/viewStore'
-import { beginPushPull } from '../tools/actions'
+import { beginPushPull, hideSelection, isolateSelection } from '../tools/actions'
 import { MenuItem } from './MenuItem'
 import { Tip } from './Tip'
 import { useDismiss } from './useDismiss'
@@ -91,6 +94,53 @@ function JoinMenu({ hostId }: { hostId: string }) {
 }
 
 /**
+ * Dölj och Isolera, som i Shapr3D: så når man sidor som skyms av andra delar.
+ * Isolerat syns de andra genomskinliga och går inte att trycka på. I en meny, så att raden får plats på en telefon.
+ * VisibilityBar visar att något är dolt och tar fram allt igen.
+ */
+function VisibilityMenu({ id }: { id: string }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+  const close = useCallback(() => setOpen(false), [])
+  useDismiss(ref, open, close)
+  return (
+    <div ref={ref} className="relative">
+      <button
+        aria-label="Visa"
+        aria-expanded={open}
+        onClick={() => setOpen((o) => !o)}
+        className="flex h-9 cursor-pointer items-center gap-1.5 rounded-lg px-2 hover:bg-hover aria-expanded:bg-accent-soft aria-expanded:text-accent narrow:size-11 narrow:justify-center narrow:px-0"
+      >
+        <Eye {...ICON} />
+        <span className="text-[13px] narrow:hidden">Visa</span>
+      </button>
+      {open && (
+        <div className="absolute top-full left-0 z-50 mt-1 w-60 rounded-lg border border-line bg-panel p-1 shadow-lg">
+          <MenuItem
+            Icon={ScanEye}
+            onClick={() => {
+              close()
+              isolateSelection(id)
+            }}
+          >
+            Isolera: de andra blir genomskinliga
+          </MenuItem>
+          <MenuItem
+            Icon={EyeOff}
+            onClick={() => {
+              close()
+              hideSelection(id)
+            }}
+          >
+            Dölj
+          </MenuItem>
+        </div>
+      )}
+    </div>
+  )
+}
+
+/**
  * Det man oftast gör med det valda, direkt i 3D-vyn: på mobil slipper man
  * öppna bladet. Uppe till vänster; uppe till höger ligger "Visa allt".
  */
@@ -130,6 +180,7 @@ export function SelectionBar() {
             <>
               <BarButton label="Länkad kopia" Icon={Copy} onClick={() => duplicateLinked(body.id)} />
               <JoinMenu hostId={body.id} />
+              <VisibilityMenu id={body.id} />
             </>
           )}
         </>

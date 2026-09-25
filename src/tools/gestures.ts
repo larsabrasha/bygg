@@ -25,6 +25,33 @@ export function snapPx(tool: Tool, kind: PointerKind): number {
   return (tool === 'measure' ? RULER_SNAP_PX : SNAP_PX)[kind]
 }
 
+/**
+ * I pennläget (pennan har nuddat skärmen) styr fingrarna bara kameran, som i
+ * Shapr3D: ett tryck med ett finger gör ingenting med modellen. Pennan ritar,
+ * väljer, drar och flyttar. Så ändrar inte handflatan något när man vilar handen
+ * på skärmen.
+ */
+export function fingerOnlyCamera(kind: PointerKind, penSeen: boolean): boolean {
+  return penSeen && kind === 'touch'
+}
+
+/**
+ * Om ett tryck med den här pekaren får röra kameran. Med pennläget på gör
+ * pennan det aldrig (den ritar och väljer); kameran styrs med fingrarna.
+ */
+export function movesCamera(kind: PointerKind, penSeen: boolean): boolean {
+  return !(penSeen && kind === 'pen')
+}
+
+/**
+ * Om pekaren svävar över vyn utan att trycka: en mus, eller en penna som hålls
+ * strax ovanför skärmen (iPad med M2 eller senare). Då visas snäppmarkör och
+ * markerad yta innan man trycker. Ett finger har ingen hover.
+ */
+export function hovers(kind: PointerKind, buttons: number): boolean {
+  return kind !== 'touch' && buttons === 0
+}
+
 /** Längsta tid mellan två tryck som räknas som dubbeltryck, i ms. */
 export const DOUBLE_TAP_MS = 350
 /** Längsta tid för ett tryck med två eller tre fingrar (ångra/gör om), i ms. */

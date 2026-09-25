@@ -70,6 +70,9 @@ async function refreshList() {
 
 /** Tar en ny bild av den öppna modellen, högst var THUMB_INTERVAL_MS om inte force. */
 async function updateThumbnail(id: string, force = false) {
+  // Med dolda delar blir bilden bara en del av modellen; ta den när allt syns igen.
+  const view = useViewStore.getState()
+  if (view.hidden.length > 0 || view.isolated) return
   const now = Date.now()
   if (!force && lastThumb.id === id && now - lastThumb.at < THUMB_INTERVAL_MS) return
   lastThumb = { id, at: now }
@@ -130,6 +133,8 @@ function showModel(m: LocalModel): boolean {
     return false
   }
   useToolStore.getState().setTool('select')
+  // Dolda delar gäller modellen man tittade på, inte den som öppnas.
+  useViewStore.getState().showAll()
   docs().load(r.doc)
   lastPersistedDoc = docs().doc
   lib().set({ currentId: m.id, currentName: m.name, currentBase: m.baseRevision })

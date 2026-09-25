@@ -4,7 +4,7 @@ import { useEffect } from 'react'
 import { resolveBodies } from '../model/resolve'
 import { useDocumentStore } from '../store/documentStore'
 import { useToolStore } from '../store/toolStore'
-import { useViewStore } from '../store/viewStore'
+import { isShown, useViewStore } from '../store/viewStore'
 import { explodeOffsets } from '../model/explode'
 import { PartNames } from './PartNames'
 import { bodyCenter } from '../model/geometry'
@@ -49,7 +49,12 @@ function Scene() {
   const copy = useToolStore((s) => s.copy)
   const preview = op ? previewDoc(op, doc, copy) : null
   const shown = preview?.doc ?? doc
-  const bodies = resolveBodies(shown)
+  // Dolda delar ritas inte (och går då inte att trycka på), som i Shapr3D. Är något isolerat ritas
+  // de andra genomskinliga (faded). Ett verktyg följer sin del.
+  const hidden = useViewStore((s) => s.hidden)
+  const isolated = useViewStore((s) => s.isolated)
+  const bodies = resolveBodies(shown).filter((b) => !hidden.includes(b.tool?.host ?? b.id))
+  const fadedIds = new Set(bodies.filter((b) => !isShown({ hidden, isolated }, b.id, b.tool?.host)).map((b) => b.id))
   // I sprängskissen står delarna inte där de är; pilar, mått och skisser skulle hamna fel och visas inte.
   const offsets = exploded ? explodeOffsets(bodies, explodeShown) : null
   const active = op?.kind === 'pushpull' ? op.target : hover
@@ -73,12 +78,15 @@ function Scene() {
         // En tapp syns också när delen med tapphålet är vald.
         if (b.tool && !(shownHost && toolTargets(b.tool).includes(shownHost)) && !preview?.affected.has(b.id))
           return null
+        // Verktyg på en genomskinlig del visas inte som spöken; de hör till det man inte arbetar med.
+        if (b.tool && fadedIds.has(b.id)) return null
         return (
           <BodyMesh
             key={b.id}
             body={b}
             ghost={!!b.tool}
             offset={offsets?.get(b.id)}
+            faded={fadedIds.has(b.id)}
             preview={preview?.affected.has(b.id)}
             selected={selectedBody?.id === b.id}
             sibling={!!selectedBody && !b.tool && selectedBody.id !== b.id && selectedBody.defId === b.defId}

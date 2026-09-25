@@ -6,6 +6,7 @@ import { Notices } from './panel/Notices'
 import { PrintCutList } from './panel/PrintCutList'
 import { PrintExploded } from './panel/PrintExploded'
 import { ExplodeBar } from './panel/ExplodeBar'
+import { VisibilityBar } from './panel/VisibilityBar'
 import { SelectionBar } from './panel/SelectionBar'
 import { Sidebar } from './panel/Sidebar'
 import { Toolbar } from './panel/Toolbar'
@@ -16,9 +17,11 @@ import { Viewport } from './scene/Viewport'
 import { useLibraryStore } from './store/libraryStore'
 import { useViewStore } from './store/viewStore'
 import { useShortcuts } from './tools/useShortcuts'
+import { usePenFieldGuard } from './panel/usePenFieldGuard'
 
 export function App() {
   useShortcuts()
+  usePenFieldGuard()
   const screen = useLibraryStore((s) => s.screen)
   const panelOpen = useViewStore((s) => s.panelOpen)
   const focusMode = useViewStore((s) => s.focusMode)
@@ -59,6 +62,7 @@ export function App() {
           )}
           <ViewButtons />
           <SelectionBar />
+          <VisibilityBar />
         </main>
         <Sidebar />
       </div>

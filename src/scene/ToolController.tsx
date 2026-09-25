@@ -5,6 +5,7 @@ import { Raycaster, Vector2, Vector3, type Intersection, type Object3D, type Per
 import { circleFace, faceOnBox, type Box } from '../model/geometry'
 import { FACES, type Face, type Vec3 } from '../model/types'
 import { useDocumentStore } from '../store/documentStore'
+import { useLibraryStore } from '../store/libraryStore'
 import { useToolStore, type Op } from '../store/toolStore'
 import { useViewStore } from '../store/viewStore'
 import {
@@ -25,7 +26,10 @@ import {
 import {
   afterTapStart,
   cameraButtons,
+  fingerOnlyCamera,
   fingerTap,
+  hovers,
+  movesCamera,
   isDoubleTap,
   pickable,
   pressOwner,
@@ -55,8 +59,13 @@ const ON_TOP = new Set<string>(['handle', 'axis', 'rotate'])
 const kindOf = (e: PointerEvent): PointerKind =>
   e.pointerType === 'touch' || e.pointerType === 'pen' ? e.pointerType : 'mouse'
 
+/** Pennläget (se ViewState.penMode): då ritar pennan och fingrarna styr bara kameran. */
+const penMode = () => useViewStore.getState().penMode
+
 /** Pågående tryck med den primära pekaren. */
 interface Press {
+  pointerId: number
+  kind: PointerKind
   x: number
   y: number
   slop: number
@@ -281,12 +290,26 @@ export function ToolController() {
     }
 
     const onDown = (e: PointerEvent) => {
+      const kind = kindOf(e)
+      // Pennan slår på pennläget (också om man slagit av det: då vill man rita med pennan igen).
+      if (kind === 'pen' && !useViewStore.getState().penMode) {
+        useViewStore.getState().setPenMode(true)
+        useLibraryStore
+          .getState()
+          .notify('Pennläge: pennan ritar och väljer, fingrarna styr bara vyn. Slå av med pennan bland verktygen.')
+      }
+      const fingerOnly = fingerOnlyCamera(kind, penMode())
+      // Pennan ritar: ett finger (eller handflatan) stör inte det den håller på med.
+      if (fingerOnly && press?.kind === 'pen') return
       dropMove()
-      pointers.set(e.pointerId, { x: e.clientX, y: e.clientY, moved: 0 })
-      if (pointers.size === 1) gesture = { start: e.timeStamp, fingers: 1, moved: 0 }
-      gesture.fingers = Math.max(gesture.fingers, pointers.size)
+      // Pennan räknas inte bland fingrarna: pennan och en handflata är inte en tvåfingergest.
+      if (kind !== 'pen') {
+        pointers.set(e.pointerId, { x: e.clientX, y: e.clientY, moved: 0 })
+        if (pointers.size === 1) gesture = { start: e.timeStamp, fingers: 1, moved: 0 }
+        gesture.fingers = Math.max(gesture.fingers, pointers.size)
+      }
 
-      if (pointers.size > 1) {
+      if (kind !== 'pen' && pointers.size > 1) {
         // Fler fingrar: kameran tar över. Det första fingrets verkan tas tillbaka.
         multiTouch = true
         if (press?.owner === 'tool') useToolStore.getState().setOp(press.opBefore)
@@ -315,12 +338,12 @@ export function ToolController() {
         return
       }
 
-      const kind = kindOf(e)
       lastKind = kind
       // En operation som väntar på ett mått avbryts, och trycket räknas som om den aldrig funnits.
-      // Utom ett dubbeltryck på pilen: samma djup som förra gången (se onUp).
+      // Utom ett dubbeltryck på pilen: samma djup som förra gången (se onUp). Ett finger när
+      // pennan används vrider bara kameran, och låter operationen vänta kvar.
       const here = { x: e.clientX, y: e.clientY, time: e.timeStamp }
-      if (waiting && !isDoubleTap(startTap, here, TAP_SLOP[kind])) {
+      if (waiting && !fingerOnly && !isDoubleTap(startTap, here, TAP_SLOP[kind])) {
         cancel()
         op = null
       }
@@ -333,11 +356,14 @@ export function ToolController() {
       const t = hit?.target
       const headOn = (t?.kind === 'handle' || t?.kind === 'axis') && !!t.headOn
       const owner =
-        useViewStore.getState().exploded || (headOn && !op)
+        useViewStore.getState().exploded || (headOn && !op) || fingerOnly
           ? 'camera'
           : pressOwner(tool, op !== null, kind, t?.kind ?? null, onSelected)
-      if (controls) applyCameraButtons(controls, cameraButtons(tool, owner))
+      // Pennan vrider aldrig vyn när pennläget är på: ett tryck med den väljer ändå (se onUp).
+      if (controls) applyCameraButtons(controls, cameraButtons(tool, movesCamera(kind, penMode()) ? owner : 'tool'))
       press = {
+        pointerId: e.pointerId,
+        kind,
         x: e.clientX,
         y: e.clientY,
         slop: TAP_SLOP[kind],
@@ -374,7 +400,11 @@ export function ToolController() {
         p.moved = Math.max(p.moved, Math.hypot(e.clientX - p.x, e.clientY - p.y))
         gesture.moved = Math.max(gesture.moved, p.moved)
       }
-      if (!e.isPrimary || multiTouch) return
+      const kind = kindOf(e)
+      // Fingrar när pennan används: bara kameran, som sköter sig själv.
+      if (fingerOnlyCamera(kind, penMode())) return
+      if (!e.isPrimary || (multiTouch && kind !== 'pen')) return
+      if (press && press.pointerId !== e.pointerId) return
       const { op, tool, hover, setHover } = useToolStore.getState()
       if (op) {
         // Med mitt- eller högerknappen nere rör man kameran, inte operationen.
@@ -384,25 +414,26 @@ export function ToolController() {
         queueMove(rayOf(e))
         return
       }
-      // Hover bara med mus; touch har ingen hover. Med mellanslaget nere visas handen i stället.
+      // Hover med mus och med en penna som svävar över skärmen; ett finger har ingen hover.
+      // Med mellanslaget nere visas handen i stället.
       const view = useViewStore.getState()
-      if (e.pointerType !== 'mouse' || e.buttons !== 0 || view.spacePan.held || view.exploded) return
+      if (!hovers(kind, e.buttons) || view.spacePan.held || view.exploded) return
       if (tool === 'select') {
         // Handen visar att pilen går att dra i.
         const onHandle =
-          useDocumentStore.getState().selection && pick(e.clientX, e.clientY, 'mouse')?.target.kind === 'handle'
+          useDocumentStore.getState().selection && pick(e.clientX, e.clientY, kind)?.target.kind === 'handle'
         el.style.cursor = onHandle ? 'grab' : ''
         return
       }
-      const hit = pick(e.clientX, e.clientY, 'mouse')
+      const hit = pick(e.clientX, e.clientY, kind)
       if (tool === 'measure') {
         el.style.cursor = 'crosshair'
-        rulerHoverAt(hit, hit ? tolFor(hit.point, 'mouse') : 0)
+        rulerHoverAt(hit, hit ? tolFor(hit.point, kind) : 0)
         return
       }
       el.style.cursor = hit && ON_TOP.has(hit.target.kind) ? 'grab' : ''
       if (tool === 'rect' || tool === 'circle') {
-        hoverAt(hit, hit ? tolFor(hit.point, 'mouse') : 0)
+        hoverAt(hit, hit ? tolFor(hit.point, kind) : 0)
         return
       }
       const t = hit?.target
@@ -428,17 +459,18 @@ export function ToolController() {
     }
 
     const onUp = (e: PointerEvent) => {
-      // Släppet räknas med sin egen stråle nedan; en väntande rörelse är gammal.
-      dropMove()
-      pointers.delete(e.pointerId)
+      const wasFinger = pointers.delete(e.pointerId)
       const wasMulti = multiTouch
-      if (pointers.size === 0) {
+      if (wasFinger && pointers.size === 0) {
         endGesture(e)
         multiTouch = false
       }
-      if (!e.isPrimary || !press) return
+      // Bara pekaren som tryckte räknas: ett finger som släpps medan pennan ritar gör inget.
+      if (!e.isPrimary || !press || press.pointerId !== e.pointerId) return
+      // Släppet räknas med sin egen stråle nedan; en väntande rörelse är gammal.
+      dropMove()
       const moved = Math.hypot(e.clientX - press.x, e.clientY - press.y)
-      const isTap = moved <= press.slop && !wasMulti
+      const isTap = moved <= press.slop && !(wasMulti && press.kind !== 'pen')
       const p = press
       press = null
 
@@ -462,6 +494,9 @@ export function ToolController() {
         return
       }
       if (isTap && p.owner === 'camera') {
+        // Ett finger i pennläget gör inget med modellen, som i Shapr3D: det styr bara vyn.
+        // (Tvåfinger- och trefingertryck för ångra och gör om räknas ändå, se endGesture.)
+        if (fingerOnlyCamera(p.kind, penMode())) return
         const kind = kindOf(e)
         const hit = pick(e.clientX, e.clientY, kind)
         const here = { x: e.clientX, y: e.clientY, time: e.timeStamp }
@@ -490,10 +525,11 @@ export function ToolController() {
     }
 
     const onCancel = (e: PointerEvent) => {
-      dropMove()
       pointers.delete(e.pointerId)
       if (pointers.size === 0) multiTouch = false
-      if (press?.owner === 'tool') useToolStore.getState().setOp(press.opBefore)
+      if (press?.pointerId !== e.pointerId) return
+      dropMove()
+      if (press.owner === 'tool') useToolStore.getState().setOp(press.opBefore)
       press = null
     }
 
