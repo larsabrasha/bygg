@@ -5,6 +5,7 @@ import { PrintCutList } from './panel/PrintCutList'
 import { SelectionBar } from './panel/SelectionBar'
 import { Sidebar } from './panel/Sidebar'
 import { Toolbar } from './panel/Toolbar'
+import { ToolRail } from './panel/ToolButtons'
 import { ViewButtons } from './panel/ViewButtons'
 import { Viewport } from './scene/Viewport'
 import { useLibraryStore } from './store/libraryStore'
@@ -30,6 +31,7 @@ export function App() {
           {screen === 'model' && <Notices />}
           <MeasureBox />
           <ViewButtons />
+          <ToolRail />
           <SelectionBar />
         </main>
         <Sidebar />

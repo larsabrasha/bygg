@@ -5,7 +5,11 @@ import { renameModel, showGallery } from '../sync/session'
 import { SyncBadge } from './SyncBadge'
 import { field } from './ui'
 
-/** Tillbaka till startvyn, och modellens namn: tryck på namnet för att byta det. */
+/**
+ * Tillbaka till startvyn, och modellens namn. Namnet är text, inte en knapp:
+ * ett tryck bredvid bakåtpilen ska inte börja redigera. Dubbeltryck eller
+ * dubbelklick byter namn; det går också från "…" i startvyn.
+ */
 export function ModelTitle() {
   const currentId = useLibraryStore((s) => s.currentId)
   const currentName = useLibraryStore((s) => s.currentName)
@@ -18,14 +22,15 @@ export function ModelTitle() {
   }
 
   return (
-    <div className="flex min-w-0 items-center">
+    <div className="flex min-w-0 items-center gap-1 narrow:gap-2">
+      {/* Bredare än hög på smal skärm, så att den är lätt att träffa. */}
       <button
-        className="grid size-9 shrink-0 cursor-pointer place-items-center rounded-md hover:bg-hover narrow:size-11"
+        className="grid size-9 shrink-0 cursor-pointer place-items-center rounded-md hover:bg-hover narrow:h-11 narrow:w-12"
         aria-label="Alla modeller"
         title="Alla modeller"
         onClick={() => void showGallery()}
       >
-        <ChevronLeft size={22} strokeWidth={1.75} aria-hidden />
+        <ChevronLeft size={24} strokeWidth={1.75} aria-hidden />
       </button>
       {renaming ? (
         <input
@@ -42,16 +47,16 @@ export function ModelTitle() {
           }}
         />
       ) : (
-        <button
-          className="min-h-9 min-w-0 cursor-text truncate rounded-md px-1.5 text-left font-semibold hover:bg-hover narrow:min-h-11"
-          title="Byt namn"
-          onClick={() => {
+        <h1
+          className="min-w-0 truncate font-semibold select-none"
+          title="Dubbelklicka för att byta namn"
+          onDoubleClick={() => {
             setName(currentName)
             setRenaming(true)
           }}
         >
           {currentName || 'Modell'}
-        </button>
+        </h1>
       )}
       <SyncBadge withLabel={false} />
     </div>

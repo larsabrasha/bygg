@@ -12,3 +12,9 @@ export const dangerButton =
   'cursor-pointer rounded border border-danger bg-transparent px-3 py-1.5 text-danger narrow:min-h-11'
 
 export const sectionTitle = 'mb-2 text-[13px] font-normal uppercase tracking-wide text-muted narrow:hidden'
+
+/** Kvadratisk ikonknapp: 36 px på desktop, 44 px (touchyta) på smal skärm. */
+export const iconButton =
+  'grid size-9 shrink-0 cursor-pointer place-items-center rounded-md border border-transparent hover:bg-hover narrow:size-11 disabled:cursor-default disabled:text-disabled disabled:hover:bg-transparent'
+
+export const ICON = { size: 20, strokeWidth: 1.75, 'aria-hidden': true } as const

@@ -1,52 +1,30 @@
-import { MousePointer2, Redo2, Square, Undo2, type LucideIcon } from 'lucide-react'
+import { Redo2, Undo2 } from 'lucide-react'
 import { useDocumentStore } from '../store/documentStore'
-import { useToolStore, type Tool } from '../store/toolStore'
+import { useToolStore } from '../store/toolStore'
 import { ModelTitle } from './ModelTitle'
 import { ShareMenu } from './ShareMenu'
-
-const TOOLS: { tool: Tool; label: string; key: string; Icon: LucideIcon }[] = [
-  { tool: 'select', label: 'Välj', key: 'Mellanslag', Icon: MousePointer2 },
-  { tool: 'rect', label: 'Rektangel', key: 'R', Icon: Square },
-]
-
-/** Kvadratisk ikonknapp: 36 px på desktop, 44 px (touchyta) på smal skärm. */
-const button =
-  'grid size-9 shrink-0 cursor-pointer place-items-center rounded-md border border-transparent hover:bg-hover narrow:size-11 disabled:cursor-default disabled:text-disabled disabled:hover:bg-transparent'
-
-const ICON = { size: 20, strokeWidth: 1.75, 'aria-hidden': true } as const
+import { ToolButtons } from './ToolButtons'
+import { ICON, iconButton } from './ui'
 
 export function Toolbar() {
-  const tool = useToolStore((s) => s.tool)
-  const setTool = useToolStore((s) => s.setTool)
   const canUndo = useDocumentStore((s) => s.past.length > 0)
   const canRedo = useDocumentStore((s) => s.future.length > 0)
   const undo = useDocumentStore((s) => s.undo)
   const redo = useDocumentStore((s) => s.redo)
 
   return (
-    // Knapparna visar bara ikoner; namnet finns i aria-label (skärmläsare) och title (tooltip med kortkommando).
-    <header className="flex items-center gap-2 border-b border-line bg-panel px-2 py-1.5 pt-[max(6px,env(safe-area-inset-top))] [grid-area:toolbar] narrow:gap-1">
-      <div className="max-w-72 min-w-0 narrow:flex-1">
+    <header className="flex items-center gap-2 border-b border-line bg-panel px-2 py-1.5 pt-[max(6px,env(safe-area-inset-top))] [grid-area:toolbar] narrow:gap-1 narrow:pl-1">
+      <div className="max-w-72 min-w-0 narrow:max-w-none narrow:flex-1">
         <ModelTitle />
       </div>
-      <div className="flex gap-1" role="toolbar" aria-label="Verktyg">
-        {TOOLS.map(({ tool: t, label, key, Icon }) => (
-          <button
-            key={t}
-            aria-pressed={tool === t}
-            aria-label={label}
-            title={`${label} (${key})`}
-            onClick={() => setTool(t)}
-            className={`${button} aria-pressed:border-accent-line aria-pressed:bg-accent-soft aria-pressed:text-accent`}
-          >
-            <Icon {...ICON} />
-          </button>
-        ))}
+      {/* På smal skärm ligger verktygen i en list i 3D-vyn (ToolRail). */}
+      <div className="flex gap-1 narrow:hidden" role="toolbar" aria-label="Verktyg">
+        <ToolButtons />
       </div>
-      <div className="ml-auto flex gap-1">
-        <ShareMenu buttonClass={button} />
+      <div className="ml-auto flex shrink-0 gap-1">
+        <ShareMenu buttonClass={iconButton} />
         <button
-          className={button}
+          className={iconButton}
           disabled={!canUndo}
           aria-label="Ångra"
           title="Ångra (⌘Z)"
@@ -57,7 +35,7 @@ export function Toolbar() {
         >
           <Undo2 {...ICON} />
         </button>
-        <button className={button} disabled={!canRedo} aria-label="Gör om" title="Gör om (⇧⌘Z)" onClick={redo}>
+        <button className={iconButton} disabled={!canRedo} aria-label="Gör om" title="Gör om (⇧⌘Z)" onClick={redo}>
           <Redo2 {...ICON} />
         </button>
       </div>
