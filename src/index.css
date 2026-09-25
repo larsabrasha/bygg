@@ -71,3 +71,18 @@
     }
   }
 }
+
+/* Utskrift (kaplistan): vit sida även i mörkt tema. */
+@media print {
+  @page {
+    margin: 15mm;
+  }
+
+  :root {
+    color-scheme: light;
+  }
+
+  body {
+    background: white;
+  }
+}
