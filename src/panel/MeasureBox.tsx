@@ -20,8 +20,8 @@ export function MeasureBox() {
   const hint = !op
     ? {
         rect: 'Tryck där första hörnet ska vara – på golvet eller på en yta.',
-        pushpull: 'Tryck på en skiss eller en sida av en del.',
-        move: 'Tryck på en del. Den flyttas i planet för sidan du trycker på.',
+        pushpull: 'Dra i en skiss eller en sida av en del, eller tryck på den.',
+        move: 'Dra en del dit den ska, eller tryck på den. Den flyttas i planet för sidan du tar i.',
       }[tool]
     : {
         rect: 'Tryck på andra hörnet, eller skriv längd och bredd.',

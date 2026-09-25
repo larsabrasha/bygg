@@ -1,14 +1,14 @@
+import type { CameraControlsImpl } from '@react-three/drei'
 import { useThree } from '@react-three/fiber'
 import { useEffect, useMemo } from 'react'
 import { Raycaster, Vector2, type Intersection, type Object3D } from 'three'
 import { FACES, type Vec3 } from '../model/types'
+import { useDocumentStore } from '../store/documentStore'
+import { useToolStore, type Op } from '../store/toolStore'
 import { cancel, commit, hoverAt, move, tap, type Hit, type PickTarget, type Ray } from '../tools/actions'
-import { useToolStore } from '../store/toolStore'
+import { cameraButtons, fingerTap, pressOwner, TAP_SLOP, type Owner, type PointerKind } from '../tools/gestures'
+import { applyCameraButtons } from './camera'
 
-type PointerKind = 'mouse' | 'pen' | 'touch'
-
-/** Hur långt pekaren får röra sig och ändå räknas som ett tryck, i px. */
-const TAP_SLOP: Record<PointerKind, number> = { mouse: 4, pen: 6, touch: 10 }
 /**
  * Hur nära en del pekaren måste vara för att träffa den, i px. Gör tunna
  * delar (en 22 mm bräda är några px hög på avstånd) möjliga att träffa.
@@ -16,24 +16,42 @@ const TAP_SLOP: Record<PointerKind, number> = { mouse: 4, pen: 6, touch: 10 }
 const PICK_RADIUS: Record<PointerKind, number> = { mouse: 6, pen: 8, touch: 16 }
 /** Snäpptolerans som andel av avståndet från kameran till träffpunkten (~15 px). */
 const SNAP_FRACTION = 0.015
+/** Golvet blir vridpunkt bara om det ligger högst så här många gånger längre bort än nuvarande vridpunkt. */
+const MAX_GROUND_PIVOT = 1.5
 
 const kindOf = (e: PointerEvent): PointerKind =>
   e.pointerType === 'touch' || e.pointerType === 'pen' ? e.pointerType : 'mouse'
 
+/** Pågående tryck med den primära pekaren. */
+interface Press {
+  x: number
+  y: number
+  slop: number
+  owner: Owner
+  /** Operationen före trycket; återställs om trycket blir en tvåfingergest. */
+  opBefore: Op | null
+  /** Trycket startade en operation (drar man inte, väntar den på nästa tryck). */
+  startedOp: boolean
+}
+
 /**
- * Översätter pekarhändelser till verktygsanrop. Egen raycasting mot objekt med
- * userData.pick, plus golvplanet y = 0. R3F:s egna mesh-händelser används inte.
+ * Översätter pekarhändelser till verktygsanrop och styr vad kameran får göra
+ * (se gestures.ts). Egen raycasting mot objekt med userData.pick, plus golvplanet
+ * y = 0. R3F:s egna mesh-händelser används inte.
  */
 export function ToolController() {
   const { camera, gl, scene } = useThree()
+  const controls = useThree((s) => s.controls) as CameraControlsImpl | null
   const raycaster = useMemo(() => new Raycaster(), [])
 
   useEffect(() => {
     const el = gl.domElement
     const ndc = new Vector2()
-    let down: { x: number; y: number; slop: number } | null = null
+    let press: Press | null = null
     let multiTouch = false
-    const activePointers = new Set<number>()
+    /** Alla nedtryckta pekare med startpunkt och hur långt de rört sig, för flerfingertryck. */
+    const pointers = new Map<number, { x: number; y: number; moved: number }>()
+    let gesture = { start: 0, fingers: 0, moved: 0 }
 
     const castRay = (x: number, y: number): Ray => {
       const r = el.getBoundingClientRect()
@@ -111,18 +129,92 @@ export function ToolController() {
       camera.position.distanceTo({ x: point[0], y: point[1], z: point[2] }) * SNAP_FRACTION
     const tolForRay = () => camera.position.length() * SNAP_FRACTION
 
+    /**
+     * Kameran vrider runt det man trycker på, inte runt en fast punkt.
+     * Förhandsvisade delar räknas också: när andra fingret landar kan det
+     * första just ha startat en operation, och scenen är inte omritad än.
+     */
+    const setPivot = (x0: number, y0: number) => {
+      if (!controls) return
+      scene.updateMatrixWorld()
+      const targets: Object3D[] = []
+      scene.traverse((o) => {
+        if (o.userData.pick || o.userData.pivot) targets.push(o)
+      })
+      const ray = castRay(x0, y0)
+      const hit = raycaster.intersectObjects(targets, false)[0]
+      let point: Vec3 | null = hit ? (hit.point.toArray() as Vec3) : null
+      if (!point && ray.dir[1] < 0) {
+        const t = -ray.origin[1] / ray.dir[1]
+        // Golvet långt bort ger en vridpunkt som slänger iväg modellen.
+        if (t <= controls.distance * MAX_GROUND_PIVOT)
+          point = [ray.origin[0] + ray.dir[0] * t, 0, ray.origin[2] + ray.dir[2] * t]
+      }
+      if (!point) return
+      const [x, y, z] = point
+      // setOrbitPoint klarar inte en pågående glidning (t.ex. "Visa allt"): hoppa till dess slut först.
+      controls.stop()
+      controls.update(0)
+      controls.setOrbitPoint(x, y, z)
+    }
+
     const onDown = (e: PointerEvent) => {
-      activePointers.add(e.pointerId)
-      if (activePointers.size > 1) multiTouch = true
+      pointers.set(e.pointerId, { x: e.clientX, y: e.clientY, moved: 0 })
+      if (pointers.size === 1) gesture = { start: e.timeStamp, fingers: 1, moved: 0 }
+      gesture.fingers = Math.max(gesture.fingers, pointers.size)
+
+      if (pointers.size > 1) {
+        // Fler fingrar: kameran tar över. Det första fingrets verkan tas tillbaka.
+        multiTouch = true
+        if (press?.owner === 'tool') useToolStore.getState().setOp(press.opBefore)
+        press = null
+        // Två fingrar vrider runt det som ligger mellan dem.
+        if (pointers.size === 2) {
+          const [a, b] = [...pointers.values()]
+          if (a && b) setPivot((a.x + b.x) / 2, (a.y + b.y) / 2)
+        }
+        return
+      }
       if (!e.isPrimary) return
-      down = { x: e.clientX, y: e.clientY, slop: TAP_SLOP[kindOf(e)] }
-      if (useToolStore.getState().op) move(rayOf(e), tolForRay())
+
+      const { tool, op } = useToolStore.getState()
+      // Mitt- och högerknappen styr bara kameran; mittknappen vrider under en operation.
+      if (e.pointerType === 'mouse' && e.button !== 0) {
+        if (controls) applyCameraButtons(controls, cameraButtons(tool, op ? 'tool' : 'camera'))
+        return
+      }
+
+      const kind = kindOf(e)
+      const hit = pick(e.clientX, e.clientY, kind)
+      const owner = pressOwner(tool, op !== null, kind, hit?.target.kind ?? null)
+      if (controls) applyCameraButtons(controls, cameraButtons(tool, owner))
+      press = { x: e.clientX, y: e.clientY, slop: TAP_SLOP[kind], owner, opBefore: op, startedOp: false }
+
+      if (owner === 'camera') {
+        setPivot(e.clientX, e.clientY)
+        return
+      }
+      // Släpp utanför vyn ska ändå avsluta dragningen.
+      el.setPointerCapture(e.pointerId)
+      if (op) move(rayOf(e), tolForRay())
+      else {
+        tap(hit, hit ? tolFor(hit.point) : 0)
+        press.startedOp = useToolStore.getState().op !== null
+      }
     }
 
     const onMove = (e: PointerEvent) => {
+      const p = pointers.get(e.pointerId)
+      if (p) {
+        p.moved = Math.max(p.moved, Math.hypot(e.clientX - p.x, e.clientY - p.y))
+        gesture.moved = Math.max(gesture.moved, p.moved)
+      }
       if (!e.isPrimary || multiTouch) return
       const { op, tool, hover, setHover } = useToolStore.getState()
       if (op) {
+        // Med mitt- eller högerknappen nere rör man kameran, inte operationen.
+        if (e.pointerType === 'mouse' && (e.buttons & ~1) !== 0) return
+        if (press && press.owner !== 'tool') return
         move(rayOf(e), tolForRay())
         return
       }
@@ -138,30 +230,50 @@ export function ToolController() {
       if (JSON.stringify(next) !== JSON.stringify(hover)) setHover(next)
     }
 
+    /** Sista fingret släpptes efter ett snabbt tryck med två eller tre fingrar: ångra eller gör om. */
+    const endGesture = (e: PointerEvent) => {
+      if (gesture.fingers < 2) return
+      const action = fingerTap(gesture.fingers, e.timeStamp - gesture.start, gesture.moved)
+      if (!action) return
+      const tools = useToolStore.getState()
+      const docs = useDocumentStore.getState()
+      if (tools.op) cancel()
+      else if (action === 'undo') docs.undo()
+      else docs.redo()
+    }
+
     const onUp = (e: PointerEvent) => {
-      activePointers.delete(e.pointerId)
+      pointers.delete(e.pointerId)
       const wasMulti = multiTouch
-      if (activePointers.size === 0) multiTouch = false
-      if (!e.isPrimary || !down) return
-      const moved = Math.hypot(e.clientX - down.x, e.clientY - down.y)
-      const isTap = moved <= down.slop && !wasMulti
-      down = null
+      if (pointers.size === 0) {
+        endGesture(e)
+        multiTouch = false
+      }
+      if (!e.isPrimary || !press) return
+      const moved = Math.hypot(e.clientX - press.x, e.clientY - press.y)
+      const isTap = moved <= press.slop && !wasMulti
+      const p = press
+      press = null
 
       if (useToolStore.getState().op) {
-        if (wasMulti) return
+        if (wasMulti || p.owner !== 'tool') return
+        // Ett tryck som startade operationen väntar på nästa tryck; en dragning avslutar den.
+        if (isTap && p.startedOp) return
         move(rayOf(e), tolForRay())
         commit()
         return
       }
-      if (isTap) {
+      if (isTap && p.owner === 'camera') {
         const hit = pick(e.clientX, e.clientY, kindOf(e))
         tap(hit, hit ? tolFor(hit.point) : 0)
       }
     }
 
     const onCancel = (e: PointerEvent) => {
-      activePointers.delete(e.pointerId)
-      down = null
+      pointers.delete(e.pointerId)
+      if (pointers.size === 0) multiTouch = false
+      if (press?.owner === 'tool') useToolStore.getState().setOp(press.opBefore)
+      press = null
     }
 
     const onLeave = () => {
@@ -183,7 +295,7 @@ export function ToolController() {
       el.removeEventListener('pointerleave', onLeave)
       cancel()
     }
-  }, [camera, gl, scene, raycaster])
+  }, [camera, gl, scene, raycaster, controls])
 
   return null
 }

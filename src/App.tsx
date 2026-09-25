@@ -3,6 +3,7 @@ import { Notices } from './panel/Notices'
 import { PrintCutList } from './panel/PrintCutList'
 import { Sidebar } from './panel/Sidebar'
 import { Toolbar } from './panel/Toolbar'
+import { ViewButtons } from './panel/ViewButtons'
 import { Viewport } from './scene/Viewport'
 import { useShortcuts } from './tools/useShortcuts'
 
@@ -21,6 +22,7 @@ export function App() {
           <Viewport />
           <Notices />
           <MeasureBox />
+          <ViewButtons />
         </main>
         <Sidebar />
       </div>

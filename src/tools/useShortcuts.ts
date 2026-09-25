@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import { useDocumentStore } from '../store/documentStore'
 import { useToolStore } from '../store/toolStore'
+import { useViewStore } from '../store/viewStore'
 import { applyMeasure, cancel } from './actions'
 
 /** Tecken som går direkt till måttfältet. Bokstäver (parameternamn) skrivs i fältet, så att R/P/M fungerar som kortkommandon. */
@@ -11,7 +12,7 @@ function isEditable(t: EventTarget | null) {
 }
 
 /**
- * Kortkommandon som i SketchUp: R, P, M, mellanslag, Esc, Delete, ⌘Z / ⇧⌘Z.
+ * Kortkommandon som i SketchUp: R, P, M, mellanslag, Esc, Delete, ⌘Z / ⇧⌘Z, ⇧Z (visa allt).
  * Under en operation går siffror direkt till måttfältet utan att man klickar i det;
  * ; eller Tab byter fält.
  */
@@ -82,6 +83,9 @@ export function useShortcuts() {
         case 'm':
         case 'M':
           tools.setTool('move')
+          break
+        case 'Z':
+          if (e.shiftKey) useViewStore.getState().requestFit('all')
           break
         case 'Delete':
         case 'Backspace':

@@ -13,7 +13,7 @@ interface Props {
   /** Länkad kopia av den valda delen. */
   sibling?: boolean
   highlightFace?: Face | null
-  /** Förhandsvisning: halvgenomskinlig och går inte att träffa med pekaren. */
+  /** Förhandsvisning: halvgenomskinlig och går inte att träffa med pekaren, men kameran kan vrida runt den. */
   preview?: boolean
 }
 
@@ -46,7 +46,11 @@ export function BodyMesh({ body, selected = false, sibling = false, highlightFac
 
   return (
     <group position={body.frame.origin} quaternion={quaternion}>
-      <mesh position={center} material={materials} userData={preview ? {} : { pick: { kind: 'body', id: body.id } }}>
+      <mesh
+        position={center}
+        material={materials}
+        userData={preview ? { pivot: true } : { pick: { kind: 'body', id: body.id } }}
+      >
         <boxGeometry args={[w, h, d]} />
         <Edges color={edge} lineWidth={selected ? 2.5 : sibling ? 1.8 : 1} />
       </mesh>

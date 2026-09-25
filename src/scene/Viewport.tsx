@@ -1,10 +1,12 @@
-import { GizmoHelper, GizmoViewport, Grid, OrbitControls } from '@react-three/drei'
+import { GizmoHelper, GizmoViewport, Grid } from '@react-three/drei'
 import { Canvas } from '@react-three/fiber'
 import { resolveBodies } from '../model/resolve'
 import { useDocumentStore } from '../store/documentStore'
 import { useToolStore } from '../store/toolStore'
 import { previewDoc } from '../tools/preview'
 import { BodyMesh } from './BodyMesh'
+import { HOME } from './camera'
+import { CameraRig } from './CameraRig'
 import { SCENE } from './colors'
 import { HoverMarker, OpOverlay } from './OpPreview'
 import { SketchMesh } from './SketchMesh'
@@ -60,12 +62,11 @@ function Scene() {
 
 // Scenen ritas i millimeter: 1 enhet = 1 mm.
 export function Viewport() {
-  const opActive = useToolStore((s) => s.op !== null)
   const colors = SCENE[useColorScheme()]
 
   return (
     // frameloop="demand": ritar bara om när något ändras. Sparar batteri på mobil.
-    <Canvas frameloop="demand" camera={{ position: [1500, 1200, 1500], fov: 45, near: 1, far: 50000 }}>
+    <Canvas frameloop="demand" camera={{ position: [...HOME.position], fov: 45, near: 1, far: 50000 }}>
       <color attach="background" args={[colors.background]} />
       <ambientLight intensity={0.6} />
       <directionalLight position={[2000, 4000, 3000]} intensity={1.6} />
@@ -88,9 +89,7 @@ export function Viewport() {
       <Scene />
       <ToolController />
 
-      {/* Kameran står still under en operation, så att dragningen styr måttet.
-          Ingen tröghet: vyn stannar när man släpper, som i ett CAD-program. */}
-      <OrbitControls makeDefault enableDamping={false} enabled={!opActive} target={[0, 0, 0]} />
+      <CameraRig />
       <GizmoHelper alignment="bottom-left" margin={[70, 70]}>
         <GizmoViewport labelColor="white" />
       </GizmoHelper>
