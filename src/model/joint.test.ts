@@ -102,6 +102,27 @@ describe('tapp och tapphål', () => {
     expect(b!.tools).toBe(a!.tools)
   })
 
+  it('länkade sargar i var sitt ben får en tapp var, inte en per fog', () => {
+    const doc = legAndApron()
+    docs().load({
+      ...doc,
+      instances: [
+        ...doc.instances,
+        { id: 'ben2', defId: 'ben', frame: identity(500, 0, 0) },
+        { id: 'sarg2', defId: 'sarg', frame: identity(540, 9, 550) },
+      ],
+    })
+    expect(docs().joint('sarg', 'ben')).toBeNull()
+    expect(docs().joint('sarg2', 'ben2')).toBeNull()
+    const find = (id: string) => bodies().find((b) => b.id === id)!
+    // Båda tapparna hamnar på samma ställe i den delade formen: en gång räcker.
+    expect(find('sarg').tools).toHaveLength(1)
+    expect(find('sarg2').tools).toBe(find('sarg').tools)
+    // Men varje ben har sitt tapphål.
+    expect(find('ben').tools).toHaveLength(1)
+    expect(find('ben2').tools).toHaveLength(1)
+  })
+
   describe('tappen följer sargen och benet', () => {
     const tenonSize = () => {
       const t = bodies().find((b) => b.name === 'Tapp 1')!

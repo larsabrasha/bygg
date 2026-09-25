@@ -2,7 +2,7 @@ import type { ManifoldToplevel } from 'manifold-3d'
 import { useEffect, useSyncExternalStore } from 'react'
 import { BufferAttribute, BufferGeometry } from 'three'
 import type { Box } from '../model/box'
-import { buildSolid } from '../model/solid'
+import { buildSolid, SEGMENTS } from '../model/solid'
 import type { ToolShape } from '../model/types'
 
 /**
@@ -51,10 +51,16 @@ const CACHE_SIZE = 64
 
 /**
  * Formen med sina verktyg som three.js-geometri, i formens koordinater.
+ * segments = segment runt det som är runt (färre medan man drar, DRAG_SEGMENTS).
  * Geometrin ägs av cachen: den som använder den ska inte ta bort den.
  */
-export function solidGeometry(m: ManifoldToplevel, box: Box, tools: readonly ToolShape[]): BufferGeometry {
-  const key = JSON.stringify([box.profile, box.shape, box.z0, box.z1, tools])
+export function solidGeometry(
+  m: ManifoldToplevel,
+  box: Box,
+  tools: readonly ToolShape[],
+  segments = SEGMENTS,
+): BufferGeometry {
+  const key = JSON.stringify([segments, box.profile, box.shape, box.z0, box.z1, tools])
   const hit = cache.get(key)
   if (hit) {
     // Senast använd sist, så att den tas bort sist.
@@ -62,7 +68,7 @@ export function solidGeometry(m: ManifoldToplevel, box: Box, tools: readonly Too
     cache.set(key, hit)
     return hit
   }
-  const mesh = buildSolid(m, box, tools)
+  const mesh = buildSolid(m, box, tools, segments)
   const g = new BufferGeometry()
   g.setAttribute('position', new BufferAttribute(mesh.positions, 3))
   g.setAttribute('normal', new BufferAttribute(mesh.normals, 3))

@@ -2,7 +2,7 @@ import Module from 'manifold-3d'
 import { beforeAll, describe, expect, it } from 'vitest'
 import type { ManifoldToplevel } from 'manifold-3d'
 import { faceOnBox } from './geometry'
-import { buildSolid, type SolidMesh } from './solid'
+import { buildSolid, DRAG_SEGMENTS, SEGMENTS, type SolidMesh } from './solid'
 import type { Frame, ToolShape } from './types'
 
 let api: ManifoldToplevel
@@ -87,5 +87,32 @@ describe('former med verktyg', () => {
     const round = { ...leg, shape: 'circle' as const }
     expect(faceOnBox(round, [40, 20, 300], [1, 0, 0])).toBe('u+')
     expect(faceOnBox(round, [30, 20, 300], [1, 0, 0])).toBeUndefined()
+  })
+})
+
+describe('medan man drar', () => {
+  const hole: ToolShape = {
+    op: 'subtract',
+    shape: 'circle',
+    profile: { x0: -10, y0: -10, x1: 10, y1: 10 },
+    z0: 0,
+    z1: 30,
+    frame: identity([20, 20, 0]),
+  }
+  const board = { profile: { x0: 0, y0: 0, x1: 400, y1: 250 }, z0: 0, z1: 30 }
+
+  it('färre segment ger färre trianglar, och ungefär samma volym', () => {
+    const fine = buildSolid(api, board, [hole])
+    const rough = buildSolid(api, board, [hole], DRAG_SEGMENTS)
+    expect(rough.indices.length).toBeLessThan(fine.indices.length / 2)
+    expect(volume(rough)).toBeCloseTo(volume(fine), -3)
+    expect(SEGMENTS).toBeGreaterThan(DRAG_SEGMENTS)
+  })
+
+  it('samma verktyg på en form som växer ger samma hål (verktygen sparas mellan anropen)', () => {
+    const a = buildSolid(api, board, [hole])
+    const b = buildSolid(api, { ...board, z1: 60 }, [hole])
+    // Den tjockare skivan: 30 mm mer trä, och hålet är lika stort som förut.
+    expect(volume(b) - volume(a)).toBeCloseTo(400 * 250 * 30, -1)
   })
 })

@@ -10,6 +10,10 @@ interface Tools {
   byInstance: Map<string, ToolShape[]>
 }
 
+/** Ett verktyg som text, avrundat till en tusendels mm, så att två likadana känns igen. */
+const toolKey = (t: ToolShape) =>
+  JSON.stringify(t, (_, v: unknown) => (typeof v === 'number' ? Math.round(v * 1000) / 1000 : v))
+
 /**
  * Verktygen som ToolShape i värdens koordinater. Verktyg på verktyg räknas
  * inte (se combineError).
@@ -27,14 +31,19 @@ function collectTools(doc: ModelDocument, defs: Map<string, PartDef>): Tools {
     d: PartDef,
   ) => {
     const list = out.get(key) ?? []
-    list.push({
+    const shape: ToolShape = {
       op,
       profile: d.profile,
       ...(d.shape && { shape: d.shape }),
       z0: d.z0,
       z1: d.z1,
       frame: relativeFrame(on.frame, t.frame),
-    })
+    }
+    // Samma verktyg på samma ställe en gång till (tappar från var sin länkad kopia in i en
+    // skiva hamnar på samma ställe i den delade formen): räkna det bara en gång. Annars
+    // ritades benen med fyra tappar på varandra, och manifold blev långsam på dem.
+    const k = toolKey(shape)
+    if (!list.some((x) => toolKey(x) === k)) list.push(shape)
     out.set(key, list)
   }
   for (const t of doc.instances) {

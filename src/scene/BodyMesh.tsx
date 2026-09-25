@@ -5,6 +5,7 @@ import { bodyExtents, type Box } from '../model/geometry'
 import { FACES, type Body, type Face, type Vec3 } from '../model/types'
 import { add } from '../model/vec'
 import { ACCENT, ACCENT_LIGHT, EDGE, materialColor } from './colors'
+import { DRAG_SEGMENTS, SEGMENTS } from '../model/solid'
 import { solidGeometry, useManifold } from './csg'
 import { cylinderGeometry } from './cylinder'
 import { frameQuaternion } from './frameTransform'
@@ -43,11 +44,14 @@ function BodyMeshImpl({
   const round = body.shape === 'circle'
   // Med verktyg ritas resultatet av manifold-3d, i formens koordinater (medan den laddas: bara formen).
   const manifold = useManifold(!!body.tools)
+  // Medan delen dras (förhandsvisning) räknas runda hål och tappar med färre segment: det går
+  // flera gånger fortare. När man släpper ritas den med alla.
+  const segments = preview ? DRAG_SEGMENTS : SEGMENTS
   const solid = useMemo(
-    () => (manifold && body.tools ? solidGeometry(manifold, body, body.tools) : null),
+    () => (manifold && body.tools ? solidGeometry(manifold, body, body.tools, segments) : null),
     // body självt byts vid varje ändring i dokumentet; det som ritas är form och verktyg.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [manifold, body.profile, body.shape, body.z0, body.z1, body.tools],
+    [manifold, body.profile, body.shape, body.z0, body.z1, body.tools, segments],
   )
 
   // En material per sida (i BoxGeometrys ordning) så att en sida kan markeras,
