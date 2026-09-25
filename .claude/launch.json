@@ -3,7 +3,12 @@
   "configurations": [
     {
       "name": "bygg",
-      "url": "http://localhost:5173"
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "run",
+        "dev:lan"
+      ],
+      "port": 5173
     }
   ]
 }

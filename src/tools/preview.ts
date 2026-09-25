@@ -9,6 +9,9 @@ export interface Preview {
   affected: Set<string>
 }
 
+/** Id för delen som förhandsvisas när en skiss dras ut. */
+export const PREVIEW_ID = 'preview'
+
 /** Id för kopian som förhandsvisas när Kopia är på. */
 export const COPY_PREVIEW_ID = 'preview-copy'
 
@@ -41,7 +44,7 @@ export function previewDoc(op: Op, doc: ModelDocument, copy = false): Preview | 
   if (t.kind === 'sketch') {
     const s = doc.sketches.find((x) => x.id === t.id)
     const part =
-      s && sketchToPart(s, op.distance, { defId: 'preview', instanceId: 'preview', name: '', material: 'furu' })
+      s && sketchToPart(s, op.distance, { defId: PREVIEW_ID, instanceId: PREVIEW_ID, name: '', material: 'furu' })
     if (!part) return null
     return {
       doc: {
@@ -50,7 +53,7 @@ export function previewDoc(op: Op, doc: ModelDocument, copy = false): Preview | 
         defs: [...doc.defs, part.def],
         instances: [...doc.instances, part.instance],
       },
-      affected: new Set(['preview']),
+      affected: new Set([PREVIEW_ID]),
     }
   }
 

@@ -10,6 +10,8 @@ import { previewDoc } from '../tools/preview'
 import { BodyMesh } from './BodyMesh'
 import { HOME } from './camera'
 import { CameraRig } from './CameraRig'
+import { DimensionGuides } from './DimensionGuides'
+import { dimensionsFor } from './dimensionLabels'
 import { AXIS_COLORS, SCENE } from './colors'
 import { MoveGizmo } from './MoveGizmo'
 import { HoverMarker, OpOverlay } from './OpPreview'
@@ -46,6 +48,8 @@ function Scene() {
   const selectedFace = handleTarget?.kind === 'body' ? handleTarget : null
   // I Flytta-läget får den valda delen tre färgade pilar i stället.
   const gizmoAt = !op && tool === 'move' && selectedBody ? bodyCenter(selectedBody) : null
+  // I Välj visas den valda delens mått vid kanterna (etiketterna i panel/DimensionLabels).
+  const dims = dimensionsFor(doc, selection, tool, op)
 
   return (
     <>
@@ -82,6 +86,7 @@ function Scene() {
       ))}
       {handle && <PushPullHandle anchor={handle.anchor} normal={handle.normal} />}
       {gizmoAt && <MoveGizmo center={gizmoAt} />}
+      {dims && <DimensionGuides key={dims.body.id} body={dims.body} live={dims.live} />}
       {op && <OpOverlay op={op} />}
       {!op && hoverPoint && <HoverMarker hover={hoverPoint} />}
     </>

@@ -1,5 +1,5 @@
 import { Edges } from '@react-three/drei'
-import { useEffect, useMemo } from 'react'
+import { memo, useEffect, useMemo } from 'react'
 import { MeshStandardMaterial } from 'three'
 import { bodyExtents } from '../model/geometry'
 import { FACES, type Body, type Face } from '../model/types'
@@ -16,7 +16,7 @@ interface Props {
   preview?: boolean
 }
 
-export function BodyMesh({ body, selected = false, sibling = false, highlightFace = null, preview = false }: Props) {
+function BodyMeshImpl({ body, selected = false, sibling = false, highlightFace = null, preview = false }: Props) {
   const quaternion = useMemo(() => frameQuaternion(body.frame), [body.frame])
   const [w, h, d] = bodyExtents(body)
   const { x0, x1, y0, y1 } = body.profile
@@ -56,3 +56,28 @@ export function BodyMesh({ body, selected = false, sibling = false, highlightFac
     </group>
   )
 }
+
+/** Samma del om allt som ritas är detsamma. Form och läge jämförs som referenser; de byts bara när de ändras. */
+const sameBody = (a: Body, b: Body) =>
+  a === b ||
+  (a.id === b.id &&
+    a.frame === b.frame &&
+    a.profile === b.profile &&
+    a.z0 === b.z0 &&
+    a.z1 === b.z1 &&
+    a.material === b.material)
+
+/**
+ * Under push/pull och flytt skapas nya Body-objekt för alla delar vid varje
+ * rörelse (förhandsdokumentet), fast bara en ändras. Utan memo ritades alla
+ * om i React varje gång, vilket märks på iPad.
+ */
+export const BodyMesh = memo(
+  BodyMeshImpl,
+  (a, b) =>
+    sameBody(a.body, b.body) &&
+    a.selected === b.selected &&
+    a.sibling === b.sibling &&
+    a.highlightFace === b.highlightFace &&
+    a.preview === b.preview,
+)

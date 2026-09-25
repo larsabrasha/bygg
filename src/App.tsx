@@ -1,4 +1,5 @@
 import { Gallery } from './panel/Gallery'
+import { DimensionLabels } from './panel/DimensionLabels'
 import { MeasureBox } from './panel/MeasureBox'
 import { Notices } from './panel/Notices'
 import { PrintCutList } from './panel/PrintCutList'
@@ -27,6 +28,7 @@ export function App() {
         <Toolbar />
         <main className="relative min-h-0 min-w-0 [grid-area:viewport]">
           <Viewport />
+          <DimensionLabels />
           {/* Startvyn visar samma meddelanden själv. */}
           {screen === 'model' && <Notices />}
           <MeasureBox />
