@@ -3,6 +3,7 @@ import { useToolStore, type Tool } from '../store/toolStore'
 import { useViewStore } from '../store/viewStore'
 import { Tip } from './Tip'
 import { ICON, iconButton } from './ui'
+import { useCoversView } from './useCoversView'
 
 const TOOLS: { tool: Tool; label: string; key: string; Icon: LucideIcon }[] = [
   { tool: 'select', label: 'Välj', key: 'Mellanslag', Icon: MousePointer2 },
@@ -34,8 +35,10 @@ export function ToolButtons({ tipSide = 'bottom' }: { tipSide?: 'bottom' | 'left
  */
 export function ToolRail() {
   const focusMode = useViewStore((s) => s.focusMode)
+  const cover = useCoversView<HTMLDivElement>()
   return (
     <div
+      ref={cover}
       role="toolbar"
       aria-label="Verktyg"
       aria-orientation="vertical"

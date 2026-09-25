@@ -20,6 +20,7 @@ import { beginPushPull } from '../tools/actions'
 import { MenuItem } from './MenuItem'
 import { Tip } from './Tip'
 import { useDismiss } from './useDismiss'
+import { useCoversView } from './useCoversView'
 
 const ICON = { size: 18, strokeWidth: 1.75, 'aria-hidden': true } as const
 
@@ -104,6 +105,8 @@ export function SelectionBar() {
   const combining = useToolStore((s) => s.combining)
   const detach = useDocumentStore((s) => s.detach)
 
+  const cover = useCoversView<HTMLDivElement>()
+
   // Medan man väljer verktyg för Skär ut / Lägg till visas CombineBar i stället.
   if (!selection || opActive || combining) return null
   const body = selection.kind === 'body' ? resolveBodies(doc).find((b) => b.id === selection.id) : undefined
@@ -111,6 +114,7 @@ export function SelectionBar() {
 
   return (
     <div
+      ref={cover}
       role="toolbar"
       aria-label="Det valda"
       className="absolute top-3 left-3 flex max-w-[calc(100%-190px)] narrow:max-w-[calc(100%-80px)] items-center gap-0.5 rounded-lg border border-line bg-panel/95 p-0.5 shadow-md"

@@ -17,6 +17,7 @@ import { rulerResult, type RulerPoint } from '../model/ruler'
 import { bottomBox, ghostButton, iconAction, toggleButton } from './ui'
 import { Tip } from './Tip'
 import { numberFormat } from '../model/numberFormat'
+import { useCoversView } from './useCoversView'
 
 const fmt = numberFormat(1)
 
@@ -54,6 +55,7 @@ export function MeasureBox() {
   useToolStore((s) => s.lastOp)
   useDocumentStore((s) => s.selection)
   const doc = useDocumentStore((s) => s.doc)
+  const cover = useCoversView<HTMLDivElement>()
 
   // Efter en kopia kan man skriva hur många det ska bli (som "5x" i SketchUp).
   const extending = !op && tool === 'move' ? extendableCopy() : null
@@ -148,7 +150,7 @@ export function MeasureBox() {
   if (tool === 'measure') return <RulerBox ruler={ruler} hover={rulerHover} onDone={() => setTool('select')} />
 
   return (
-    <div className={bottomBox}>
+    <div ref={cover} className={bottomBox}>
       {shown || extending ? (
         <>
           <p className="px-1 pb-1.5 text-xs text-muted">{hint}</p>

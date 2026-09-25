@@ -4,6 +4,7 @@ import { useDocumentStore } from '../store/documentStore'
 import { useToolStore } from '../store/toolStore'
 import { Tip } from './Tip'
 import { bottomBox, iconAction } from './ui'
+import { useCoversView } from './useCoversView'
 
 /**
  * Efter Skär ut eller Lägg till i knappraden: tala om att nästa tryck väljer
@@ -13,6 +14,7 @@ export function CombineBar() {
   const combining = useToolStore((s) => s.combining)
   const setCombining = useToolStore((s) => s.setCombining)
   const doc = useDocumentStore((s) => s.doc)
+  const cover = useCoversView<HTMLDivElement>()
   if (!combining) return null
   const host = resolveBodies(doc).find((b) => b.id === combining.host)
   if (!host) return null
@@ -22,7 +24,7 @@ export function CombineBar() {
     joint: `Tryck på delen som tappen på ${host.name} ska in i. Änden på ${host.name} ska ligga an mot den.`,
   }[combining.op]
   return (
-    <div role="status" className={`${bottomBox} flex items-center gap-2 pl-3`}>
+    <div ref={cover} role="status" className={`${bottomBox} flex items-center gap-2 pl-3`}>
       <div className="flex flex-col">
         <p className="text-[13px]">{text}</p>
         {combining.error && <p className="text-xs text-danger">{combining.error}</p>}

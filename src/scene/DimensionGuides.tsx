@@ -5,7 +5,7 @@ import { dimensionEdges, type DimensionEdge } from '../model/dimensions'
 import { bodyCenter } from '../model/geometry'
 import type { Body, Vec3 } from '../model/types'
 import { add, scale } from '../model/vec'
-import { arrowOnScreen, labelElements, labelSizes, setDimensionWake } from './dimensionLabels'
+import { arrowOnScreen, coverBoxes, coversMoved, labelElements, labelSizes, setDimensionWake } from './dimensionLabels'
 import { placeLabel, type Placement } from './labelPlacement'
 
 /** Ungefärlig halv bredd och höjd på en etikett och luften mot kanten, i px. */
@@ -14,6 +14,7 @@ const HALF_H = 14
 const GAP = 6
 
 const v = new Vector3()
+let lastView: [number, number] = [0, 0]
 
 /**
  * Etikettens läge på skärmen: kantens mitt, flyttad ut från delen vinkelrätt
@@ -43,8 +44,6 @@ function labelPlacement(
 /** Minsta avstånd från vyns kant, i px. */
 const EDGE_MARGIN = 8
 
-const clamp = (x: number, lo: number, hi: number) => Math.min(Math.max(x, lo), Math.max(lo, hi))
-
 /**
  * Placerar måttetiketterna (panel/DimensionLabels) på skärmen, vid de kanter
  * som den valda delens mått sitter på (närmast kameran). Kanterna själva syns
@@ -68,6 +67,12 @@ export function DimensionGuides({ body }: { body: Body }) {
       return v.z > 1 ? null : [((v.x + 1) * view.width) / 2, ((1 - v.y) * view.height) / 2]
     }
     const center = bodyCenter(body)
+    // Knapparna vid högerkanten flyttas när vyn byter storlek, utan att själva ändra storlek.
+    if (view.width !== lastView[0] || view.height !== lastView[1]) {
+      coversMoved()
+      lastView = [view.width, view.height]
+    }
+    const covers = coverBoxes(view.left, view.top)
     // Etiketterna placeras en i taget; krockar en med en som redan står, eller med pilen, flyttas den (placeLabel).
     const placed: { pos: [number, number]; size: [number, number] }[] = []
     for (const edge of current) {
@@ -77,12 +82,13 @@ export function DimensionGuides({ body }: { body: Body }) {
       el.style.visibility = p ? 'visible' : 'hidden'
       if (!p) continue
       const size = labelSizes.get(edge.axis) ?? [2 * HALF_W, 2 * HALF_H]
-      let pos = placeLabel(p, size, placed, arrowOnScreen())
-      // Inom vyn, så att en etikett vid kanten av skärmen går att trycka på.
-      pos = [
-        clamp(pos[0], size[0] / 2 + EDGE_MARGIN, view.width - size[0] / 2 - EDGE_MARGIN),
-        clamp(pos[1], size[1] / 2 + EDGE_MARGIN, view.height - size[1] / 2 - EDGE_MARGIN),
-      ]
+      const pos = placeLabel(p, size, {
+        placed,
+        arrow: arrowOnScreen(),
+        covers,
+        view: [view.width, view.height],
+        margin: EDGE_MARGIN,
+      })
       placed.push({ pos, size })
       el.style.transform = `translate(${pos[0]}px, ${pos[1]}px) translate(-50%, -50%)`
     }

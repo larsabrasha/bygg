@@ -1,6 +1,7 @@
 import { House, Maximize2, Minimize2 } from 'lucide-react'
 import { useViewStore } from '../store/viewStore'
 import { Tip } from './Tip'
+import { useCoversView } from './useCoversView'
 
 /**
  * Knappar ovanpå 3D-vyn för kameran. Uppe till höger, så att de inte krockar med måttfältet på mobil.
@@ -12,8 +13,9 @@ export function ViewButtons() {
   const focusMode = useViewStore((s) => s.focusMode)
   const toggleFocusMode = useViewStore((s) => s.toggleFocusMode)
   const FocusIcon = focusMode ? Minimize2 : Maximize2
+  const cover = useCoversView<HTMLDivElement>()
   return (
-    <div className="absolute top-3 right-3 flex gap-1 narrow:flex-col">
+    <div ref={cover} className="absolute top-3 right-3 flex gap-1 narrow:flex-col">
       <Tip label="Visa hela modellen" keys="⇧Z">
         <button
           aria-label="Visa allt"

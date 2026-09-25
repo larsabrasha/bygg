@@ -4,7 +4,7 @@ import type { Axis, Body, ModelDocument, PartDef } from '../model/types'
 import type { Selection } from '../store/documentStore'
 import type { Op, Tool } from '../store/toolStore'
 import { PREVIEW_ID, previewDoc } from '../tools/preview'
-import type { Segment } from './labelPlacement'
+import type { LabelBox, Segment } from './labelPlacement'
 
 /**
  * Måtten på den valda delen visas som vanliga HTML-element ovanpå 3D-vyn
@@ -56,6 +56,49 @@ const resizes =
         }
         wake?.()
       })
+
+/**
+ * Knappar och rutor ovanpå 3D-vyn (raden för det valda, kameraknapparna,
+ * verktygslisten, måttrutan). Etiketterna ställer sig inte under dem. Deras
+ * lägen mäts bara när något ändrats (storlek, en ny ruta, vyns storlek), inte
+ * varje bildruta.
+ */
+const covers = new Set<HTMLElement>()
+let coverRects: DOMRect[] | null = null
+const coverResizes =
+  typeof ResizeObserver === 'undefined'
+    ? null
+    : new ResizeObserver(() => {
+        coverRects = null
+        wake?.()
+      })
+
+/** Ref för ett element som ligger ovanpå 3D-vyn och som etiketterna ska undvika. */
+export function registerCover(el: HTMLElement | null, old: HTMLElement | null) {
+  if (old) {
+    covers.delete(old)
+    coverResizes?.unobserve(old)
+  }
+  if (el) {
+    covers.add(el)
+    coverResizes?.observe(el)
+  }
+  coverRects = null
+  wake?.()
+}
+
+/** Vyn har bytt storlek: element vid högerkanten har flyttats utan att ändra storlek. */
+export function coversMoved() {
+  coverRects = null
+}
+
+/** Rutorna ovanpå vyn, i px från vyns övre vänstra hörn (left, top). */
+export function coverBoxes(left: number, top: number): LabelBox[] {
+  coverRects ??= [...covers].map((el) => el.getBoundingClientRect())
+  return coverRects
+    .filter((r) => r.width > 0 && r.height > 0)
+    .map((r) => ({ pos: [r.left - left + r.width / 2, r.top - top + r.height / 2], size: [r.width, r.height] }))
+}
 
 export function registerLabel(axis: Axis, el: HTMLElement | null) {
   const old = labelElements.get(axis)
