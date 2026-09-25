@@ -1,7 +1,7 @@
 import { toLocal, toWorld } from './frame'
 import { AXES } from './partAxes'
 import type { Axis, Body, Vec3 } from './types'
-import { add, length, scale, sub } from './vec'
+import { add, cross, dot, length, scale, sub } from './vec'
 
 /** En kant på delen som ett mått sitter på. */
 export interface DimensionEdge {
@@ -49,8 +49,12 @@ export function dimensionEdges(body: Body, camera: Vec3): DimensionEdge[] {
 
 /**
  * En cylinder har två mått: diametern (på axeln u; v är samma mått) tvärs
- * över ändytan närmast kameran, och längden längs sidan på den linje som
- * ligger närmast kameran. Så hamnar båda på delen och inte vid lådans hörn.
+ * över ändytan närmast kameran, och längden längs konturen, den linje på sidan
+ * där cylindern slutar som man ser den. Den undre konturen, eller den högra om
+ * cylindern står upp. Så hamnar båda på delen och inte vid lådans hörn.
+ *
+ * Inte linjen närmast kameran: den syns mitt på cylindern, och etiketten
+ * hoppade då mellan över- och undersidan när delen ändrades under ett drag.
  */
 function circleEdges(body: Body, camera: Vec3): DimensionEdge[] {
   const { profile: r, z0, z1, frame } = body
@@ -61,7 +65,14 @@ function circleEdges(body: Body, camera: Vec3): DimensionEdge[] {
   const toward = Math.hypot(px - cx, py - cy)
   const [dx, dy] = toward > 1e-9 ? [(px - cx) / toward, (py - cy) / toward] : [1, 0]
   const out = (x: number, y: number) => add(scale(frame.u, x), scale(frame.v, y))
-  const side = (z: number): Vec3 => [cx + radius * dx, cy + radius * dy, z]
+  // Konturen ligger tvärs mot riktningen mot kameran. Av de två: den som ligger lägst,
+  // och om de ligger lika högt (cylindern står upp) den till höger sett från kameran.
+  const toCamera = sub(camera, toWorld(frame, [cx, cy, (z0 + z1) / 2]))
+  const right = cross([0, 1, 0], toCamera)
+  const w = out(dy, -dx)
+  const flip = Math.abs(w[1]) < 0.1 ? dot(w, right) < 0 : w[1] > 0
+  const [ex, ey] = flip ? [-dy, dx] : [dy, -dx]
+  const side = (z: number): Vec3 => [cx + radius * ex, cy + radius * ey, z]
   const cap = Math.abs(pz - z1) <= Math.abs(pz - z0) ? z1 : z0
   return [
     {
@@ -70,6 +81,6 @@ function circleEdges(body: Body, camera: Vec3): DimensionEdge[] {
       to: toWorld(frame, [cx - radius * dy, cy + radius * dx, cap]),
       out: scale(frame.n, cap === z1 ? 1 : -1),
     },
-    { axis: 'n', from: toWorld(frame, side(z0)), to: toWorld(frame, side(z1)), out: out(dx, dy) },
+    { axis: 'n', from: toWorld(frame, side(z0)), to: toWorld(frame, side(z1)), out: out(ex, ey) },
   ]
 }
