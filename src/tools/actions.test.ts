@@ -3,6 +3,7 @@ import { toWorld } from '../model/frame'
 import { bodyCenter } from '../model/geometry'
 import { buildCutList } from '../model/cutlist'
 import { resolveBodies } from '../model/resolve'
+import { alignedGuides, movedPoints } from '../model/snapping'
 import type { Vec3 } from '../model/types'
 import { resetDocumentStore, useDocumentStore } from '../store/documentStore'
 import { useToolStore, type PushPullOp } from '../store/toolStore'
@@ -18,10 +19,14 @@ import {
   hoverAt,
   liveMeasure,
   move,
+  moveDeltaWorld,
+  readyPushPull,
   opFocus,
   regrab,
   repeatLastPushPull,
   setCopy,
+  setExploded,
+  startReadyPushPull,
   tap,
   undoLast,
 } from './actions'
@@ -416,6 +421,29 @@ describe('flytta', () => {
     move(down(1100 - 393, -200), 10)
     expect(tools().op).toMatchObject({ delta: [-400, 0], onTarget: [true, false] })
   })
+
+  it('snäpper så att mitten på en sida hamnar mitt för mitten på den andras, och visar det', () => {
+    // A: mitten på sidorna i z = −200. B: 100 djup, mitten i z = −550.
+    extrude(drawGroundRect(0, 0, 600, -400), '22')
+    const b = extrude(drawGroundRect(1000, -500, 1200, -600), '22')
+    tools().setTool('move')
+    tap({ point: [1100, 22, -550], target: { kind: 'body', id: b.id, face: 'n+' } }, 0)
+    // Dra 345 mot A: B:s mitt hamnar i z = −205, nära A:s mitt i −200.
+    move(down(1100, -205), 10)
+    const op = tools().op
+    expect(op).toMatchObject({ delta: [0, -350], onTarget: [false, true] })
+    if (op?.kind !== 'move') throw new Error('ingen flytt')
+    // Hjälplinjen går från mitten på A:s högra sida till mitten på B:s vänstra.
+    const guides = alignedGuides(
+      movedPoints(op.moving, op.movingWorld!, op.delta, moveDeltaWorld(op)),
+      op.targets,
+      op.onTarget,
+    )
+    expect(guides).toHaveLength(1)
+    const [from, to] = guides[0]!
+    expect([from[0], from[2]]).toEqual([600, -200])
+    expect([to[0], to[2]]).toEqual([1000, -200])
+  })
 })
 
 describe('flyttpilarna', () => {
@@ -619,6 +647,30 @@ describe('pilen på det valda', () => {
     expect(bodies()[0]!.profile.x1).toBe(650)
     expect(docs().selection).toEqual({ kind: 'body', id: b.id, face: 'u+' })
     expect(tools().tool).toBe('select')
+  })
+
+  it('en vald sida är redo att dras ut: det man skriver drar ut den, utan tryck på pilen', () => {
+    const b = extrude(drawGroundRect(), '22')
+    tools().setTool('select')
+    tap({ point: [600, 11, -200], target: { kind: 'body', id: b.id, face: 'u+' } }, 0)
+    expect(readyPushPull()).toEqual({ kind: 'body', id: b.id, face: 'u+' })
+    expect(startReadyPushPull()).toBe(true)
+    tools().setMeasure(0, '50')
+    applyMeasure()
+    expect(bodies()[0]!.profile.x1).toBe(650)
+  })
+
+  it('inte redo direkt efter en dragning (då ändrar man den), och inte i sprängskissen', () => {
+    extrude(drawGroundRect(), '22')
+    // Ovansidan är vald efter dragningen; det man skriver ändrar dragningen i stället.
+    expect(readyPushPull()).toBeNull()
+    tools().setTool('select')
+    tools().setOp(null)
+    useToolStore.setState({ lastOp: null })
+    expect(readyPushPull()).not.toBeNull()
+    setExploded(true)
+    expect(readyPushPull()).toBeNull()
+    setExploded(false)
   })
 
   it('en utdragen skiss blir en del med ovansidan vald', () => {

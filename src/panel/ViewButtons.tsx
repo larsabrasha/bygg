@@ -1,17 +1,20 @@
-import { House, Maximize2, Minimize2 } from 'lucide-react'
+import { Boxes, House, Maximize2, Minimize2 } from 'lucide-react'
 import { useViewStore } from '../store/viewStore'
+import { setExploded } from '../tools/actions'
 import { Tip } from './Tip'
 import { useCoversView } from './useCoversView'
 
 /**
  * Knappar ovanpå 3D-vyn för kameran. Uppe till höger, så att de inte krockar med måttfältet på mobil.
  * Visa allt har text på desktop, så att den inte ser ut som fullskärm; på smal skärm bara huset.
- * Till höger om den (under den på smal skärm, där raden uppe till vänster behöver bredden): fokusläget (Tab), bara 3D-vyn. Knappen behövs där det inte finns något tangentbord.
+ * Till höger om den (under den på smal skärm, där raden uppe till vänster behöver bredden): sprängskissen (E)
+ * och fokusläget (Tab), bara 3D-vyn. Knapparna behövs där det inte finns något tangentbord.
  */
 export function ViewButtons() {
   const requestFit = useViewStore((s) => s.requestFit)
   const focusMode = useViewStore((s) => s.focusMode)
   const toggleFocusMode = useViewStore((s) => s.toggleFocusMode)
+  const exploded = useViewStore((s) => s.exploded)
   const FocusIcon = focusMode ? Minimize2 : Maximize2
   const cover = useCoversView<HTMLDivElement>()
   return (
@@ -24,6 +27,16 @@ export function ViewButtons() {
         >
           <House size={18} strokeWidth={1.75} aria-hidden />
           <span className="narrow:hidden">Visa allt</span>
+        </button>
+      </Tip>
+      <Tip label={exploded ? 'Stäng sprängskissen' : 'Sprängskiss: delarna isär'} keys="E">
+        <button
+          aria-label="Sprängskiss"
+          aria-pressed={exploded}
+          onClick={() => setExploded(!exploded)}
+          className="grid size-9 cursor-pointer place-items-center rounded-lg bg-panel/95 shadow-md hover:bg-hover aria-pressed:bg-accent-soft aria-pressed:text-accent narrow:size-11"
+        >
+          <Boxes size={18} strokeWidth={1.75} aria-hidden />
         </button>
       </Tip>
       <Tip label={focusMode ? 'Visa panelerna igen' : 'Fokusläge: bara 3D-vyn'} keys="Tab">

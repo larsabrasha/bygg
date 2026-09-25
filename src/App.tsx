@@ -4,6 +4,8 @@ import { DimensionLabels } from './panel/DimensionLabels'
 import { MeasureBox } from './panel/MeasureBox'
 import { Notices } from './panel/Notices'
 import { PrintCutList } from './panel/PrintCutList'
+import { PrintExploded } from './panel/PrintExploded'
+import { ExplodeBar } from './panel/ExplodeBar'
 import { SelectionBar } from './panel/SelectionBar'
 import { Sidebar } from './panel/Sidebar'
 import { Toolbar } from './panel/Toolbar'
@@ -20,6 +22,7 @@ export function App() {
   const screen = useLibraryStore((s) => s.screen)
   const panelOpen = useViewStore((s) => s.panelOpen)
   const focusMode = useViewStore((s) => s.focusMode)
+  const exploded = useViewStore((s) => s.exploded)
   return (
     <TipProvider>
       {/* minmax(0, …): annars får raden inte bli lägre än canvasens nuvarande höjd.
@@ -44,10 +47,17 @@ export function App() {
           <DimensionLabels />
           {/* Startvyn visar samma meddelanden själv. */}
           {screen === 'model' && <Notices />}
-          <MeasureBox />
-          <CombineBar />
+          {/* I sprängskissen ändrar man inget: raden där ersätter måttrutan och verktygen. */}
+          {exploded ? (
+            <ExplodeBar />
+          ) : (
+            <>
+              <MeasureBox />
+              <CombineBar />
+              <ToolRail />
+            </>
+          )}
           <ViewButtons />
-          <ToolRail />
           <SelectionBar />
         </main>
         <Sidebar />
@@ -55,6 +65,7 @@ export function App() {
       {/* Startvyn ligger ovanpå; 3D-vyn hålls kvar under så att den kan ta bilder och öppnas snabbt. */}
       {screen === 'gallery' && <Gallery />}
       <PrintCutList />
+      <PrintExploded />
     </TipProvider>
   )
 }

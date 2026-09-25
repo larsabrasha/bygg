@@ -3,7 +3,7 @@ import { useDocumentStore } from '../store/documentStore'
 import { useLibraryStore } from '../store/libraryStore'
 import { useToolStore, type Op } from '../store/toolStore'
 import { useViewStore } from '../store/viewStore'
-import { amendableOp, applyMeasure, cancel, extendableCopy, setCopy } from './actions'
+import { amendableOp, applyMeasure, cancel, extendableCopy, setCopy, setExploded, startReadyPushPull } from './actions'
 
 /** Rektangeln har två fält (längd och bredd), som Tab växlar mellan; en cirkel bara diametern. */
 const hasTwoFields = (op: Op | null | undefined) => op?.kind === 'rect' && op.shape !== 'circle'
@@ -11,13 +11,15 @@ const hasTwoFields = (op: Op | null | undefined) => op?.kind === 'rect' && op.sh
 /** Tecken som går direkt till måttfältet. Bokstäver (parameternamn) skrivs i fältet, så att R/P/M fungerar som kortkommandon. */
 const MEASURE_CHAR = /^[0-9.,+\-*/() ]$/
 
+/** Ett fält man skriver i. Inte ett reglage (sprängskissen): där ska Esc och E fortfarande fungera. */
 function isEditable(t: EventTarget | null) {
+  if (t instanceof HTMLInputElement && t.type === 'range') return false
   return t instanceof HTMLElement && (t.isContentEditable || ['INPUT', 'SELECT', 'TEXTAREA'].includes(t.tagName))
 }
 
 /**
  * Kortkommandon som i SketchUp: R, P, M, T (Mät), mellanslag, Esc, Delete, ⌘Z / ⇧⌘Z, ⇧Z (visa allt),
- * Alt/Option (Kopia i Flytta-läget), Tab (fokusläge), mellanslag + dra (panorera).
+ * Alt/Option (Kopia i Flytta-läget), Tab (fokusläge), E (sprängskiss), mellanslag + dra (panorera).
  * P och M har ingen knapp i verktygsraden; där görs push/pull med pilen och flytt med dubbeltryck på delen.
  * Under en operation går siffror direkt till måttfältet utan att man klickar i det;
  * ; eller Tab byter fält.
@@ -53,6 +55,13 @@ export function useShortcuts() {
       if (mod || e.altKey) return
 
       const { op, measure, measureField } = tools
+      // En vald sida eller skiss: siffror drar ut den direkt, som efter ett tryck på pilen.
+      // Inte mellanslaget, som panorerar.
+      if (!op && e.key !== ' ' && MEASURE_CHAR.test(e.key) && startReadyPushPull()) {
+        e.preventDefault()
+        useToolStore.getState().setMeasure(0, e.key)
+        return
+      }
       // Efter en kopia går siffror till antalet, och efter en avslutad operation
       // till dess mått (för att ändra det), som under en operation.
       if (op || (tools.tool === 'move' && extendableCopy()) || amendableOp()) {
@@ -90,7 +99,12 @@ export function useShortcuts() {
       switch (e.key) {
         case 'Escape':
           if (op) cancel()
+          else if (useViewStore.getState().exploded) setExploded(false)
           else tools.setTool('select')
+          break
+        case 'e':
+        case 'E':
+          setExploded(!useViewStore.getState().exploded)
           break
         case ' ':
           // Hålls det nere kan man panorera med musen; Välj först när det släpps utan att man gjort det (onKeyUp).

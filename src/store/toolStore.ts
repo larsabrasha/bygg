@@ -71,6 +71,10 @@ export interface MoveOp {
   grab: number
   /** Den flyttade delens nyckelpunkter i planets koordinater (före flytt). */
   moving: Vec2[]
+  /** Samma punkter i världen, för hjälplinjerna. */
+  movingWorld?: Vec3[]
+  /** Sidan man tog tag i (före flytt), vars kantmitter visas. Saknas när man drar i en pil. */
+  face?: { frame: Frame; bounds: Rect }
   targets: PlaneTargets
   delta: Vec2
   onTarget: [boolean, boolean]
@@ -128,8 +132,12 @@ export interface LastOp {
 /** Var första hörnet skulle hamna (rektangelverktyget, bara mus). */
 export interface HoverPoint {
   frame: Frame
+  /** Ytan under pekaren, i frame-koordinater. Null på golvet. */
+  bounds: Rect | null
   point: Vec2
   onTarget: boolean
+  /** Hjälplinjer från det punkten snäppte i linje med (se guideLines). */
+  guides: [Vec3, Vec3][]
 }
 
 interface ToolSnapshot {

@@ -2,14 +2,17 @@ import { Check, Copy, Repeat, X } from 'lucide-react'
 import { AXIS_COLORS } from '../scene/colors'
 import { useDocumentStore } from '../store/documentStore'
 import { useToolStore, type Axis } from '../store/toolStore'
+import { useViewStore } from '../store/viewStore'
 import {
   amendableOp,
   applyMeasure,
   cancel,
   extendableCopy,
   liveMeasure,
+  readyPushPull,
   repeatLastPushPull,
   setCopy,
+  startReadyPushPull,
   undoLast,
 } from '../tools/actions'
 import { ExprInput } from './ExprInput'
@@ -62,39 +65,45 @@ export function MeasureBox() {
   // Efter en avslutad operation ligger rutan kvar med värdet, så att man kan skriva ett annat.
   const amend = !op && !extending ? amendableOp() : null
   const shown = op ?? amend?.op ?? null
+  // En vald sida eller skiss i Välj: rutan syns direkt, och det man skriver drar ut den.
+  useToolStore((s) => s.combining)
+  useViewStore((s) => s.exploded)
+  const ready = !shown && !extending ? readyPushPull() : null
 
-  // I Välj syns rutan bara under och direkt efter en operation (pilen eller "Dra ut").
-  if (tool === 'select' && !shown) return null
+  // I Välj syns rutan bara när något är valt, och under och direkt efter en operation.
+  if (tool === 'select' && !shown && !ready) return null
 
   const hint = extending
     ? 'Kopian är gjord. Skriv antal för fler med samma avstånd.'
     : amend
       ? 'Klart. Skriv ett annat värde för att ändra.'
-      : !op && tool === 'move' && copy
-        ? 'Kopia: dra i en pil, en båge eller delen. Originalet står kvar.'
-        : !op
-          ? {
-              select: '',
-              rect: 'Tryck där första hörnet ska vara – på golvet eller på en yta.',
-              circle: 'Tryck där mitten ska vara – på golvet eller på en yta.',
-              pushpull: 'Dra i en skiss eller en sida av en del, eller tryck på den.',
-              move: 'Dra i en pil för att flytta längs X, Y eller Z, eller i en båge för att vrida. Du kan också dra i själva delen.',
-              measure: '',
-            }[tool]
-          : {
-              rect:
-                op.kind === 'rect' && op.shape === 'circle'
-                  ? 'Tryck där kanten ska vara, eller skriv diametern.'
-                  : 'Tryck på andra hörnet, eller skriv längd och bredd.',
-              pushpull: 'Dra längs pilen, eller skriv avståndet.',
-              move:
-                op.kind === 'move' && op.axis !== null
-                  ? 'Dra längs pilen, eller skriv avståndet.'
-                  : 'Dra dit delen ska, eller skriv avståndet.',
-              rotate: 'Dra runt bågen (steg om 15°), eller skriv vinkeln.',
-            }[op.kind]
+      : ready
+        ? 'Dra i pilen, eller skriv avståndet.'
+        : !op && tool === 'move' && copy
+          ? 'Kopia: dra i en pil, en båge eller delen. Originalet står kvar.'
+          : !op
+            ? {
+                select: '',
+                rect: 'Tryck där första hörnet ska vara – på golvet eller på en yta.',
+                circle: 'Tryck där mitten ska vara – på golvet eller på en yta.',
+                pushpull: 'Dra i en skiss eller en sida av en del, eller tryck på den.',
+                move: 'Dra i en pil för att flytta längs X, Y eller Z, eller i en båge för att vrida. Du kan också dra i själva delen.',
+                measure: '',
+              }[tool]
+            : {
+                rect:
+                  op.kind === 'rect' && op.shape === 'circle'
+                    ? 'Tryck där kanten ska vara, eller skriv diametern.'
+                    : 'Tryck på andra hörnet, eller skriv längd och bredd.',
+                pushpull: 'Dra längs pilen, eller skriv avståndet.',
+                move:
+                  op.kind === 'move' && op.axis !== null
+                    ? 'Dra längs pilen, eller skriv avståndet.'
+                    : 'Dra dit delen ska, eller skriv avståndet.',
+                rotate: 'Dra runt bågen (steg om 15°), eller skriv vinkeln.',
+              }[op.kind]
 
-  const live = shown ? liveMeasure(shown) : extending ? [extending.count] : []
+  const live = shown ? liveMeasure(shown) : extending ? [extending.count] : ready ? [0] : []
   const axis = shown?.kind === 'rotate' ? shown.axis : shown?.kind === 'move' ? shown.axis : null
   const fields: { label: string; axis: Axis | null }[] = extending
     ? [{ label: 'Antal kopior', axis: null }]
@@ -151,7 +160,7 @@ export function MeasureBox() {
 
   return (
     <div ref={cover} className={bottomBox}>
-      {shown || extending ? (
+      {shown || extending || ready ? (
         <>
           <p className="px-1 pb-1.5 text-xs text-muted">{hint}</p>
           <form
@@ -183,7 +192,11 @@ export function MeasureBox() {
                   placeholder={fmt.format(live[i] ?? 0)}
                   placement="above"
                   wrapperClass="block"
-                  onChange={(t) => setMeasure(i as 0 | 1, t)}
+                  onChange={(t) => {
+                    // Det första man skriver startar dragningen av det valda.
+                    if (ready) startReadyPushPull()
+                    setMeasure(i as 0 | 1, t)
+                  }}
                   onKeyDown={(e) => {
                     if (e.key === 'Escape') cancel()
                   }}
@@ -192,9 +205,16 @@ export function MeasureBox() {
                 <span className="text-[13px] text-unit">{unit}</span>
               </label>
             ))}
-            {op?.kind === 'pushpull' && last && (
+            {(op?.kind === 'pushpull' || ready) && last && (
               <Tip label="Samma djup som förra gången (eller dubbeltryck)" side="top">
-                <button type="button" className={`${ghostButton} text-muted`} onClick={repeatLastPushPull}>
+                <button
+                  type="button"
+                  className={`${ghostButton} text-muted`}
+                  onClick={() => {
+                    if (ready) startReadyPushPull()
+                    repeatLastPushPull()
+                  }}
+                >
                   <Repeat size={15} strokeWidth={1.75} aria-hidden />
                   Som förra
                   <span className="text-ink tabular-nums">{last.expr ?? `${fmt.format(last.distance)} mm`}</span>

@@ -4,6 +4,7 @@ import type { Axis, Body, PartDef } from '../model/types'
 import { dimensionsFor, registerLabel } from '../scene/dimensionLabels'
 import { useDocumentStore } from '../store/documentStore'
 import { useToolStore } from '../store/toolStore'
+import { useViewStore } from '../store/viewStore'
 import { ExprInput } from './ExprInput'
 import { Tip } from './Tip'
 import { numberFormat } from '../model/numberFormat'
@@ -140,7 +141,9 @@ export function DimensionLabels() {
   const selection = useDocumentStore((s) => s.selection)
   const tool = useToolStore((s) => s.tool)
   const op = useToolStore((s) => s.op)
-  const target = dimensionsFor(doc, selection, tool, op)
+  // I sprängskissen står delen inte där måtten skulle sitta.
+  const exploded = useViewStore((s) => s.exploded || s.explodeShown > 0)
+  const target = exploded ? null : dimensionsFor(doc, selection, tool, op)
   if (!target) return null
   const round = target.def.shape === 'circle'
   return (

@@ -2,7 +2,8 @@ import { Edges } from '@react-three/drei'
 import { memo, useEffect, useMemo } from 'react'
 import { BoxGeometry, GreaterDepth, MeshStandardMaterial } from 'three'
 import { bodyExtents, type Box } from '../model/geometry'
-import { FACES, type Body, type Face } from '../model/types'
+import { FACES, type Body, type Face, type Vec3 } from '../model/types'
+import { add } from '../model/vec'
 import { ACCENT, ACCENT_LIGHT, EDGE, materialColor } from './colors'
 import { solidGeometry, useManifold } from './csg'
 import { cylinderGeometry } from './cylinder'
@@ -21,6 +22,8 @@ interface Props {
   preview?: boolean
   /** Ett verktyg (läggs till eller skärs ut): genomskinligt med streckade kanter. */
   ghost?: boolean
+  /** Hur långt delen flyttats i sprängskissen, i världen. */
+  offset?: Vec3
 }
 
 function BodyMeshImpl({
@@ -30,6 +33,7 @@ function BodyMeshImpl({
   highlightFace = null,
   preview = false,
   ghost = false,
+  offset,
 }: Props) {
   const quaternion = useMemo(() => frameQuaternion(body.frame), [body.frame])
   const [w, h, d] = bodyExtents(body)
@@ -84,7 +88,7 @@ function BodyMeshImpl({
   const edge = selected || preview ? ACCENT : sibling ? ACCENT_LIGHT : EDGE
 
   return (
-    <group position={body.frame.origin} quaternion={quaternion}>
+    <group position={offset ? add(body.frame.origin, offset) : body.frame.origin} quaternion={quaternion}>
       <mesh
         // Resultatet med verktyg är redan i formens koordinater; lådan och cylindern ritas kring sin mitt.
         position={solid ? [0, 0, 0] : center}
@@ -163,5 +167,6 @@ export const BodyMesh = memo(
     a.sibling === b.sibling &&
     a.highlightFace === b.highlightFace &&
     a.preview === b.preview &&
-    a.ghost === b.ghost,
+    a.ghost === b.ghost &&
+    a.offset?.join() === b.offset?.join(),
 )

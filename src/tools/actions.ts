@@ -4,11 +4,21 @@ import { bodyCenter, bodyExtents, circleRect, pushPullMin, rectFromCorners, rect
 import { evaluateIn } from '../model/params'
 import { rulerPointOn, type RulerPoint } from '../model/ruler'
 import { resolveBodies } from '../model/resolve'
-import { bodyKeyPoints, offsetTargets, planeTargets, snapDelta, snapValue, type PlaneTargets } from '../model/snapping'
+import {
+  bodyKeyPoints,
+  guideLines,
+  offsetTargets,
+  planeTargets,
+  rectMidpoints,
+  snapDelta,
+  snapValue,
+  type PlaneTargets,
+} from '../model/snapping'
 import type { Body, DimExprs, Face, Frame, Rect, Vec2, Vec3 } from '../model/types'
 import { arrowDir } from '../model/arrowDir'
 import { add, closestParamOnLine, cross, dot, length, scale, sub } from '../model/vec'
 import { useDocumentStore, type Selection } from '../store/documentStore'
+import { useViewStore } from '../store/viewStore'
 import {
   useToolStore,
   type Axis,
@@ -99,12 +109,21 @@ function planeForHit(hit: Hit): { frame: Frame; bounds: Rect | null; on?: string
   }
 }
 
-/** Mål för en rektangel i ett plan: ytans kanter, andra delar och ev. första hörnet. */
+/** Mål för en rektangel i ett plan: ytans hörn och kantmitter, andra delar och ev. första hörnet. */
 function rectTargets(frame: Frame, bounds: Rect | null): PlaneTargets {
   const t = planeTargets(bodies(), frame)
   if (bounds) {
-    t.xs.push(bounds.x0, bounds.x1)
-    t.ys.push(bounds.y0, bounds.y1)
+    const corners: Vec2[] = [
+      [bounds.x0, bounds.y0],
+      [bounds.x1, bounds.y0],
+      [bounds.x0, bounds.y1],
+      [bounds.x1, bounds.y1],
+    ]
+    for (const at of [...corners, ...rectMidpoints(bounds)]) {
+      t.xs.push(at[0])
+      t.ys.push(at[1])
+      t.points?.push({ at, world: toWorld(frame, [at[0], at[1], 0]) })
+    }
   }
   return t
 }
@@ -211,7 +230,11 @@ export function tap(hit: Hit | null, tol: number) {
     const targets = rectTargets(plane.frame, plane.bounds)
     const { point, onTarget } = snapPoint(toLocal2D(plane.frame, hit.point), targets, tol)
     // Första hörnet blir också ett mål, så att man kan dra rakt ut från det.
-    const withFirst = { xs: [...targets.xs, point[0]], ys: [...targets.ys, point[1]] }
+    const withFirst = {
+      xs: [...targets.xs, point[0]],
+      ys: [...targets.ys, point[1]],
+      points: [...(targets.points ?? []), { at: point, world: toWorld(plane.frame, [point[0], point[1], 0]) }],
+    }
     setOp({
       kind: 'rect',
       ...(tool === 'circle' && { shape: 'circle' as const }),
@@ -229,8 +252,9 @@ export function tap(hit: Hit | null, tol: number) {
     const b = findBody(hit.target.id)
     if (!b) return
     // Inne i ett hål: flytta i golvets riktning.
-    const f = faceFrame(b, hit.target.face ?? 'n+')
-    setOp(moveOp(b, { ...f, origin: hit.point }, null))
+    const face = hit.target.face ?? 'n+'
+    const f = faceFrame(b, face)
+    setOp(moveOp(b, { ...f, origin: hit.point }, null, hit.target.face && { frame: f, bounds: faceBounds(b, face) }))
     return
   }
 
@@ -317,14 +341,17 @@ function pushPullMinOf(target: PushPullTarget): number {
   return b ? pushPullMin(b, target.face) : -Infinity
 }
 
-function moveOp(b: Body, plane: Frame, axis: Axis | null): MoveOp {
+function moveOp(b: Body, plane: Frame, axis: Axis | null, face?: MoveOp['face']): MoveOp {
+  const keys = bodyKeyPoints(b)
   return {
     kind: 'move',
     instanceId: b.id,
     plane,
     axis,
     grab: 0,
-    moving: bodyKeyPoints(b).map((p) => toLocal2D(plane, p)),
+    moving: keys.map((p) => toLocal2D(plane, p)),
+    movingWorld: keys,
+    ...(face && { face }),
     // Med Kopia står originalet kvar och går att snäppa mot.
     targets: planeTargets(bodies(), plane, tools().copy ? undefined : b.id),
     delta: [0, 0],
@@ -449,8 +476,15 @@ export function hoverAt(hit: Hit | null, tol: number) {
   }
   const plane = planeForHit(hit)
   if (!plane) return
-  const { point, onTarget } = snapPoint(toLocal2D(plane.frame, hit.point), rectTargets(plane.frame, plane.bounds), tol)
-  setHoverPoint({ frame: plane.frame, point, onTarget: onTarget[0] || onTarget[1] })
+  const targets = rectTargets(plane.frame, plane.bounds)
+  const { point, onTarget } = snapPoint(toLocal2D(plane.frame, hit.point), targets, tol)
+  setHoverPoint({
+    frame: plane.frame,
+    bounds: plane.bounds,
+    point,
+    onTarget: onTarget[0] || onTarget[1],
+    guides: guideLines(plane.frame, point, targets, onTarget),
+  })
 }
 
 /** Pekaren flyttas (eller trycks ned) under en pågående operation. */
@@ -711,6 +745,39 @@ export function repeatLastPushPull(): boolean {
 
 export function cancel() {
   tools().setOp(null)
+}
+
+/**
+ * Sidan eller skissen som är vald i Välj, när inget annat pågår: måttrutan
+ * visas direkt för den, och det man skriver drar ut den (startPushPullFor).
+ * Så behövs inget extra tryck på pilen först.
+ */
+export function readyPushPull(): PushPullTarget | null {
+  const t = tools()
+  const sel = docs().selection
+  if (t.op || t.tool !== 'select' || t.combining || !sel || useViewStore.getState().exploded) return null
+  if (amendableOp()) return null
+  const target = pushPullTargetOf(sel)
+  return target && pushPullAnchor(target) ? target : null
+}
+
+/** Startar push/pull på det valda (readyPushPull), som ett tryck på pilen. Sant om den startade. */
+export function startReadyPushPull(): boolean {
+  const target = readyPushPull()
+  if (target) beginPushPull(target)
+  return target !== null
+}
+
+/**
+ * Slår av eller på sprängskissen. Det som pågår avbryts och verktyget blir
+ * Välj: i sprängskissen står delarna inte där de är, så man ändrar inget då.
+ */
+export function setExploded(on: boolean) {
+  cancel()
+  tools().setCombining(null)
+  tools().setTool('select')
+  tools().setRuler([])
+  useViewStore.getState().setExploded(on)
 }
 
 /** Aktuella mått för förhandsvisningen: [längd, bredd] för rektangel, annars [avstånd]. */

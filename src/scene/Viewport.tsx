@@ -4,6 +4,9 @@ import { useEffect } from 'react'
 import { resolveBodies } from '../model/resolve'
 import { useDocumentStore } from '../store/documentStore'
 import { useToolStore } from '../store/toolStore'
+import { useViewStore } from '../store/viewStore'
+import { explodeOffsets } from '../model/explode'
+import { PartNames } from './PartNames'
 import { bodyCenter } from '../model/geometry'
 import { pushPullAnchor, pushPullTargetOf } from '../tools/actions'
 import { toolTargets } from '../model/combine'
@@ -20,6 +23,8 @@ import { PushPullHandle } from './PushPullHandle'
 import { RulerOverlay } from './RulerOverlay'
 import { SketchMesh } from './SketchMesh'
 import { ThumbnailCapturer } from './ThumbnailCapturer'
+import { ViewCapturer } from './ViewCapturer'
+import { ExplodeAnimator } from './ExplodeAnimator'
 import { ToolController } from './ToolController'
 import { useColorScheme } from './useColorScheme'
 
@@ -36,23 +41,28 @@ function Scene() {
   const hover = useToolStore((s) => s.hover)
   const hoverPoint = useToolStore((s) => s.hoverPoint)
   const tool = useToolStore((s) => s.tool)
+  // Under glidningen ut och in står delarna också isär; läget att titta slutar när de är ihop igen.
+  const explodeShown = useViewStore((s) => s.explodeShown)
+  const exploded = useViewStore((s) => s.exploded) || explodeShown > 0
 
   // Under en operation ritas dokumentet som det skulle bli; berörda delar halvgenomskinliga.
   const copy = useToolStore((s) => s.copy)
   const preview = op ? previewDoc(op, doc, copy) : null
   const shown = preview?.doc ?? doc
   const bodies = resolveBodies(shown)
+  // I sprängskissen står delarna inte där de är; pilar, mått och skisser skulle hamna fel och visas inte.
+  const offsets = exploded ? explodeOffsets(bodies, explodeShown) : null
   const active = op?.kind === 'pushpull' ? op.target : hover
   const selectedBody = selection?.kind === 'body' ? bodies.find((b) => b.id === selection.id) : undefined
   // Pilen på det valda syns i Välj och Rektangel (så att en ny skiss kan dras ut direkt), när inget annat pågår.
   const handleTarget =
     !op && (tool === 'select' || tool === 'rect' || tool === 'circle') && selection ? pushPullTargetOf(selection) : null
-  const handle = handleTarget && pushPullAnchor(handleTarget, doc)
+  const handle = !exploded && handleTarget && pushPullAnchor(handleTarget, doc)
   const selectedFace = handleTarget?.kind === 'body' ? handleTarget : null
   // I Flytta-läget får den valda delen tre färgade pilar i stället.
-  const gizmoAt = !op && tool === 'move' && selectedBody ? bodyCenter(selectedBody) : null
+  const gizmoAt = !op && !exploded && tool === 'move' && selectedBody ? bodyCenter(selectedBody) : null
   // I Välj visas den valda delens mått vid kanterna (etiketterna i panel/DimensionLabels).
-  const dims = dimensionsFor(doc, selection, tool, op)
+  const dims = exploded ? null : dimensionsFor(doc, selection, tool, op)
 
   // Verktyg (tillägg och urskärningar) syns som spöken när deras värd, eller de själva, är valda.
   const shownHost = selectedBody?.tool?.host ?? selectedBody?.id
@@ -68,6 +78,7 @@ function Scene() {
             key={b.id}
             body={b}
             ghost={!!b.tool}
+            offset={offsets?.get(b.id)}
             preview={preview?.affected.has(b.id)}
             selected={selectedBody?.id === b.id}
             sibling={!!selectedBody && !b.tool && selectedBody.id !== b.id && selectedBody.defId === b.defId}
@@ -81,28 +92,30 @@ function Scene() {
           />
         )
       })}
-      {shown.sketches.map((s) => (
-        <SketchMesh
-          key={s.id}
-          frame={s.frame}
-          rect={s.rect}
-          shape={s.shape}
-          pickId={s.id}
-          emphasis={
-            selection?.kind === 'sketch' && selection.id === s.id
-              ? 'selected'
-              : active?.kind === 'sketch' && active.id === s.id
-                ? 'hover'
-                : 'none'
-          }
-        />
-      ))}
+      {offsets && <PartNames bodies={bodies} offsets={offsets} />}
+      {!exploded &&
+        shown.sketches.map((s) => (
+          <SketchMesh
+            key={s.id}
+            frame={s.frame}
+            rect={s.rect}
+            shape={s.shape}
+            pickId={s.id}
+            emphasis={
+              selection?.kind === 'sketch' && selection.id === s.id
+                ? 'selected'
+                : active?.kind === 'sketch' && active.id === s.id
+                  ? 'hover'
+                  : 'none'
+            }
+          />
+        ))}
       {handle && <PushPullHandle anchor={handle.anchor} normal={handle.normal} />}
       {gizmoAt && <MoveGizmo center={gizmoAt} />}
       {dims && <DimensionGuides key={dims.body.id} body={dims.body} />}
       {op && <OpOverlay op={op} />}
       {!op && hoverPoint && <HoverMarker hover={hoverPoint} />}
-      <RulerOverlay />
+      {!exploded && <RulerOverlay />}
     </>
   )
 }
@@ -138,6 +151,8 @@ export function Viewport() {
       <Scene />
       <ToolController />
       <ThumbnailCapturer />
+      <ViewCapturer />
+      <ExplodeAnimator />
 
       <CameraRig />
       <GizmoHelper alignment="bottom-left" margin={[70, 70]}>

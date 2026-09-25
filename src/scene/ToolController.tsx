@@ -303,7 +303,10 @@ export function ToolController() {
       const hit = pick(e.clientX, e.clientY, kind)
       const sel = useDocumentStore.getState().selection
       const onSelected = hit?.target.kind === 'body' && sel?.kind === 'body' && sel.id === hit.target.id
-      const owner = pressOwner(tool, op !== null, kind, hit?.target.kind ?? null, onSelected)
+      // I sprängskissen står delarna inte där de är: trycket vrider kameran eller väljer, inget annat.
+      const owner = useViewStore.getState().exploded
+        ? 'camera'
+        : pressOwner(tool, op !== null, kind, hit?.target.kind ?? null, onSelected)
       if (controls) applyCameraButtons(controls, cameraButtons(tool, owner))
       press = {
         x: e.clientX,
@@ -353,7 +356,8 @@ export function ToolController() {
         return
       }
       // Hover bara med mus; touch har ingen hover. Med mellanslaget nere visas handen i stället.
-      if (e.pointerType !== 'mouse' || e.buttons !== 0 || useViewStore.getState().spacePan.held) return
+      const view = useViewStore.getState()
+      if (e.pointerType !== 'mouse' || e.buttons !== 0 || view.spacePan.held || view.exploded) return
       if (tool === 'select') {
         // Handen visar att pilen går att dra i.
         const onHandle =
@@ -430,6 +434,11 @@ export function ToolController() {
         const kind = kindOf(e)
         const hit = pick(e.clientX, e.clientY, kind)
         const here = { x: e.clientX, y: e.clientY, time: e.timeStamp }
+        if (useViewStore.getState().exploded) {
+          const t = hit?.target
+          useDocumentStore.getState().select(t?.kind === 'body' ? { kind: 'body', id: t.id } : null)
+          return
+        }
         // Dubbeltryck på en del: Flytta/vrid. Första trycket har redan valt den.
         if (isDoubleTap(lastTap, here, p.slop) && doubleTap(hit)) {
           lastTap = null

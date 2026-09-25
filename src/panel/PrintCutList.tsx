@@ -3,6 +3,7 @@ import { buildCutList } from '../model/cutlist'
 import { formatMm, rowNames } from '../model/cutlistExport'
 import { useBodies } from '../store/documentStore'
 import { useLibraryStore } from '../store/libraryStore'
+import { usePrintStore } from '../store/printStore'
 import { numberFormat } from '../model/numberFormat'
 
 const volume = numberFormat(4, true)
@@ -15,6 +16,9 @@ export function PrintCutList() {
   const bodies = useBodies()
   const name = useLibraryStore((s) => s.currentName)
   const cutList = useMemo(() => buildCutList(bodies), [bodies])
+  // Sprängskissen skrivs ut i stället (PrintExploded).
+  const what = usePrintStore((s) => s.what)
+  if (what !== 'cutlist') return null
 
   return (
     <div className="hidden bg-white text-[11pt] text-black print:block">

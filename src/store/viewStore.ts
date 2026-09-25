@@ -19,6 +19,18 @@ interface ViewState {
    */
   spacePan: { held: boolean; used: boolean }
   setSpacePan: (p: { held: boolean; used: boolean }) => void
+  /**
+   * Sprängskissen: delarna flyttas bort från modellens mitt (model/explode.ts),
+   * explodeAmount gånger avståndet. Bara för att titta och skriva ut; man ändrar
+   * inga delar då. Sparas inte.
+   */
+  exploded: boolean
+  explodeAmount: number
+  /** Hur långt isär delarna står just nu: glider mot explodeAmount (eller 0) när läget slås av och på. */
+  explodeShown: number
+  setExploded: (on: boolean) => void
+  setExplodeAmount: (amount: number) => void
+  setExplodeShown: (shown: number) => void
 }
 
 const PANEL_KEY = 'bygg.panelOpen'
@@ -46,6 +58,12 @@ export const useViewStore = create<ViewState>()((set) => ({
   requestFit: (target) => set((s) => ({ fit: { target, n: (s.fit?.n ?? 0) + 1 } })),
   spacePan: { held: false, used: false },
   setSpacePan: (spacePan) => set({ spacePan }),
+  exploded: false,
+  explodeAmount: 0.6,
+  explodeShown: 0,
+  setExploded: (exploded) => set({ exploded }),
+  setExplodeAmount: (explodeAmount) => set({ explodeAmount }),
+  setExplodeShown: (explodeShown) => set({ explodeShown }),
   focusMode: false,
   toggleFocusMode: () => set((s) => ({ focusMode: !s.focusMode })),
   panelOpen: readPanelOpen(),

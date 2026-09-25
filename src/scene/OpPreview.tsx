@@ -4,11 +4,13 @@ import { Vector3, type Camera, type Object3D } from 'three'
 import { toWorld } from '../model/frame'
 import { add, scale } from '../model/vec'
 import type { HoverPoint, Op, PushPullOp, RotateOp } from '../store/toolStore'
-import { opRect } from '../tools/actions'
+import { alignedGuides, guideLines, movedPoints } from '../model/snapping'
+import { moveDeltaWorld, opRect } from '../tools/actions'
 import { opReadout } from '../tools/opReadout'
 import { AXIS_COLORS } from './colors'
 import { PushPullHandle } from './PushPullHandle'
 import { SketchMesh } from './SketchMesh'
+import { SnapGuides } from './SnapGuides'
 import { SnapMarker } from './SnapMarker'
 
 /** Halva längden på hjälplinjen längs axeln, i mm. */
@@ -78,6 +80,7 @@ function OpShapes({ op }: { op: Op }) {
     return (
       <>
         {(r.x1 > r.x0 || r.y1 > r.y0) && <SketchMesh frame={op.frame} rect={r} shape={op.shape} emphasis="selected" />}
+        <SnapGuides face={op} guides={guideLines(op.frame, op.current, op.targets, op.onTarget)} />
         <SnapMarker position={at} onTarget={op.onTarget[0] || op.onTarget[1]} />
       </>
     )
@@ -91,9 +94,13 @@ function OpShapes({ op }: { op: Op }) {
     )
   }
   if (op.kind === 'rotate') return <RotateGuide op={op} />
-  const at = add(op.plane.origin, add(scale(op.plane.u, op.delta[0]), scale(op.plane.v, op.delta[1])))
+  const moved = moveDeltaWorld(op)
+  const at = add(op.plane.origin, moved)
+  // ?? för en flytt från före en hot reload, utan punkterna i världen.
+  const guides = alignedGuides(movedPoints(op.moving, op.movingWorld ?? [], op.delta, moved), op.targets, op.onTarget)
   return (
     <>
+      <SnapGuides face={op.face ?? null} offset={moved} guides={guides} />
       {/* Längs en pil: en linje i axelns färg visar att delen bara kan gå åt det hållet. */}
       {op.axis !== null && (
         <Line
@@ -131,5 +138,11 @@ function RotateGuide({ op }: { op: RotateOp }) {
 }
 
 export function HoverMarker({ hover }: { hover: HoverPoint }) {
-  return <SnapMarker position={toWorld(hover.frame, [hover.point[0], hover.point[1], 0])} onTarget={hover.onTarget} />
+  return (
+    <>
+      {/* ?? för en punkt från före en hot reload, utan de nya fälten. */}
+      <SnapGuides face={hover} guides={hover.guides ?? []} />
+      <SnapMarker position={toWorld(hover.frame, [hover.point[0], hover.point[1], 0])} onTarget={hover.onTarget} />
+    </>
+  )
 }
