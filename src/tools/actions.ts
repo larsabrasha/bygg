@@ -104,7 +104,7 @@ export function tap(hit: Hit | null, tol: number) {
   if (hit?.target.kind === 'handle') {
     const sel = docs().selection
     const target = sel && pushPullTargetOf(sel)
-    if (target) beginPushPull(target)
+    if (target) beginPushPull(target, hit.point)
     return
   }
 
@@ -158,6 +158,7 @@ export function tap(hit: Hit | null, tol: number) {
       kind: 'pushpull',
       ...pp,
       anchor: hit.point,
+      grab: 0,
       targets: offsetTargets(others, hit.point, pp.normal),
       distance: 0,
       onTarget: false,
@@ -191,7 +192,7 @@ export function pushPullAnchor(target: PushPullTarget, doc = docs().doc): { anch
  * knappen "Dra ut". Sedan drar man, skriver ett mått eller tar förra djupet.
  * Verktyget byts inte; man är kvar i Välj när operationen är klar.
  */
-export function beginPushPull(target: PushPullTarget) {
+export function beginPushPull(target: PushPullTarget, grabPoint?: Vec3) {
   const at = pushPullAnchor(target)
   if (!at) return
   const others = target.kind === 'body' ? bodies().filter((b) => b.id !== target.id) : bodies()
@@ -199,6 +200,7 @@ export function beginPushPull(target: PushPullTarget) {
     kind: 'pushpull',
     target,
     ...at,
+    grab: grabPoint ? dot(sub(grabPoint, at.anchor), at.normal) : 0,
     targets: offsetTargets(others, at.anchor, at.normal),
     distance: 0,
     onTarget: false,
@@ -246,8 +248,30 @@ export function move(ray: Ray, tol: number) {
 
   const t = closestParamOnLine(op.anchor, op.normal, ray.origin, ray.dir)
   if (t === null) return
-  const s = snapValue(t, 1, op.targets, tol)
+  const s = snapValue(t - op.grab, 1, op.targets, tol)
   setOp({ ...op, distance: s.value, onTarget: s.onTarget })
+}
+
+/**
+ * Punkten man arbetar vid under en operation: ytans nya läge, delens nya
+ * läge eller rektangelns hörn. Snäpptoleransen räknas från kamerans avstånd
+ * hit, så att den motsvarar ungefär lika många pixlar var man än är.
+ */
+export function opFocus(op: Op): Vec3 {
+  if (op.kind === 'pushpull') return add(op.anchor, scale(op.normal, op.distance))
+  if (op.kind === 'move') return add(op.plane.origin, moveDeltaWorld(op))
+  return toWorld(op.frame, [op.current[0], op.current[1], 0])
+}
+
+/**
+ * Nytt tag under en pågående push/pull (man släppte och trycker igen, var som
+ * helst): ytan ligger kvar där den är och följer fingret därifrån.
+ */
+export function regrab(ray: Ray) {
+  const { op, setOp } = tools()
+  if (op?.kind !== 'pushpull') return
+  const t = closestParamOnLine(op.anchor, op.normal, ray.origin, ray.dir)
+  if (t !== null) setOp({ ...op, grab: t - op.distance })
 }
 
 /** Förflyttningen i världskoordinater för en flytt-operation. */

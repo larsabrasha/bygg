@@ -26,6 +26,11 @@ export interface PushPullOp {
   target: PushPullTarget
   anchor: Vec3
   normal: Vec3
+  /**
+   * Var längs normalen man tog tag, räknat från anchor. Tar man i pilen en bit
+   * ut från ytan ska ytan inte hoppa dit, utan följa med från där den är.
+   */
+  grab: number
   /** Avstånd där ytan hamnar i jämnhöjd med en annan dels kant. */
   targets: number[]
   distance: number

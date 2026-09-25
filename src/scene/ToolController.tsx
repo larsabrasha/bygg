@@ -10,6 +10,8 @@ import {
   commit,
   hoverAt,
   move,
+  opFocus,
+  regrab,
   repeatLastPushPull,
   tap,
   type Hit,
@@ -151,7 +153,14 @@ export function ToolController() {
 
     const tolFor = (point: Vec3) =>
       camera.position.distanceTo({ x: point[0], y: point[1], z: point[2] }) * SNAP_FRACTION
-    const tolForRay = () => camera.position.length() * SNAP_FRACTION
+    /**
+     * Tolerans under en operation. Från kamerans avstånd till det man drar i,
+     * inte till origo: kameran kan stå nära modellen men långt från origo.
+     */
+    const tolForOp = () => {
+      const { op } = useToolStore.getState()
+      return op ? tolFor(opFocus(op)) : 0
+    }
 
     /**
      * Kameran vrider runt det man trycker på, inte runt en fast punkt.
@@ -220,10 +229,15 @@ export function ToolController() {
       }
       // Släpp utanför vyn ska ändå avsluta dragningen.
       el.setPointerCapture(e.pointerId)
-      if (op) move(rayOf(e), tolForRay())
+      // Push/pull tar nytt tag där ytan är; andra operationer följer pekaren direkt.
+      if (op?.kind === 'pushpull') regrab(rayOf(e))
+      else if (op) move(rayOf(e), tolForOp())
       else {
         tap(hit, hit ? tolFor(hit.point) : 0)
         press.startedOp = useToolStore.getState().op !== null
+        // Greppunkten räknas från pekarens stråle, som dragningen. Träffpunkten
+        // på pilens tjocka träffyta ligger närmare kameran och skulle ge ett hopp.
+        regrab(rayOf(e))
       }
     }
 
@@ -239,7 +253,7 @@ export function ToolController() {
         // Med mitt- eller högerknappen nere rör man kameran, inte operationen.
         if (e.pointerType === 'mouse' && (e.buttons & ~1) !== 0) return
         if (press && press.owner !== 'tool') return
-        move(rayOf(e), tolForRay())
+        move(rayOf(e), tolForOp())
         return
       }
       // Hover bara med mus; touch har ingen hover.
@@ -296,7 +310,7 @@ export function ToolController() {
         }
         // Dubbeltryck på en yta: samma djup som förra gången.
         if (isTap && isDoubleTap(startTap, here, p.slop) && repeatLastPushPull()) return
-        move(rayOf(e), tolForRay())
+        move(rayOf(e), tolForOp())
         commit()
         return
       }

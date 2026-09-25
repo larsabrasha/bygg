@@ -3,7 +3,7 @@ import { resolveBodies } from '../model/resolve'
 import type { Vec3 } from '../model/types'
 import { resetDocumentStore, useDocumentStore } from '../store/documentStore'
 import { useToolStore } from '../store/toolStore'
-import { applyMeasure, beginPushPull, commit, hoverAt, move, repeatLastPushPull, tap } from './actions'
+import { applyMeasure, beginPushPull, commit, hoverAt, move, opFocus, regrab, repeatLastPushPull, tap } from './actions'
 
 const docs = () => useDocumentStore.getState()
 const doc = () => docs().doc
@@ -267,6 +267,44 @@ describe('pilen på det valda', () => {
     expect(docs().selection).toEqual({ kind: 'body', id: b.id, face: 'n+' })
     expect(extrude(drawGroundRect(1000, 0, 1400, -400), '-18')).toBeDefined()
     expect(docs().selection).toMatchObject({ face: 'n-' })
+  })
+
+  it('mäter från där man tog tag i pilen, så att ytan inte hoppar', () => {
+    const b = extrude(drawGroundRect(), '22')
+    tools().setTool('select')
+    tap({ point: [300, 22, -200], target: { kind: 'body', id: b.id, face: 'n+' } }, 0)
+    // Pilens mitt, 50 mm ovanför ovansidan.
+    tap({ point: [300, 72, -200], target: { kind: 'handle' } }, 0)
+    const ray = (y: number) => ({ origin: [300, y, 3000] as Vec3, dir: [0, 0, -1] as Vec3 })
+    move(ray(72), 0)
+    expect(tools().op).toMatchObject({ distance: 0 })
+    move(ray(102), 0)
+    expect(tools().op).toMatchObject({ distance: 30 })
+  })
+
+  it('ett nytt tryck var som helst tar tag där ytan är, utan hopp', () => {
+    const b = extrude(drawGroundRect(), '22')
+    tools().setTool('select')
+    tap({ point: [300, 22, -200], target: { kind: 'body', id: b.id, face: 'n+' } }, 0)
+    tap({ point: [300, 72, -200], target: { kind: 'handle' } }, 0)
+    const ray = (y: number) => ({ origin: [300, y, 3000] as Vec3, dir: [0, 0, -1] as Vec3 })
+    move(ray(102), 0)
+    expect(tools().op).toMatchObject({ distance: 30 })
+    // Släpp och tryck långt ovanför: ytan ligger kvar på 30.
+    regrab(ray(500))
+    move(ray(500), 0)
+    expect(tools().op).toMatchObject({ distance: 30 })
+    move(ray(510), 0)
+    expect(tools().op).toMatchObject({ distance: 40 })
+  })
+
+  it('arbetspunkten för snäpptoleransen följer ytan', () => {
+    const b = extrude(drawGroundRect(), '22')
+    tools().setTool('select')
+    tap({ point: [300, 22, -200], target: { kind: 'body', id: b.id, face: 'n+' } }, 0)
+    tap({ point: [300, 72, -200], target: { kind: 'handle' } }, 0)
+    move({ origin: [300, 172, 3000], dir: [0, 0, -1] }, 0)
+    expect(opFocus(tools().op!)).toEqual([300, 122, -200])
   })
 
   it('fungerar direkt efter en ny rektangel, utan att byta till Välj', () => {
