@@ -9,13 +9,15 @@ export type PutResult = { ok: true; revision: number; updatedAt: string } | { ok
 export type DeleteResult = { ok: true } | { ok: false; current: ServerModel | null }
 
 /**
- * Modeller som JSON-filer: <dataDir>/models/<id>.json. Borttagna flyttas till
+ * Modeller som JSON-filer: <dataDir>/models/<id>.json, och bilden av varje modell
+ * (till startvyn) i <dataDir>/thumbs/<id>.png. Borttagna flyttas till
  * <dataDir>/trash/ i stället för att raderas. Skrivningar är atomära (temp-fil +
  * rename) och köas per modell, så att två samtidiga anrop inte kan tappa en revision.
  */
 export class FileStorage {
   private readonly modelsDir: string
   private readonly trashDir: string
+  private readonly thumbsDir: string
   private readonly locks = new Map<string, Promise<unknown>>()
 
   constructor(
@@ -24,11 +26,40 @@ export class FileStorage {
   ) {
     this.modelsDir = path.join(dataDir, 'models')
     this.trashDir = path.join(dataDir, 'trash')
+    this.thumbsDir = path.join(dataDir, 'thumbs')
   }
 
   async init() {
     await mkdir(this.modelsDir, { recursive: true })
     await mkdir(this.trashDir, { recursive: true })
+    await mkdir(this.thumbsDir, { recursive: true })
+  }
+
+  private thumbFile(id: string) {
+    if (!MODEL_ID_PATTERN.test(id)) throw new Error(`Ogiltigt modell-id: ${id}`)
+    return path.join(this.thumbsDir, `${id}.png`)
+  }
+
+  /** Bilden av modellen, eller null om den saknas. */
+  async getThumb(id: string): Promise<Buffer | null> {
+    try {
+      return await readFile(this.thumbFile(id))
+    } catch (e) {
+      if ((e as NodeJS.ErrnoException).code === 'ENOENT') return null
+      throw e
+    }
+  }
+
+  /** Sparar bilden av en modell som finns. Falskt om modellen inte finns. */
+  putThumb(id: string, png: Uint8Array): Promise<boolean> {
+    return this.withLock(id, async () => {
+      if (!(await this.read(id))) return false
+      const target = this.thumbFile(id)
+      const tmp = `${target}.${process.pid}.tmp`
+      await writeFile(tmp, png)
+      await rename(tmp, target)
+      return true
+    })
   }
 
   private file(id: string) {
@@ -104,6 +135,7 @@ export class FileStorage {
       if (current.revision !== baseRevision) return { ok: false, current }
       const stamp = this.now().toISOString().replace(/[:.]/g, '-')
       await rename(this.file(id), path.join(this.trashDir, `${id}-${stamp}.json`))
+      await rename(this.thumbFile(id), path.join(this.trashDir, `${id}-${stamp}.png`)).catch(() => {})
       return { ok: true }
     })
   }

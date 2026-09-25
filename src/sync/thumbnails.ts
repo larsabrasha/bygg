@@ -29,3 +29,39 @@ export function captureThumbnail(): string | null {
 export const getThumbnail = (id: string) => get<string>(PREFIX + id)
 export const putThumbnail = (id: string, url: string) => set(PREFIX + id, url)
 export const deleteThumbnail = (id: string) => del(PREFIX + id)
+
+/**
+ * Laddar upp bilden till servern, så att andra enheter får den utan att öppna
+ * modellen. 'missing' om modellen inte finns där än (inte synkad), 'failed' vid
+ * nätverksfel eller utan server.
+ */
+export async function uploadThumbnail(id: string, url: string): Promise<'ok' | 'missing' | 'failed'> {
+  try {
+    const png = await (await fetch(url)).blob()
+    const r = await fetch(`/api/models/${id}/thumb`, {
+      method: 'PUT',
+      headers: { 'content-type': 'image/png' },
+      body: png,
+    })
+    return r.status === 204 ? 'ok' : r.status === 404 ? 'missing' : 'failed'
+  } catch {
+    return 'failed'
+  }
+}
+
+/** Serverns bild av modellen som data-URL, eller null om den saknas eller inte går att hämta. */
+export async function downloadThumbnail(id: string): Promise<string | null> {
+  try {
+    const r = await fetch(`/api/models/${id}/thumb`)
+    if (r.status !== 200 || r.headers.get('content-type') !== 'image/png') return null
+    const blob = await r.blob()
+    return await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onload = () => resolve(String(reader.result))
+      reader.onerror = () => reject(reader.error)
+      reader.readAsDataURL(blob)
+    })
+  } catch {
+    return null
+  }
+}

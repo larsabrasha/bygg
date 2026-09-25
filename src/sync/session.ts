@@ -9,7 +9,14 @@ import { useViewStore } from '../store/viewStore'
 import { ApiError, httpApi } from './api'
 import { syncOnce, type SyncEvent } from './engine'
 import { idbRepo, importLegacy, LEGACY_KEY, type LocalModel } from './localRepo'
-import { captureThumbnail, deleteThumbnail, getThumbnail, putThumbnail } from './thumbnails'
+import {
+  captureThumbnail,
+  deleteThumbnail,
+  downloadThumbnail,
+  getThumbnail,
+  putThumbnail,
+  uploadThumbnail,
+} from './thumbnails'
 
 /**
  * Kopplar ihop den öppna modellen (documentStore) med det lokala förrådet och servern:
@@ -38,6 +45,12 @@ let syncing: Promise<void> | null = null
 let rerun = false
 let askedPersist = false
 let lastThumb = { id: '', at: 0 }
+/** Bilder som tagits här men inte laddats upp än (modellen fanns kanske inte på servern). */
+const unsentThumbs = new Set<string>()
+/** Bilder att hämta från servern: saknas här, eller modellen ändrades på en annan enhet. */
+const staleThumbs = new Set<string>()
+/** Redan försökt hämta i den här sessionen och fått nej; försök inte igen varje synk. */
+const noServerThumb = new Set<string>()
 const deleteTimers = new Map<string, { timer: ReturnType<typeof setTimeout>; notice: string }>()
 
 async function refreshList() {
@@ -73,6 +86,40 @@ async function updateThumbnail(id: string, force = false) {
   }
   await putThumbnail(id, url)
   lib().set({ thumbs: { ...lib().thumbs, [id]: url } })
+  unsentThumbs.add(id)
+}
+
+/**
+ * Efter en synk: laddar upp bilder som tagits här, och hämtar bilder som saknas
+ * här (eller är gamla) från servern. Så får en ny enhet bilder utan att öppna
+ * varje modell. Bilderna synkas utan revisioner: den senaste som laddades upp gäller.
+ */
+async function syncThumbs() {
+  for (const id of [...unsentThumbs]) {
+    const url = await getThumbnail(id).catch(() => undefined)
+    if (!url) {
+      unsentThumbs.delete(id)
+      continue
+    }
+    const r = await uploadThumbnail(id, url)
+    if (r === 'failed') return
+    if (r === 'ok') unsentThumbs.delete(id)
+  }
+  const { models, thumbs, currentId } = lib()
+  for (const m of models) {
+    // Den öppna modellens bild tas här, av det som syns.
+    if (m.id === currentId) continue
+    const wanted = staleThumbs.has(m.id) || (!thumbs[m.id] && !noServerThumb.has(m.id))
+    if (!wanted) continue
+    staleThumbs.delete(m.id)
+    const url = await downloadThumbnail(m.id)
+    if (!url) {
+      noServerThumb.add(m.id)
+      continue
+    }
+    await putThumbnail(m.id, url)
+    lib().set({ thumbs: { ...lib().thumbs, [m.id]: url } })
+  }
 }
 
 /** Laddar en lokal modell i storen utan att det räknas som en ändring. */
@@ -166,6 +213,8 @@ async function handle(events: SyncEvent[], docAtStart: ModelDocument) {
         if (isCurrent) lib().set({ currentBase: e.revision })
         break
       case 'conflict':
+        // Bilden här är av vår version, som nu är kopian; serverns bild hör till den andra.
+        unsentThumbs.delete(e.id)
         if (isCurrent) {
           // Vi fortsätter i vår egen version, som nu är kopian.
           lib().set({ currentId: e.copyId, currentName: e.copyName, currentBase: null })
@@ -176,6 +225,8 @@ async function handle(events: SyncEvent[], docAtStart: ModelDocument) {
         )
         break
       case 'remote-update':
+        staleThumbs.add(e.id)
+        noServerThumb.delete(e.id)
         if (isCurrent && untouched()) {
           const m = await repo.get(e.id)
           if (m && showModel(m)) lib().notify(`"${m.name}" uppdaterades från en annan enhet.`)
@@ -221,6 +272,8 @@ export function syncNow(): Promise<void> {
         if (again) rerun = true
       } while (rerun)
       lib().set({ status: 'synced', error: null })
+      await refreshList()
+      await syncThumbs()
     } catch (e) {
       if (e instanceof ApiError) lib().set({ status: STATUS_FOR[e.kind], error: e.message })
       else {
