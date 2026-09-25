@@ -1,7 +1,7 @@
 import { useFrame } from '@react-three/fiber'
 import { useEffect, useRef } from 'react'
-import { Vector3, type Group, type Mesh, type PerspectiveCamera } from 'three'
-import { arrowDir } from '../model/arrowDir'
+import { Vector3, type Group, type Mesh, type MeshBasicMaterial, type PerspectiveCamera } from 'three'
+import { isHeadOn } from '../model/arrowDir'
 import type { Vec3 } from '../model/types'
 import type { PickTarget } from '../tools/actions'
 import { ACCENT } from './colors'
@@ -10,7 +10,6 @@ import { setArrowOnScreen } from './dimensionLabels'
 const UP = new Vector3(0, 1, 0)
 // Återanvänds varje bildruta.
 const TO_CAMERA = new Vector3()
-const SCREEN_UP = new Vector3()
 const DIR = new Vector3()
 const BASE = new Vector3()
 const TIP = new Vector3()
@@ -20,12 +19,15 @@ const CONE_RADIUS = 10
 
 /** Ritas ovanpå allt, som flyttpilarna: annars skymmer en del framför (t.ex. en hylla) pilen. */
 const onTop = { color: ACCENT, depthTest: false, depthWrite: false, transparent: true } as const
+/** Hur synlig en pil som pekar rakt mot kameran är (den går inte att dra i då, se isHeadOn). */
+export const HEAD_ON_OPACITY = 0.35
 
 /**
  * Pilen på vald yta eller skiss. Drar man i den blir det push/pull.
  * Ritas i pixlar (1 enhet = 1 px), så att den är lika stor oavsett avstånd.
- * Vetter ytan rakt mot kameran lutas den mot skärmens överkant (arrowDir),
- * annars syns den bara som en prick.
+ * Den pekar alltid åt det håll ytan går, som i Shapr3D. Vetter ytan nästan
+ * rakt mot kameran blir den kort och blek och går inte att dra i (isHeadOn):
+ * man vrider vyn lite eller skriver måttet.
  * En osynlig, tjockare cylinder gör den lätt att träffa med fingret, också
  * när en annan del ligger framför (se ON_TOP i ToolController).
  */
@@ -42,9 +44,12 @@ export function PushPullHandle({ anchor, normal }: { anchor: Vec3; normal: Vec3 
     g.scale.setScalar((2 * distance * Math.tan(fov / 2)) / size.height)
 
     const toCamera = TO_CAMERA.subVectors(camera.position, g.position).divideScalar(distance)
-    const up = SCREEN_UP.setFromMatrixColumn(camera.matrixWorld, 1)
-    const dir = arrowDir(normal, toCamera.toArray() as Vec3, up.toArray() as Vec3)
-    g.quaternion.setFromUnitVectors(UP, DIR.fromArray(dir))
+    const headOn = isHeadOn(normal, toCamera.toArray() as Vec3)
+    g.quaternion.setFromUnitVectors(UP, DIR.fromArray(normal))
+    g.traverse((o) => {
+      const m = (o as Mesh).material as MeshBasicMaterial | undefined
+      if (m && o.visible) m.opacity = headOn ? HEAD_ON_OPACITY : 1
+    })
     // Var pilen syns på skärmen, från foten till spetsen, för måttetiketterna.
     const toPx = (p: Vector3): [number, number] => {
       p.project(camera)
@@ -52,8 +57,7 @@ export function PushPullHandle({ anchor, normal }: { anchor: Vec3; normal: Vec3 
     }
     const tip = TIP.copy(g.position).addScaledVector(DIR, TIP_PX * g.scale.x)
     setArrowOnScreen({ a: toPx(BASE.copy(g.position)), b: toPx(tip), r: CONE_RADIUS })
-    // Träffen bär med sig riktningen, så att draget börjar där man tog tag längs den lutade pilen.
-    if (hitRef.current) hitRef.current.userData.pick = { kind: 'handle', dir } satisfies PickTarget
+    if (hitRef.current) hitRef.current.userData.pick = { kind: 'handle', headOn } satisfies PickTarget
   })
 
   return (

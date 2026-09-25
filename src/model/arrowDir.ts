@@ -2,9 +2,8 @@ import type { Vec3 } from './types'
 import { add, dot, length, scale, sub } from './vec'
 
 /**
- * Minsta vinkel mellan en pil (push/pull, flyttpilarna) och siktlinjen. Under den blir pilen
- * så kort på skärmen att den ser ut som en prick, och draget blir ryckigt
- * (en liten rörelse med musen blir ett stort mått).
+ * Minsta vinkel mellan dragriktningen längs en båge sedd från kanten och
+ * siktlinjen (arrowDir). Under den blir draget ryckigt.
  */
 export const MIN_VIEW_ANGLE = Math.PI / 4
 
@@ -13,16 +12,27 @@ const unit = (a: Vec3): Vec3 => scale(a, 1 / length(a))
 const across = (a: Vec3, v: Vec3): Vec3 => sub(a, scale(v, dot(a, v)))
 
 /**
- * Riktningen som en pil ritas i och som draget följer. Normalt pilens egen
- * riktning (ytans normal, flyttaxeln). Pekar den nästan rakt mot kameran
- * (eller rakt bort) lutas pilen mot skärmens överkant, så att den alltid
- * syns som en pil med minst MIN_VIEW_ANGLE mot siktlinjen. Övergången är
- * mjuk: vid gränsvinkeln är det pilens egen riktning, och ju rakare man
- * tittar, desto mer mot skärmens upp.
- *
- * Det som dras flyttas fortfarande längs pilens egen riktning; bara pekaren
- * följer den lutade linjen, med samma mått per pixel som längs en pil i profil.
- * toCamera = från pilens fot mot kameran, up = skärmens upp i världen. Båda enhetsvektorer.
+ * Under den här vinkeln mot siktlinjen pekar en pil (push/pull, flyttpilarna)
+ * nästan rakt mot kameran eller bort. Den syns då kort, och ett drag längs den
+ * blir ryckigt: en liten rörelse med pekaren blir ett stort mått. Pilen ritas
+ * ändå åt det håll delen rör sig (som i Shapr3D), men blir blek och går inte att
+ * dra i; man vrider vyn lite eller skriver måttet.
+ */
+export const HEAD_ON_ANGLE = (20 * Math.PI) / 180
+
+/** Om riktningen dir pekar nästan längs siktlinjen. toCamera = mot kameran, enhetsvektor. */
+export function isHeadOn(dir: Vec3, toCamera: Vec3): boolean {
+  return length(across(dir, toCamera)) < Math.sin(HEAD_ON_ANGLE) * length(dir)
+}
+
+/**
+ * Riktningen att dra längs för en båge i Flytta-läget som ses från kanten:
+ * tangenten där man tog tag (dir). Pekar den nästan rakt mot kameran (eller
+ * bort) lutas den mot skärmens överkant, så att den har minst MIN_VIEW_ANGLE
+ * mot siktlinjen. Övergången är mjuk: vid gränsvinkeln är det dir själv, och ju
+ * rakare man tittar, desto mer mot skärmens upp. Vridningen räknas ändå längs
+ * bågen; bara pekaren följer den lutade linjen.
+ * toCamera = från punkten mot kameran, up = skärmens upp i världen. Båda enhetsvektorer.
  */
 export function arrowDir(normal: Vec3, toCamera: Vec3, up: Vec3): Vec3 {
   const cos = dot(normal, toCamera)

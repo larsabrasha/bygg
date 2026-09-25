@@ -257,7 +257,31 @@ export function ToolController() {
       controls.setOrbitPoint(x, y, z)
     }
 
+    /**
+     * Under en operation räknas pekaren högst en gång per bildruta, med den senaste
+     * strålen. En telefon skickar fler pekarhändelser än den ritar bilder, och varje
+     * steg kan betyda att en del med hål räknas om (manifold).
+     */
+    let pendingRay: Ray | null = null
+    let moveFrame = 0
+    const dropMove = () => {
+      if (moveFrame) cancelAnimationFrame(moveFrame)
+      moveFrame = 0
+      pendingRay = null
+    }
+    const queueMove = (ray: Ray) => {
+      pendingRay = ray
+      if (moveFrame) return
+      moveFrame = requestAnimationFrame(() => {
+        moveFrame = 0
+        const r = pendingRay
+        pendingRay = null
+        if (r && useToolStore.getState().op) move(r, tolForOp())
+      })
+    }
+
     const onDown = (e: PointerEvent) => {
+      dropMove()
       pointers.set(e.pointerId, { x: e.clientX, y: e.clientY, moved: 0 })
       if (pointers.size === 1) gesture = { start: e.timeStamp, fingers: 1, moved: 0 }
       gesture.fingers = Math.max(gesture.fingers, pointers.size)
@@ -303,10 +327,15 @@ export function ToolController() {
       const hit = pick(e.clientX, e.clientY, kind)
       const sel = useDocumentStore.getState().selection
       const onSelected = hit?.target.kind === 'body' && sel?.kind === 'body' && sel.id === hit.target.id
-      // I sprängskissen står delarna inte där de är: trycket vrider kameran eller väljer, inget annat.
-      const owner = useViewStore.getState().exploded
-        ? 'camera'
-        : pressOwner(tool, op !== null, kind, hit?.target.kind ?? null, onSelected)
+      // En pil som pekar rakt mot kameran går inte att dra i: ett drag där vrider vyn, så att den syns
+      // (och ett tryck säger det, se tap). I sprängskissen står delarna inte där de är: trycket vrider
+      // kameran eller väljer, inget annat.
+      const t = hit?.target
+      const headOn = (t?.kind === 'handle' || t?.kind === 'axis') && !!t.headOn
+      const owner =
+        useViewStore.getState().exploded || (headOn && !op)
+          ? 'camera'
+          : pressOwner(tool, op !== null, kind, t?.kind ?? null, onSelected)
       if (controls) applyCameraButtons(controls, cameraButtons(tool, owner))
       press = {
         x: e.clientX,
@@ -352,7 +381,7 @@ export function ToolController() {
         if (e.pointerType === 'mouse' && (e.buttons & ~1) !== 0) return
         if (press && press.owner !== 'tool') return
         if (waiting && !press) return
-        move(rayOf(e), tolForOp())
+        queueMove(rayOf(e))
         return
       }
       // Hover bara med mus; touch har ingen hover. Med mellanslaget nere visas handen i stället.
@@ -399,6 +428,8 @@ export function ToolController() {
     }
 
     const onUp = (e: PointerEvent) => {
+      // Släppet räknas med sin egen stråle nedan; en väntande rörelse är gammal.
+      dropMove()
       pointers.delete(e.pointerId)
       const wasMulti = multiTouch
       if (pointers.size === 0) {
@@ -459,6 +490,7 @@ export function ToolController() {
     }
 
     const onCancel = (e: PointerEvent) => {
+      dropMove()
       pointers.delete(e.pointerId)
       if (pointers.size === 0) multiTouch = false
       if (press?.owner === 'tool') useToolStore.getState().setOp(press.opBefore)
@@ -506,6 +538,7 @@ export function ToolController() {
       el.removeEventListener('pointerleave', onLeave)
       unsubscribePan()
       unsubscribeOp()
+      dropMove()
       cancel()
     }
   }, [camera, gl, scene, raycaster, controls])

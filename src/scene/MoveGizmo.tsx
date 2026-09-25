@@ -1,9 +1,20 @@
 import { useFrame } from '@react-three/fiber'
 import { useMemo, useRef, type Ref } from 'react'
-import { Matrix4, Quaternion, Vector3, type Group, type PerspectiveCamera } from 'three'
-import { arrowDir } from '../model/arrowDir'
+import {
+  Matrix4,
+  Quaternion,
+  Vector3,
+  type BufferGeometry,
+  type Group,
+  type Mesh,
+  type MeshBasicMaterial,
+  type PerspectiveCamera,
+} from 'three'
+import { isHeadOn } from '../model/arrowDir'
+import { HEAD_ON_OPACITY } from './PushPullHandle'
 import type { Vec3 } from '../model/types'
 import type { Axis } from '../store/toolStore'
+import type { PickTarget } from '../tools/actions'
 import { AXIS_COLORS } from './colors'
 
 /** Ritas ovanpå delen, som i Shapr3D: pilarna börjar mitt i den. */
@@ -39,7 +50,6 @@ const AXIS_DIRS: readonly Vec3[] = [
 const UP = E[1]
 // Återanvänds varje bildruta.
 const TO_CAMERA = new Vector3()
-const SCREEN_UP = new Vector3()
 const DIR = new Vector3()
 /** Bågens radie i px: mellan pilarnas skaft och spetsar. */
 const ARC_RADIUS = 58
@@ -76,8 +86,9 @@ function RotateArc({ axis }: { axis: Axis }) {
 /**
  * Tre pilar längs X, Y och Z på den valda delen i Flytta-läget, och en båge
  * runt varje axel. Pilen flyttar delen längs axeln, bågen vrider den runt
- * axeln. Ritas i pixlar, som PushPullHandle. En pil som pekar rakt mot
- * kameran lutas mot skärmens överkant (arrowDir), och draget följer den.
+ * axeln. Ritas i pixlar, som PushPullHandle. Pilarna pekar alltid längs sin
+ * axel; en som pekar nästan rakt mot kameran blir blek och går inte att dra i
+ * (isHeadOn), som pilen på det valda.
  */
 export function MoveGizmo({ center }: { center: Vec3 }) {
   const ref = useRef<Group>(null)
@@ -91,9 +102,16 @@ export function MoveGizmo({ center }: { center: Vec3 }) {
     g.scale.setScalar((2 * distance * Math.tan(fov / 2)) / size.height)
 
     const toCamera = TO_CAMERA.subVectors(camera.position, g.position).divideScalar(distance).toArray() as Vec3
-    const up = SCREEN_UP.setFromMatrixColumn(camera.matrixWorld, 1).toArray() as Vec3
     arrows.current.forEach((arrow, axis) => {
-      arrow?.quaternion.setFromUnitVectors(UP, DIR.fromArray(arrowDir(AXIS_DIRS[axis]!, toCamera, up)))
+      if (!arrow) return
+      const dir = AXIS_DIRS[axis]!
+      const headOn = isHeadOn(dir, toCamera)
+      arrow.quaternion.setFromUnitVectors(UP, DIR.fromArray(dir))
+      for (const o of arrow.children) {
+        const m = o as Mesh<BufferGeometry, MeshBasicMaterial>
+        if (o.visible) m.material.opacity = headOn ? HEAD_ON_OPACITY : 1
+        else o.userData.pick = { kind: 'axis', axis: axis as Axis, headOn } satisfies PickTarget
+      }
     })
   })
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { MIN_VIEW_ANGLE, arrowDir } from './arrowDir'
+import { HEAD_ON_ANGLE, MIN_VIEW_ANGLE, arrowDir, isHeadOn } from './arrowDir'
 import type { Vec3 } from './types'
 import { dot, length } from './vec'
 
@@ -47,5 +47,18 @@ describe('arrowDir', () => {
     const d = arrowDir([0, 1, 0], [0, 1, 0], [0, 1, 0])
     expect(length(d)).toBeCloseTo(1)
     expect(angleTo(d, [0, 1, 0])).toBeCloseTo(MIN_VIEW_ANGLE)
+  })
+})
+
+describe('isHeadOn', () => {
+  it('sant när pilen pekar nästan rakt mot kameran eller bort, annars falskt', () => {
+    const toCamera: [number, number, number] = [0, 0, 1]
+    expect(isHeadOn([0, 0, 1], toCamera)).toBe(true)
+    expect(isHeadOn([0, 0, -1], toCamera)).toBe(true)
+    expect(isHeadOn([1, 0, 0], toCamera)).toBe(false)
+    const a = HEAD_ON_ANGLE + 0.01
+    expect(isHeadOn([Math.sin(a), 0, Math.cos(a)], toCamera)).toBe(false)
+    const b = HEAD_ON_ANGLE - 0.01
+    expect(isHeadOn([Math.sin(b), 0, Math.cos(b)], toCamera)).toBe(true)
   })
 })
