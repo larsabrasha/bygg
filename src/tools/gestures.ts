@@ -1,4 +1,4 @@
-import type { Tool } from '../store/toolStore'
+import type { Op, Tool } from '../store/toolStore'
 import type { PickTarget } from './actions'
 
 /**
@@ -128,4 +128,19 @@ export function fingerTap(fingers: number, durationMs: number, maxMovedPx: numbe
  */
 export function pickable(pick: { id?: string }, skip: string | undefined): boolean {
   return !(skip && pick.id === skip)
+}
+
+/**
+ * Vad en operation som startades med ett tryck (utan dragning) gör sedan.
+ * follow: följer pekaren tills nästa tryck avslutar den (rita med två klick,
+ * push/pull med verktyget P, som i SketchUp). wait: står still och väntar på
+ * ett inskrivet mått; nästa tryck avbryter den. Pilarna och bågarna syns alltid
+ * på det valda, så ett tryck där är ofta ett försök att välja, och då ska
+ * inget ändras av att musen sedan rör sig. drop: tas bort direkt (ett tryck på
+ * delen i Flytta/vrid, som också oftast är ett försök att välja).
+ */
+export function afterTapStart(target: PickTarget['kind'] | null, op: Op): 'follow' | 'wait' | 'drop' {
+  if (target === 'handle' || target === 'axis' || target === 'rotate') return 'wait'
+  if (op.kind === 'move') return 'drop'
+  return 'follow'
 }

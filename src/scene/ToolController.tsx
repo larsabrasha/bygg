@@ -23,6 +23,7 @@ import {
   type Ray,
 } from '../tools/actions'
 import {
+  afterTapStart,
   cameraButtons,
   fingerTap,
   isDoubleTap,
@@ -64,6 +65,8 @@ interface Press {
   opBefore: Op | null
   /** Trycket startade en operation (drar man inte, väntar den på nästa tryck). */
   startedOp: boolean
+  /** Vad operationen gör om trycket inte blir en dragning (se afterTapStart). */
+  afterTap: ReturnType<typeof afterTapStart>
 }
 
 /**
@@ -95,6 +98,11 @@ export function ToolController() {
      * går den tillbaka hit. Annars drar vägen dit ytan eller delen långt iväg.
      */
     let opAtStart = useToolStore.getState().op
+    /**
+     * Operationen startades med ett tryck på en pil eller båge och står still
+     * tills man skriver ett mått. Nästa tryck avbryter den (se afterTapStart).
+     */
+    let waiting = false
 
     const castRay = (x: number, y: number): Ray => {
       const r = el.getBoundingClientRect()
@@ -266,7 +274,8 @@ export function ToolController() {
       }
       if (!e.isPrimary) return
 
-      const { tool, op } = useToolStore.getState()
+      const { tool } = useToolStore.getState()
+      let { op } = useToolStore.getState()
       // Mitt- och högerknappen styr bara kameran; mittknappen vrider under en operation.
       if (e.pointerType === 'mouse' && e.button !== 0) {
         if (controls) applyCameraButtons(controls, cameraButtons(tool, op ? 'tool' : 'camera'))
@@ -282,12 +291,27 @@ export function ToolController() {
 
       const kind = kindOf(e)
       lastKind = kind
+      // En operation som väntar på ett mått avbryts, och trycket räknas som om den aldrig funnits.
+      // Utom ett dubbeltryck på pilen: samma djup som förra gången (se onUp).
+      const here = { x: e.clientX, y: e.clientY, time: e.timeStamp }
+      if (waiting && !isDoubleTap(startTap, here, TAP_SLOP[kind])) {
+        cancel()
+        op = null
+      }
       const hit = pick(e.clientX, e.clientY, kind)
       const sel = useDocumentStore.getState().selection
       const onSelected = hit?.target.kind === 'body' && sel?.kind === 'body' && sel.id === hit.target.id
       const owner = pressOwner(tool, op !== null, kind, hit?.target.kind ?? null, onSelected)
       if (controls) applyCameraButtons(controls, cameraButtons(tool, owner))
-      press = { x: e.clientX, y: e.clientY, slop: TAP_SLOP[kind], owner, opBefore: op, startedOp: false }
+      press = {
+        x: e.clientX,
+        y: e.clientY,
+        slop: TAP_SLOP[kind],
+        owner,
+        opBefore: op,
+        startedOp: false,
+        afterTap: 'follow',
+      }
 
       if (owner === 'camera') {
         setPivot(e.clientX, e.clientY)
@@ -300,7 +324,9 @@ export function ToolController() {
         if (!regrab(rayOf(e))) move(rayOf(e), tolForOp())
       } else {
         tap(hit, hit ? tolFor(hit.point) : 0)
-        press.startedOp = useToolStore.getState().op !== null
+        const started = useToolStore.getState().op
+        press.startedOp = started !== null
+        if (started) press.afterTap = afterTapStart(hit?.target.kind ?? null, started)
         // Greppunkten räknas från pekarens stråle, som dragningen. Träffpunkten
         // på pilens tjocka träffyta ligger närmare kameran och skulle ge ett hopp.
         regrab(rayOf(e))
@@ -320,6 +346,7 @@ export function ToolController() {
         // Med mitt- eller högerknappen nere rör man kameran, inte operationen.
         if (e.pointerType === 'mouse' && (e.buttons & ~1) !== 0) return
         if (press && press.owner !== 'tool') return
+        if (waiting && !press) return
         move(rayOf(e), tolForOp())
         return
       }
@@ -383,6 +410,11 @@ export function ToolController() {
         const here = { x: e.clientX, y: e.clientY, time: e.timeStamp }
         // Ett tryck som startade operationen väntar på nästa tryck; en dragning avslutar den.
         if (isTap && p.startedOp) {
+          if (p.afterTap === 'drop') {
+            cancel()
+            return
+          }
+          waiting = p.afterTap === 'wait'
           startTap = here
           return
         }
@@ -428,8 +460,10 @@ export function ToolController() {
 
     // Handen visar att man kan panorera medan mellanslaget är nere.
     const unsubscribeOp = useToolStore.subscribe((s, prev) => {
-      if (!s.op) opAtStart = null
-      else if (!prev.op) opAtStart = s.op
+      if (!s.op) {
+        opAtStart = null
+        waiting = false
+      } else if (!prev.op) opAtStart = s.op
     })
 
     const unsubscribePan = useViewStore.subscribe((s, prev) => {

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { cameraButtons, fingerTap, isDoubleTap, pickable, pressOwner, snapPx } from './gestures'
+import type { Op } from '../store/toolStore'
+import { afterTapStart, cameraButtons, fingerTap, isDoubleTap, pickable, pressOwner, snapPx } from './gestures'
 
 describe('pressOwner', () => {
   it('ger alltid verktyget trycket under en operation', () => {
@@ -102,5 +103,24 @@ describe('pickable', () => {
     expect(pickable({ id: 'ben' }, undefined)).toBe(true)
     expect(pickable({ id: 'ben' }, 'ben')).toBe(false)
     expect(pickable({ id: 'sarg' }, 'ben')).toBe(true)
+  })
+})
+
+describe('afterTapStart', () => {
+  const op = (kind: Op['kind']) => ({ kind }) as Op
+
+  it('ett tryck på en pil eller båge väntar på ett mått, i stället för att följa musen', () => {
+    expect(afterTapStart('handle', op('pushpull'))).toBe('wait')
+    expect(afterTapStart('axis', op('move'))).toBe('wait')
+    expect(afterTapStart('rotate', op('rotate'))).toBe('wait')
+  })
+
+  it('ett tryck på delen i Flytta/vrid startar ingen flytt', () => {
+    expect(afterTapStart('body', op('move'))).toBe('drop')
+  })
+
+  it('en rektangel och push/pull med verktyget P följer musen till nästa klick', () => {
+    expect(afterTapStart('ground', op('rect'))).toBe('follow')
+    expect(afterTapStart('body', op('pushpull'))).toBe('follow')
   })
 })
