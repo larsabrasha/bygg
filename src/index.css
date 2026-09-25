@@ -1,0 +1,40 @@
+@import 'tailwindcss';
+
+/* Smal skärm (mobil i stående läge). Liggande mobil får desktop-layouten. */
+@custom-variant narrow (@media (max-width: 720px));
+
+@theme {
+  --font-sans: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --color-ink: #2a2724;
+  --color-canvas: #f2f1ee;
+  --color-panel: #fbfaf8;
+  --color-line: #d8d4cc;
+  --color-muted: #6b655c;
+  --color-faint: #8a847a;
+  --color-hover: #f0ede7;
+  --color-accent: #1e6fd9;
+  --color-accent-soft: #dce9fb;
+  --color-accent-line: #b8d0f3;
+  --color-danger: #b3261e;
+}
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    @apply bg-canvas font-sans text-sm text-ink;
+    overscroll-behavior: none;
+  }
+
+  /* 16 px hindrar iOS från att zooma in när ett fält får fokus. */
+  @variant narrow {
+    input,
+    select {
+      font-size: 16px;
+    }
+  }
+}
