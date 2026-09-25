@@ -6,6 +6,7 @@ import {
   fingerOnlyCamera,
   fingerTap,
   hovers,
+  inSystemEdge,
   movesCamera,
   isDoubleTap,
   pickable,
@@ -64,6 +65,28 @@ describe('cameraButtons', () => {
   it('vrider med två fingrar i verktygslägena', () => {
     expect(cameraButtons('rect', 'tool').two).toBe('dollyRotate')
     expect(cameraButtons('pushpull', 'camera').two).toBe('dollyRotate')
+  })
+})
+
+describe('inSystemEdge', () => {
+  const screen = { left: 0, right: 1366, bottom: 1024 }
+  it('ett finger längst ner räknas inte (dockan i iPadOS)', () => {
+    expect(inSystemEdge('touch', 600, 1010, screen)).toBe(true)
+    expect(inSystemEdge('touch', 600, 1000, screen)).toBe(true)
+    expect(inSystemEdge('touch', 600, 990, screen)).toBe(false)
+  })
+  it('ett finger vid vänster- eller högerkanten räknas inte (bakåt och framåt i Safari)', () => {
+    expect(inSystemEdge('touch', 10, 500, screen)).toBe(true)
+    expect(inSystemEdge('touch', 1350, 500, screen)).toBe(true)
+    expect(inSystemEdge('touch', 40, 500, screen)).toBe(false)
+    expect(inSystemEdge('touch', 1320, 500, screen)).toBe(false)
+  })
+  it('överkanten räknas som vanligt', () => {
+    expect(inSystemEdge('touch', 600, 5, screen)).toBe(false)
+  })
+  it('pennan och musen räknas ända ut', () => {
+    expect(inSystemEdge('pen', 600, 1020, screen)).toBe(false)
+    expect(inSystemEdge('mouse', 5, 500, screen)).toBe(false)
   })
 })
 

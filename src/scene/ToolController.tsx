@@ -27,6 +27,7 @@ import {
   afterTapStart,
   cameraButtons,
   fingerOnlyCamera,
+  inSystemEdge,
   fingerTap,
   hovers,
   movesCamera,
@@ -96,6 +97,8 @@ export function ToolController() {
     let multiTouch = false
     /** Alla nedtryckta pekare med startpunkt och hur långt de rört sig, för flerfingertryck. */
     const pointers = new Map<number, { x: number; y: number; moved: number }>()
+    /** Fingrar som började vid skärmens kant (dockan, Safaris bakåt, se inSystemEdge): de gör ingenting. */
+    const edgeTouches = new Set<number>()
     let gesture = { start: 0, fingers: 0, moved: 0 }
     /** Trycket som startade pågående operation, för dubbeltryck. */
     let startTap: TapPoint | null = null
@@ -291,6 +294,20 @@ export function ToolController() {
 
     const onDown = (e: PointerEvent) => {
       const kind = kindOf(e)
+      const vv = window.visualViewport
+      const screen = vv
+        ? { left: vv.offsetLeft, right: vv.offsetLeft + vv.width, bottom: vv.offsetTop + vv.height }
+        : { left: 0, right: window.innerWidth, bottom: window.innerHeight }
+      // Bara ett första finger: ett andra finger vid kanten hör till en tvåfingergest.
+      if (pointers.size === 0 && inSystemEdge(kind, e.clientX, e.clientY, screen)) {
+        edgeTouches.add(e.pointerId)
+        // camera-controls får också trycket; ett finger ska inte vrida vyn.
+        if (controls) {
+          const { tool } = useToolStore.getState()
+          applyCameraButtons(controls, { ...cameraButtons(tool, 'camera'), one: 'none' })
+        }
+        return
+      }
       // Pennan slår på pennläget (också om man slagit av det: då vill man rita med pennan igen).
       if (kind === 'pen' && !useViewStore.getState().penMode) {
         useViewStore.getState().setPenMode(true)
@@ -395,6 +412,7 @@ export function ToolController() {
     }
 
     const onMove = (e: PointerEvent) => {
+      if (edgeTouches.has(e.pointerId)) return
       const p = pointers.get(e.pointerId)
       if (p) {
         p.moved = Math.max(p.moved, Math.hypot(e.clientX - p.x, e.clientY - p.y))
@@ -459,6 +477,7 @@ export function ToolController() {
     }
 
     const onUp = (e: PointerEvent) => {
+      if (edgeTouches.delete(e.pointerId)) return
       const wasFinger = pointers.delete(e.pointerId)
       const wasMulti = multiTouch
       if (wasFinger && pointers.size === 0) {
@@ -525,6 +544,7 @@ export function ToolController() {
     }
 
     const onCancel = (e: PointerEvent) => {
+      if (edgeTouches.delete(e.pointerId)) return
       pointers.delete(e.pointerId)
       if (pointers.size === 0) multiTouch = false
       if (press?.pointerId !== e.pointerId) return

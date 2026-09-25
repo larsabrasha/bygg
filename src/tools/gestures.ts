@@ -52,6 +52,28 @@ export function hovers(kind: PointerKind, buttons: number): boolean {
   return kind !== 'touch' && buttons === 0
 }
 
+/**
+ * Hur nära skärmens kant ett finger kan börja utan att räknas, i px. Nedtill börjar
+ * iPadOS dockan och hemgesten, och från sidorna går Safari bakåt och framåt. En
+ * webbsida kan inte stoppa dem, och utan zonen vred svepet också vyn. Pennan
+ * startar dem inte och räknas som vanligt. Överkanten ligger inte mot vyn
+ * (Safaris adressfält och appens verktygsrad är där).
+ */
+export const SYSTEM_EDGE_PX = 24
+
+/** Skärmens kanter, i samma koordinater som pekaren. */
+export interface ScreenEdges {
+  left: number
+  right: number
+  bottom: number
+}
+
+/** Om ett tryck som börjar i (x, y) troligen är ett svep från skärmens kant, som systemet tar. */
+export function inSystemEdge(kind: PointerKind, x: number, y: number, screen: ScreenEdges): boolean {
+  if (kind !== 'touch') return false
+  return x - screen.left <= SYSTEM_EDGE_PX || screen.right - x <= SYSTEM_EDGE_PX || screen.bottom - y <= SYSTEM_EDGE_PX
+}
+
 /** Längsta tid mellan två tryck som räknas som dubbeltryck, i ms. */
 export const DOUBLE_TAP_MS = 350
 /** Längsta tid för ett tryck med två eller tre fingrar (ångra/gör om), i ms. */
