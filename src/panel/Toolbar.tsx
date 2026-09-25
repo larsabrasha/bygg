@@ -1,4 +1,4 @@
-import { ArrowUpFromLine, MousePointer2, Move, Redo2, Square, Undo2, type LucideIcon } from 'lucide-react'
+import { MousePointer2, Redo2, Square, Undo2, type LucideIcon } from 'lucide-react'
 import { useDocumentStore } from '../store/documentStore'
 import { useToolStore, type Tool } from '../store/toolStore'
 import { ModelMenu } from './ModelMenu'
@@ -6,8 +6,6 @@ import { ModelMenu } from './ModelMenu'
 const TOOLS: { tool: Tool; label: string; key: string; Icon: LucideIcon }[] = [
   { tool: 'select', label: 'Välj', key: 'Mellanslag', Icon: MousePointer2 },
   { tool: 'rect', label: 'Rektangel', key: 'R', Icon: Square },
-  { tool: 'pushpull', label: 'Push/pull', key: 'P', Icon: ArrowUpFromLine },
-  { tool: 'move', label: 'Flytta', key: 'M', Icon: Move },
 ]
 
 /** Kvadratisk ikonknapp: 36 px på desktop, 44 px (touchyta) på smal skärm. */

@@ -6,7 +6,7 @@ import { resolveBodies } from '../model/resolve'
 import { bodyKeyPoints, offsetTargets, planeTargets, snapDelta, snapValue, type PlaneTargets } from '../model/snapping'
 import type { Body, DimExprs, Face, Frame, Rect, Vec2, Vec3 } from '../model/types'
 import { add, closestParamOnLine, dot, length, scale, sub } from '../model/vec'
-import { useDocumentStore } from '../store/documentStore'
+import { useDocumentStore, type Selection } from '../store/documentStore'
 import { useToolStore, type Op, type PushPullTarget } from '../store/toolStore'
 
 /**
@@ -14,7 +14,12 @@ import { useToolStore, type Op, type PushPullTarget } from '../store/toolStore'
  * anropar dessa funktioner. Därför går flödena att testa i node.
  */
 
-export type PickTarget = { kind: 'ground' } | { kind: 'body'; id: string; face: Face } | { kind: 'sketch'; id: string }
+export type PickTarget =
+  | { kind: 'ground' }
+  | { kind: 'body'; id: string; face: Face }
+  | { kind: 'sketch'; id: string }
+  /** Pilen på det valda; att dra i den gör push/pull. */
+  | { kind: 'handle' }
 
 export interface Hit {
   point: Vec3
@@ -50,6 +55,8 @@ function planeForHit(hit: Hit): { frame: Frame; bounds: Rect | null } | null {
       const b = findBody(hit.target.id)
       return b ? { frame: faceFrame(b, hit.target.face), bounds: faceBounds(b, hit.target.face) } : null
     }
+    case 'handle':
+      return null
   }
 }
 
@@ -94,9 +101,22 @@ function pushPullTargetFor(hit: Hit): { target: PushPullTarget; normal: Vec3 } |
 export function tap(hit: Hit | null, tol: number) {
   const { tool, setOp } = tools()
 
+  if (hit?.target.kind === 'handle') {
+    const sel = docs().selection
+    const target = sel && pushPullTargetOf(sel)
+    if (target) beginPushPull(target)
+    return
+  }
+
   if (tool === 'select') {
     const t = hit?.target
-    docs().select(t && t.kind !== 'ground' ? { kind: t.kind, id: t.id } : null)
+    docs().select(
+      t?.kind === 'body'
+        ? { kind: 'body', id: t.id, face: t.face }
+        : t?.kind === 'sketch'
+          ? { kind: 'sketch', id: t.id }
+          : null,
+    )
     return
   }
 
@@ -145,22 +165,41 @@ export function tap(hit: Hit | null, tol: number) {
   }
 }
 
+/** Det man gör push/pull på för ett val: skissen, eller delens valda yta. Null om ingen yta är vald. */
+export function pushPullTargetOf(sel: Selection): PushPullTarget | null {
+  if (sel.kind === 'sketch') return { kind: 'sketch', id: sel.id }
+  return sel.face ? { kind: 'body', id: sel.id, face: sel.face } : null
+}
+
+/** Var pilen sitter och vart den pekar: mitt på skissen eller ytan, längs normalen. */
+export function pushPullAnchor(target: PushPullTarget, doc = docs().doc): { anchor: Vec3; normal: Vec3 } | null {
+  if (target.kind === 'sketch') {
+    const s = doc.sketches.find((x) => x.id === target.id)
+    if (!s) return null
+    const { x0, x1, y0, y1 } = s.rect
+    return { anchor: toWorld(s.frame, [(x0 + x1) / 2, (y0 + y1) / 2, 0]), normal: s.frame.n }
+  }
+  const b = resolveBodies(doc).find((x) => x.id === target.id)
+  if (!b) return null
+  const f = faceFrame(b, target.face)
+  const r = faceBounds(b, target.face)
+  return { anchor: toWorld(f, [(r.x0 + r.x1) / 2, (r.y0 + r.y1) / 2, 0]), normal: f.n }
+}
+
 /**
- * Startar push/pull på en skiss utan att man trycker i 3D-vyn (knappen "Dra ut").
- * Pilen utgår från skissens mitt; sedan drar man, skriver ett mått eller tar förra djupet.
+ * Startar push/pull utan att man trycker på själva ytan: från pilen eller
+ * knappen "Dra ut". Sedan drar man, skriver ett mått eller tar förra djupet.
+ * Verktyget byts inte; man är kvar i Välj när operationen är klar.
  */
-export function beginPushPull(sketchId: string) {
-  const s = docs().doc.sketches.find((x) => x.id === sketchId)
-  if (!s) return
-  const { x0, x1, y0, y1 } = s.rect
-  const anchor = toWorld(s.frame, [(x0 + x1) / 2, (y0 + y1) / 2, 0])
-  tools().setTool('pushpull')
+export function beginPushPull(target: PushPullTarget) {
+  const at = pushPullAnchor(target)
+  if (!at) return
+  const others = target.kind === 'body' ? bodies().filter((b) => b.id !== target.id) : bodies()
   tools().setOp({
     kind: 'pushpull',
-    target: { kind: 'sketch', id: sketchId },
-    normal: s.frame.n,
-    anchor,
-    targets: offsetTargets(bodies(), anchor, s.frame.n),
+    target,
+    ...at,
+    targets: offsetTargets(others, at.anchor, at.normal),
     distance: 0,
     onTarget: false,
   })
@@ -223,6 +262,9 @@ export function commit(op: Op | null = tools().op, exprs: { dims?: DimExprs; dep
   if (op.kind === 'rect') d.addSketch(op.frame, rectFromCorners(op.first, op.current), exprs.dims)
   else if (op.kind === 'move') {
     if (op.delta[0] !== 0 || op.delta[1] !== 0) d.moveInstance(op.instanceId, moveDeltaWorld(op))
+    // Flytta nås från knappraden och gäller en flytt; sedan är man tillbaka i Välj.
+    tools().setTool('select')
+    return
   } else {
     if (op.target.kind === 'sketch') d.pushPullSketch(op.target.id, op.distance, exprs.depth)
     else d.pushPullBody(op.target.id, op.target.face, op.distance)

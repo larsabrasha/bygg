@@ -8,7 +8,8 @@ import { resolveBodies } from '../model/resolve'
 import type { Axis, DimExprs, Face, Frame, ModelDocument, PartDef, Rect, Vec3 } from '../model/types'
 import { add, scale } from '../model/vec'
 
-export type Selection = { kind: 'body' | 'sketch'; id: string }
+/** Det valda. För en del också ytan man tryckte på; den får pilen för push/pull. */
+export type Selection = { kind: 'sketch'; id: string } | { kind: 'body'; id: string; face?: Face }
 
 interface Snapshot {
   doc: ModelDocument
@@ -153,7 +154,8 @@ export const useDocumentStore = create<DocumentState>()((set, get) => {
           defs: [...doc.defs, part.def],
           instances: [...doc.instances, part.instance],
         },
-        { kind: 'body', id: part.instance.id },
+        // Den utdragna ytan blir vald, så att man kan dra vidare i den.
+        { kind: 'body', id: part.instance.id, face: distance >= 0 ? 'n+' : 'n-' },
       )
       return part.instance.id
     },
@@ -164,7 +166,7 @@ export const useDocumentStore = create<DocumentState>()((set, get) => {
       if (!next) return false
       // Handpåläggning vinner: axeln slutar styras av sitt uttryck.
       const def = withDims(next, withoutAxis(next.dims, faceAxis(face)))
-      commit(replaceDef(get().doc, def), { kind: 'body', id: instanceId })
+      commit(replaceDef(get().doc, def), { kind: 'body', id: instanceId, face })
       return true
     },
 

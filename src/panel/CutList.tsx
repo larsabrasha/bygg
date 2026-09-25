@@ -37,7 +37,7 @@ export function CutList() {
     <section className="narrow:group-data-[tab=params]/sheet:hidden narrow:group-data-[tab=properties]/sheet:hidden">
       <h2 className={sectionTitle}>Kaplista</h2>
       {cutList.rows.length === 0 ? (
-        <p className="text-faint">Inga delar än. Rita en rektangel och dra ut den med Push/pull.</p>
+        <p className="text-faint">Inga delar än. Rita en rektangel och dra i pilen.</p>
       ) : (
         <>
           <table className="w-full border-collapse text-[13px] [&_td]:border-b [&_td]:border-line [&_td]:px-1.5 [&_td]:py-1 [&_th]:border-b [&_th]:border-line [&_th]:px-1.5 [&_th]:py-1 [&_th]:text-left narrow:[&_td]:py-3 narrow:[&_th]:py-3">

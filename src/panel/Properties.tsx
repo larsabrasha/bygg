@@ -193,7 +193,7 @@ export function Properties() {
           <p className="col-span-2 tabular-nums">
             Skiss {(([w, h]) => `${fmt.format(w)} × ${fmt.format(h)} mm`)(rectSize(sketch.rect))}
           </p>
-          <button className={primaryButton} onClick={() => beginPushPull(sketch.id)}>
+          <button className={primaryButton} onClick={() => beginPushPull({ kind: 'sketch', id: sketch.id })}>
             Dra ut till en del
           </button>
           <button className={dangerButton} onClick={deleteSelection}>

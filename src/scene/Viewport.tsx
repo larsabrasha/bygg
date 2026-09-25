@@ -3,12 +3,14 @@ import { Canvas } from '@react-three/fiber'
 import { resolveBodies } from '../model/resolve'
 import { useDocumentStore } from '../store/documentStore'
 import { useToolStore } from '../store/toolStore'
+import { pushPullAnchor, pushPullTargetOf } from '../tools/actions'
 import { previewDoc } from '../tools/preview'
 import { BodyMesh } from './BodyMesh'
 import { HOME } from './camera'
 import { CameraRig } from './CameraRig'
 import { SCENE } from './colors'
 import { HoverMarker, OpOverlay } from './OpPreview'
+import { PushPullHandle } from './PushPullHandle'
 import { SketchMesh } from './SketchMesh'
 import { ToolController } from './ToolController'
 import { useColorScheme } from './useColorScheme'
@@ -19,6 +21,7 @@ function Scene() {
   const op = useToolStore((s) => s.op)
   const hover = useToolStore((s) => s.hover)
   const hoverPoint = useToolStore((s) => s.hoverPoint)
+  const tool = useToolStore((s) => s.tool)
 
   // Under en operation ritas dokumentet som det skulle bli; berörda delar halvgenomskinliga.
   const preview = op ? previewDoc(op, doc) : null
@@ -26,6 +29,10 @@ function Scene() {
   const bodies = resolveBodies(shown)
   const active = op?.kind === 'pushpull' ? op.target : hover
   const selectedBody = selection?.kind === 'body' ? bodies.find((b) => b.id === selection.id) : undefined
+  // Pilen på det valda syns i Välj och Rektangel (så att en ny skiss kan dras ut direkt), när inget annat pågår.
+  const handleTarget = !op && (tool === 'select' || tool === 'rect') && selection ? pushPullTargetOf(selection) : null
+  const handle = handleTarget && pushPullAnchor(handleTarget, doc)
+  const selectedFace = handleTarget?.kind === 'body' ? handleTarget : null
 
   return (
     <>
@@ -36,7 +43,13 @@ function Scene() {
           preview={preview?.affected.has(b.id)}
           selected={selectedBody?.id === b.id}
           sibling={!!selectedBody && selectedBody.id !== b.id && selectedBody.defId === b.defId}
-          highlightFace={active?.kind === 'body' && active.id === b.id ? active.face : null}
+          highlightFace={
+            active?.kind === 'body' && active.id === b.id
+              ? active.face
+              : selectedFace?.id === b.id
+                ? selectedFace.face
+                : null
+          }
         />
       ))}
       {shown.sketches.map((s) => (
@@ -54,6 +67,7 @@ function Scene() {
           }
         />
       ))}
+      {handle && <PushPullHandle anchor={handle.anchor} normal={handle.normal} />}
       {op && <OpOverlay op={op} />}
       {!op && hoverPoint && <HoverMarker hover={hoverPoint} />}
     </>

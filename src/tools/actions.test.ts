@@ -143,11 +143,11 @@ describe('push/pull', () => {
     expect(tools().op).not.toBeNull()
   })
 
-  it('Dra ut startar push/pull från skissens mitt, även från ett annat verktyg', () => {
+  it('Dra ut startar push/pull från skissens mitt och stannar i Välj', () => {
     const s = drawGroundRect(0, 0, 600, -400)
     tools().setTool('select')
-    beginPushPull(s)
-    expect(tools().tool).toBe('pushpull')
+    beginPushPull({ kind: 'sketch', id: s })
+    expect(tools().tool).toBe('select')
     expect(tools().op).toMatchObject({ kind: 'pushpull', anchor: [300, 0, -200], distance: 0 })
     tools().setMeasure(0, '18')
     applyMeasure()
@@ -185,6 +185,8 @@ describe('flytta', () => {
     expect(tools().op).toMatchObject({ delta: [400, 0] })
     commit()
     expect(bodies()[0]!.frame.origin).toEqual([400, 0, 0])
+    // En flytt i taget: sedan tillbaka i Välj.
+    expect(tools().tool).toBe('select')
   })
 
   it('skriver exakt avstånd längs dragriktningen', () => {
@@ -244,10 +246,52 @@ describe('uttryck i måttfälten', () => {
   })
 })
 
+describe('pilen på det valda', () => {
+  const handle = { point: [0, 0, 0] as Vec3, target: { kind: 'handle' } as const }
+
+  it('drar ut den valda ytan och behåller ytan vald', () => {
+    const b = extrude(drawGroundRect(), '22')
+    tools().setTool('select')
+    tap({ point: [600, 11, -200], target: { kind: 'body', id: b.id, face: 'u+' } }, 0)
+    tap(handle, 0)
+    expect(tools().op).toMatchObject({ kind: 'pushpull', anchor: [600, 11, -200], normal: [1, 0, 0] })
+    tools().setMeasure(0, '50')
+    applyMeasure()
+    expect(bodies()[0]!.profile.x1).toBe(650)
+    expect(docs().selection).toEqual({ kind: 'body', id: b.id, face: 'u+' })
+    expect(tools().tool).toBe('select')
+  })
+
+  it('en utdragen skiss blir en del med ovansidan vald', () => {
+    const b = extrude(drawGroundRect(), '22')
+    expect(docs().selection).toEqual({ kind: 'body', id: b.id, face: 'n+' })
+    expect(extrude(drawGroundRect(1000, 0, 1400, -400), '-18')).toBeDefined()
+    expect(docs().selection).toMatchObject({ face: 'n-' })
+  })
+
+  it('fungerar direkt efter en ny rektangel, utan att byta till Välj', () => {
+    drawGroundRect()
+    expect(tools().tool).toBe('rect')
+    tap(handle, 0)
+    tools().setMeasure(0, '22')
+    applyMeasure()
+    expect(bodies()[0]).toMatchObject({ z0: 0, z1: 22 })
+    expect(tools().tool).toBe('rect')
+  })
+
+  it('gör inget om delen är vald utan yta (t.ex. från kaplistan)', () => {
+    const b = extrude(drawGroundRect(), '22')
+    docs().select({ kind: 'body', id: b.id })
+    tools().setTool('select')
+    tap(handle, 0)
+    expect(tools().op).toBeNull()
+  })
+})
+
 describe('välj', () => {
   it('väljer del och avmarkerar på golvet', () => {
     tap({ point: [0, 0, 0], target: { kind: 'body', id: 'x', face: 'n+' } }, 0)
-    expect(docs().selection).toEqual({ kind: 'body', id: 'x' })
+    expect(docs().selection).toEqual({ kind: 'body', id: 'x', face: 'n+' })
     tap({ point: [0, 0, 0], target: { kind: 'ground' } }, 0)
     expect(docs().selection).toBeNull()
   })

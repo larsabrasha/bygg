@@ -7,8 +7,10 @@ describe('pressOwner', () => {
     expect(pressOwner('rect', true, 'mouse', null)).toBe('tool')
   })
 
-  it('låter Välj-läget vrida kameran även på en del', () => {
+  it('låter Välj-läget vrida kameran även på en del, men pilen drar ut', () => {
     expect(pressOwner('select', false, 'touch', 'body')).toBe('camera')
+    expect(pressOwner('select', false, 'touch', 'handle')).toBe('tool')
+    expect(pressOwner('rect', false, 'mouse', 'handle')).toBe('tool')
   })
 
   it('ritar rektangel med finger och penna men vrider kameran med mus', () => {

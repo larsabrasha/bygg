@@ -1,4 +1,4 @@
-import { ArrowUpFromLine, Copy, Focus, Trash2, X, type LucideIcon } from 'lucide-react'
+import { ArrowUpFromLine, Copy, Focus, Move, Trash2, X, type LucideIcon } from 'lucide-react'
 import { resolveBodies } from '../model/resolve'
 import { useDocumentStore } from '../store/documentStore'
 import { useToolStore } from '../store/toolStore'
@@ -44,6 +44,7 @@ export function SelectionBar() {
   const duplicateLinked = useDocumentStore((s) => s.duplicateLinked)
   const requestFit = useViewStore((s) => s.requestFit)
   const opActive = useToolStore((s) => s.op !== null)
+  const setTool = useToolStore((s) => s.setTool)
 
   if (!selection || opActive) return null
   const body = selection.kind === 'body' ? resolveBodies(doc).find((b) => b.id === selection.id) : undefined
@@ -58,11 +59,16 @@ export function SelectionBar() {
       <span className="truncate px-2 text-[13px] font-semibold narrow:max-w-20">{body ? body.name : 'Skiss'}</span>
       {body ? (
         <>
+          <BarButton label="Flytta" Icon={Move} onClick={() => setTool('move')} />
           <BarButton label="Zooma till" Icon={Focus} onClick={() => requestFit('selection')} />
           <BarButton label="Länkad kopia" Icon={Copy} onClick={() => duplicateLinked(body.id)} />
         </>
       ) : (
-        <BarButton label="Dra ut" Icon={ArrowUpFromLine} onClick={() => beginPushPull(selection.id)} />
+        <BarButton
+          label="Dra ut"
+          Icon={ArrowUpFromLine}
+          onClick={() => beginPushPull({ kind: 'sketch', id: selection.id })}
+        />
       )}
       <BarButton label="Ta bort" Icon={Trash2} onClick={deleteSelection} danger />
       <BarButton label="Avmarkera" Icon={X} onClick={() => select(null)} />

@@ -15,14 +15,17 @@ export function MeasureBox() {
   const measure = useToolStore((s) => s.measure)
   const setMeasure = useToolStore((s) => s.setMeasure)
   const last = useToolStore((s) => s.lastPushPull)
+  const setTool = useToolStore((s) => s.setTool)
 
-  if (tool === 'select') return null
+  // I Välj syns rutan bara under en operation (pilen eller "Dra ut").
+  if (tool === 'select' && !op) return null
 
   const hint = !op
     ? {
+        select: '',
         rect: 'Tryck där första hörnet ska vara – på golvet eller på en yta.',
         pushpull: 'Dra i en skiss eller en sida av en del, eller tryck på den.',
-        move: 'Dra en del dit den ska, eller tryck på den. Den flyttas i planet för sidan du tar i.',
+        move: 'Dra delen dit den ska. Den flyttas i planet för sidan du tar i.',
       }[tool]
     : {
         rect: 'Tryck på andra hörnet, eller skriv längd och bredd.',
@@ -35,7 +38,15 @@ export function MeasureBox() {
 
   return (
     <div className="absolute bottom-3 left-1/2 w-max max-w-[calc(100%-24px)] -translate-x-1/2 rounded-lg border border-line bg-panel/95 px-2.5 py-2 shadow-md">
-      <p className="text-[13px] text-muted">{hint}</p>
+      <div className="flex items-center gap-2">
+        <p className="text-[13px] text-muted">{hint}</p>
+        {/* Push/pull- och Flytta-läget har ingen knapp i verktygsraden att gå tillbaka med. */}
+        {!op && (tool === 'pushpull' || tool === 'move') && (
+          <button type="button" className={secondaryButton} onClick={() => setTool('select')}>
+            Klar
+          </button>
+        )}
+      </div>
       {op && (
         <form
           className="mt-1.5 flex flex-wrap items-end gap-2"
@@ -71,7 +82,7 @@ export function MeasureBox() {
             <button
               type="button"
               className={secondaryButton}
-              title="Samma djup som förra gången (eller dubbeltryck på ytan)"
+              title="Samma djup som förra gången (eller dubbeltryck)"
               onClick={repeatLastPushPull}
             >
               Som förra: {last.expr ?? `${fmt.format(last.distance)} mm`}

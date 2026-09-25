@@ -97,18 +97,21 @@ export function ToolController() {
     const closestObject = (targets: Object3D[]): Intersection | null => {
       let best: { hit: Intersection; score: number } | null = null
       for (const hit of raycaster.intersectObjects(targets, false)) {
-        const score = hit.distance - (hit.object.userData.pick.kind === 'sketch' ? 1 : 0)
+        const kind = hit.object.userData.pick.kind
+        const score = hit.distance - (kind === 'handle' ? 2 : kind === 'sketch' ? 1 : 0)
         if (!best || score < best.score) best = { hit, score }
       }
       return best?.hit ?? null
     }
 
     const toHit = (hit: Intersection): Hit => {
-      const p = hit.object.userData.pick as { kind: 'body' | 'sketch'; id: string }
+      const p = hit.object.userData.pick as { kind: 'body' | 'sketch'; id: string } | { kind: 'handle' }
       const target: PickTarget =
-        p.kind === 'body'
-          ? { kind: 'body', id: p.id, face: FACES[hit.face?.materialIndex ?? 0]! }
-          : { kind: 'sketch', id: p.id }
+        p.kind === 'handle'
+          ? p
+          : p.kind === 'body'
+            ? { kind: 'body', id: p.id, face: FACES[hit.face?.materialIndex ?? 0]! }
+            : { kind: 'sketch', id: p.id }
       return { point: hit.point.toArray() as Vec3, target }
     }
 
@@ -240,14 +243,21 @@ export function ToolController() {
         return
       }
       // Hover bara med mus; touch har ingen hover.
-      if (e.pointerType !== 'mouse' || e.buttons !== 0 || tool === 'select') return
+      if (e.pointerType !== 'mouse' || e.buttons !== 0) return
+      if (tool === 'select') {
+        // Handen visar att pilen går att dra i.
+        const onHandle =
+          useDocumentStore.getState().selection && pick(e.clientX, e.clientY, 'mouse')?.target.kind === 'handle'
+        el.style.cursor = onHandle ? 'grab' : ''
+        return
+      }
       const hit = pick(e.clientX, e.clientY, 'mouse')
       if (tool === 'rect') {
         hoverAt(hit, hit ? tolFor(hit.point) : 0)
         return
       }
       const t = hit?.target
-      const next = t && t.kind !== 'ground' && (tool === 'pushpull' || t.kind === 'body') ? t : null
+      const next = t && (t.kind === 'body' || (t.kind === 'sketch' && tool === 'pushpull')) ? t : null
       if (JSON.stringify(next) !== JSON.stringify(hover)) setHover(next)
     }
 
