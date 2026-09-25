@@ -3,7 +3,7 @@ import { resolveBodies } from '../model/resolve'
 import type { Vec3 } from '../model/types'
 import { resetDocumentStore, useDocumentStore } from '../store/documentStore'
 import { useToolStore } from '../store/toolStore'
-import { applyMeasure, commit, hoverAt, move, repeatLastPushPull, tap } from './actions'
+import { applyMeasure, beginPushPull, commit, hoverAt, move, repeatLastPushPull, tap } from './actions'
 
 const docs = () => useDocumentStore.getState()
 const doc = () => docs().doc
@@ -141,6 +141,17 @@ describe('push/pull', () => {
     tap({ point: [100, 0, -100], target: { kind: 'sketch', id: s } }, 0)
     expect(repeatLastPushPull()).toBe(false)
     expect(tools().op).not.toBeNull()
+  })
+
+  it('Dra ut startar push/pull från skissens mitt, även från ett annat verktyg', () => {
+    const s = drawGroundRect(0, 0, 600, -400)
+    tools().setTool('select')
+    beginPushPull(s)
+    expect(tools().tool).toBe('pushpull')
+    expect(tools().op).toMatchObject({ kind: 'pushpull', anchor: [300, 0, -200], distance: 0 })
+    tools().setMeasure(0, '18')
+    applyMeasure()
+    expect(bodies()[0]).toMatchObject({ z0: 0, z1: 18 })
   })
 
   it('startar inte på golvet', () => {

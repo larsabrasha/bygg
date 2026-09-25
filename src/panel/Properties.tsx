@@ -4,7 +4,8 @@ import { AXES, extent, widthAxis } from '../model/partAxes'
 import { instanceCounts, resolveBodies } from '../model/resolve'
 import { MATERIALS, type Axis, type Body, type PartDef } from '../model/types'
 import { useDocumentStore } from '../store/documentStore'
-import { dangerButton, field, fieldLabel, secondaryButton, sectionTitle } from './ui'
+import { beginPushPull } from '../tools/actions'
+import { dangerButton, field, fieldLabel, primaryButton, secondaryButton, sectionTitle } from './ui'
 import { useDraft } from './useDraft'
 
 const fmt = new Intl.NumberFormat('sv-SE', { maximumFractionDigits: 1, useGrouping: false })
@@ -192,14 +193,16 @@ export function Properties() {
           <p className="col-span-2 tabular-nums">
             Skiss {(([w, h]) => `${fmt.format(w)} × ${fmt.format(h)} mm`)(rectSize(sketch.rect))}
           </p>
-          <p className="col-span-2 text-faint">Välj Push/pull och tryck på skissen för att göra en del av den.</p>
-          <button className={`${dangerButton} col-span-2`} onClick={deleteSelection}>
+          <button className={primaryButton} onClick={() => beginPushPull(sketch.id)}>
+            Dra ut till en del
+          </button>
+          <button className={dangerButton} onClick={deleteSelection}>
             Ta bort skiss
           </button>
         </div>
       ) : (
         <div className="flex flex-col gap-3">
-          <p className="text-faint">Inget valt. Välj en del med verktyget Välj.</p>
+          <p className="text-faint">Inget valt. Tryck på en del eller skiss med verktyget Välj.</p>
           {!isEmpty && (
             <button className={`${dangerButton} self-start`} onClick={clearDocument}>
               Rensa modellen

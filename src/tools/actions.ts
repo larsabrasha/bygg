@@ -1,4 +1,4 @@
-import { faceBounds, faceFrame, GROUND_FRAME, toLocal2D } from '../model/frame'
+import { faceBounds, faceFrame, GROUND_FRAME, toLocal2D, toWorld } from '../model/frame'
 import { isConstant } from '../model/expr'
 import { rectFromCorners } from '../model/geometry'
 import { evaluateIn } from '../model/params'
@@ -143,6 +143,27 @@ export function tap(hit: Hit | null, tol: number) {
       onTarget: false,
     })
   }
+}
+
+/**
+ * Startar push/pull på en skiss utan att man trycker i 3D-vyn (knappen "Dra ut").
+ * Pilen utgår från skissens mitt; sedan drar man, skriver ett mått eller tar förra djupet.
+ */
+export function beginPushPull(sketchId: string) {
+  const s = docs().doc.sketches.find((x) => x.id === sketchId)
+  if (!s) return
+  const { x0, x1, y0, y1 } = s.rect
+  const anchor = toWorld(s.frame, [(x0 + x1) / 2, (y0 + y1) / 2, 0])
+  tools().setTool('pushpull')
+  tools().setOp({
+    kind: 'pushpull',
+    target: { kind: 'sketch', id: sketchId },
+    normal: s.frame.n,
+    anchor,
+    targets: offsetTargets(bodies(), anchor, s.frame.n),
+    distance: 0,
+    onTarget: false,
+  })
 }
 
 /** Muspekaren rör sig utan pågående operation: visa var första hörnet skulle hamna. */

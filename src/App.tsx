@@ -1,6 +1,7 @@
 import { MeasureBox } from './panel/MeasureBox'
 import { Notices } from './panel/Notices'
 import { PrintCutList } from './panel/PrintCutList'
+import { SelectionBar } from './panel/SelectionBar'
 import { Sidebar } from './panel/Sidebar'
 import { Toolbar } from './panel/Toolbar'
 import { ViewButtons } from './panel/ViewButtons'
@@ -23,6 +24,7 @@ export function App() {
           <Notices />
           <MeasureBox />
           <ViewButtons />
+          <SelectionBar />
         </main>
         <Sidebar />
       </div>
