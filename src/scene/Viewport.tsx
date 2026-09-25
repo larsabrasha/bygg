@@ -1,5 +1,6 @@
 import { GizmoHelper, GizmoViewport, Grid } from '@react-three/drei'
-import { Canvas } from '@react-three/fiber'
+import { Canvas, useThree } from '@react-three/fiber'
+import { useEffect } from 'react'
 import { resolveBodies } from '../model/resolve'
 import { useDocumentStore } from '../store/documentStore'
 import { useToolStore } from '../store/toolStore'
@@ -17,6 +18,12 @@ import { ToolController } from './ToolController'
 import { useColorScheme } from './useColorScheme'
 
 function Scene() {
+  // R3F 9 ber inte om en ny bild när ett objekt tas bort (removeChild nollställer
+  // föräldern innan invalidateInstance, som då ger upp). Med frameloop="demand"
+  // låg en borttagen del kvar på skärmen. Be om en bild efter varje ändring här.
+  const invalidate = useThree((s) => s.invalidate)
+  useEffect(() => invalidate())
+
   const doc = useDocumentStore((s) => s.doc)
   const selection = useDocumentStore((s) => s.selection)
   const op = useToolStore((s) => s.op)
