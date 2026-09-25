@@ -42,10 +42,11 @@ const PICK_RADIUS: Record<PointerKind, number> = { mouse: 6, pen: 8, touch: 16 }
 const MAX_GROUND_PIVOT = 1.5
 
 /**
- * Flyttpilarna och bågarna ritas ovanpå allt (de sitter mitt i delen), så de
- * vinner alltid över det som ligger närmare kameran.
+ * Push/pull-pilen, flyttpilarna och bågarna ritas ovanpå allt (de sitter på
+ * eller mitt i delen och kan skymmas av andra delar), så de vinner alltid
+ * över det som ligger närmare kameran.
  */
-const ON_TOP = new Set<string>(['axis', 'rotate'])
+const ON_TOP = new Set<string>(['handle', 'axis', 'rotate'])
 
 const kindOf = (e: PointerEvent): PointerKind =>
   e.pointerType === 'touch' || e.pointerType === 'pen' ? e.pointerType : 'mouse'
@@ -107,7 +108,7 @@ export function ToolController() {
       let best: { hit: Intersection; score: number } | null = null
       for (const hit of raycaster.intersectObjects(targets, false)) {
         const kind = hit.object.userData.pick.kind
-        const score = ON_TOP.has(kind) ? -Infinity : hit.distance - (kind === 'handle' ? 2 : kind === 'sketch' ? 1 : 0)
+        const score = ON_TOP.has(kind) ? -Infinity : hit.distance - (kind === 'sketch' ? 1 : 0)
         if (!best || score < best.score) best = { hit, score }
       }
       return best?.hit ?? null
