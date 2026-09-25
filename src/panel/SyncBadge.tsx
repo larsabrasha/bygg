@@ -1,6 +1,7 @@
 import { CloudAlert, CloudOff } from 'lucide-react'
 import { useLibraryStore, type SyncStatus } from '../store/libraryStore'
 import { syncNow } from '../sync/session'
+import { Tip } from './Tip'
 
 const LABEL: Record<SyncStatus, string> = {
   starting: 'Startar…',
@@ -26,20 +27,21 @@ export function SyncBadge({ withLabel = true }: { withLabel?: boolean }) {
   const Icon = status === 'offline' ? CloudOff : CloudAlert
 
   return (
-    <button
-      className={`flex min-h-9 max-w-full cursor-pointer items-center gap-1.5 rounded-md px-1.5 text-xs hover:bg-hover narrow:min-h-11 ${
-        status === 'offline' ? 'text-warn' : 'text-danger'
-      }`}
-      aria-label={`${label}. Försök synka igen.`}
-      title={`${label}. Tryck för att försöka igen.`}
-      onClick={() => {
-        void syncNow()
-        useLibraryStore.getState().notify(label)
-      }}
-    >
-      <Icon size={18} aria-hidden className="shrink-0" />
-      {/* På smal skärm bara ikonen; ett tryck visar texten. */}
-      {withLabel && <span className="truncate narrow:hidden">{label}</span>}
-    </button>
+    <Tip label={`${label}. Klicka för att försöka igen.`}>
+      <button
+        className={`flex min-h-9 max-w-full cursor-pointer items-center gap-1.5 rounded-md px-1.5 text-xs hover:bg-hover narrow:min-h-11 ${
+          status === 'offline' ? 'text-warn' : 'text-danger'
+        }`}
+        aria-label={`${label}. Försök synka igen.`}
+        onClick={() => {
+          void syncNow()
+          useLibraryStore.getState().notify(label)
+        }}
+      >
+        <Icon size={18} aria-hidden className="shrink-0" />
+        {/* På smal skärm bara ikonen; ett tryck visar texten. */}
+        {withLabel && <span className="truncate narrow:hidden">{label}</span>}
+      </button>
+    </Tip>
   )
 }

@@ -15,6 +15,7 @@ import {
 import { ExprInput } from './ExprInput'
 import { rulerResult, type RulerPoint } from '../model/ruler'
 import { ghostButton, secondaryButton, toggleButton } from './ui'
+import { Tip } from './Tip'
 
 const fmt = new Intl.NumberFormat('sv-SE', { maximumFractionDigits: 1, useGrouping: false })
 
@@ -88,16 +89,12 @@ export function MeasureBox() {
   const unit = extending ? 'st' : shown?.kind === 'rotate' ? '°' : 'mm'
 
   const copyToggle = tool === 'move' && (
-    <button
-      type="button"
-      aria-pressed={copy}
-      title="Kopia (Alt/Option): det du flyttar eller vrider blir en ny länkad kopia"
-      onClick={() => setCopy(!copy)}
-      className={toggleButton}
-    >
-      <Copy size={16} strokeWidth={1.75} aria-hidden />
-      Kopia
-    </button>
+    <Tip label="Det du flyttar eller vrider blir en ny länkad kopia" keys="Alt" side="top">
+      <button type="button" aria-pressed={copy} onClick={() => setCopy(!copy)} className={toggleButton}>
+        <Copy size={16} strokeWidth={1.75} aria-hidden />
+        Kopia
+      </button>
+    </Tip>
   )
 
   if (tool === 'measure') return <RulerBox ruler={ruler} hover={rulerHover} onDone={() => setTool('select')} />
@@ -145,38 +142,37 @@ export function MeasureBox() {
               </label>
             ))}
             {op?.kind === 'pushpull' && last && (
-              <button
-                type="button"
-                className={`${ghostButton} text-muted`}
-                title="Samma djup som förra gången (eller dubbeltryck)"
-                onClick={repeatLastPushPull}
-              >
-                <Repeat size={15} strokeWidth={1.75} aria-hidden />
-                Som förra
-                <span className="text-ink tabular-nums">{last.expr ?? `${fmt.format(last.distance)} mm`}</span>
-              </button>
+              <Tip label="Samma djup som förra gången (eller dubbeltryck)" side="top">
+                <button type="button" className={`${ghostButton} text-muted`} onClick={repeatLastPushPull}>
+                  <Repeat size={15} strokeWidth={1.75} aria-hidden />
+                  Som förra
+                  <span className="text-ink tabular-nums">{last.expr ?? `${fmt.format(last.distance)} mm`}</span>
+                </button>
+              </Tip>
             )}
             {copyToggle}
             <span aria-hidden className="mx-0.5 h-6 w-px bg-line" />
             {(op || amend) && (
-              <button
-                type="button"
-                aria-label={op ? 'Avbryt' : 'Stäng'}
-                title={op ? 'Avbryt (Esc)' : 'Stäng utan att ändra'}
-                onClick={op ? cancel : dismissLast}
-                className={`${iconAction} text-muted hover:bg-hover`}
-              >
-                <X size={18} strokeWidth={2} aria-hidden />
-              </button>
+              <Tip label={op ? 'Avbryt' : 'Stäng utan att ändra'} keys={op ? 'Esc' : undefined} side="top">
+                <button
+                  type="button"
+                  aria-label={op ? 'Avbryt' : 'Stäng'}
+                  onClick={op ? cancel : dismissLast}
+                  className={`${iconAction} text-muted hover:bg-hover`}
+                >
+                  <X size={18} strokeWidth={2} aria-hidden />
+                </button>
+              </Tip>
             )}
-            <button
-              type="submit"
-              aria-label="OK"
-              title="OK (Enter)"
-              className={`${iconAction} bg-accent text-on-accent hover:opacity-90`}
-            >
-              <Check size={18} strokeWidth={2.25} aria-hidden />
-            </button>
+            <Tip label="OK" keys="Enter" side="top">
+              <button
+                type="submit"
+                aria-label="OK"
+                className={`${iconAction} bg-accent text-on-accent hover:opacity-90`}
+              >
+                <Check size={18} strokeWidth={2.25} aria-hidden />
+              </button>
+            </Tip>
           </form>
         </>
       ) : (

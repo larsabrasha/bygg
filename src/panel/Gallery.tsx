@@ -9,6 +9,7 @@ import { SyncBadge } from './SyncBadge'
 import { field, primaryButton } from './ui'
 import { useDismiss } from './useDismiss'
 import { shortWhen } from './when'
+import { Tip } from './Tip'
 
 function RenameField({ model, onDone }: { model: ModelListItem; onDone: () => void }) {
   const [name, setName] = useState(model.name)
@@ -82,9 +83,9 @@ function ModelTile({ model, thumb, isCurrent }: { model: ModelListItem; thumb?: 
           )}
           <p className="flex items-center gap-1.5 text-xs text-faint tabular-nums">
             {conflict && (
-              <span className="rounded bg-warn-soft px-1 font-medium text-warn" title={`Krock ${conflict.when}`}>
-                Konflikt
-              </span>
+              <Tip label={`Krock ${conflict.when}`}>
+                <span className="rounded bg-warn-soft px-1 font-medium text-warn">Konflikt</span>
+              </Tip>
             )}
             <span className="truncate">
               {shortWhen(model.updatedAt)}

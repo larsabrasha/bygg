@@ -6,6 +6,7 @@ import { useDocumentStore } from '../store/documentStore'
 import { field, secondaryButton, sectionTitle } from './ui'
 import { ExprInput } from './ExprInput'
 import { useDraft } from './useDraft'
+import { Tip } from './Tip'
 
 const fmt = new Intl.NumberFormat('sv-SE', { maximumFractionDigits: 2, useGrouping: false })
 
@@ -61,15 +62,19 @@ function ParamRow({ param, error, used }: { param: Param; error?: string; used: 
           computed && <span className="text-xs text-accent">{computed}</span>
         )}
       </div>
-      <button
-        className="grid size-10 shrink-0 cursor-pointer place-items-center rounded-lg text-muted hover:bg-hover disabled:cursor-default disabled:opacity-40 disabled:hover:bg-transparent narrow:size-11"
-        title={used ? 'Används – ta bort användningen först' : 'Ta bort'}
-        aria-label={`Ta bort ${param.name}`}
-        disabled={used}
-        onClick={() => deleteParam(param.id)}
-      >
-        <X size={16} strokeWidth={2} aria-hidden />
-      </button>
+      {/* En avstängd knapp får inga pekarhändelser; spannet runt tar emot hovringen så att förklaringen syns. */}
+      <Tip label={used ? 'Används – ta bort användningen först' : 'Ta bort'}>
+        <span className="shrink-0">
+          <button
+            className="grid size-10 cursor-pointer place-items-center rounded-lg text-muted hover:bg-hover disabled:cursor-default disabled:opacity-40 disabled:hover:bg-transparent narrow:size-11"
+            aria-label={`Ta bort ${param.name}`}
+            disabled={used}
+            onClick={() => deleteParam(param.id)}
+          >
+            <X size={16} strokeWidth={2} aria-hidden />
+          </button>
+        </span>
+      </Tip>
     </li>
   )
 }

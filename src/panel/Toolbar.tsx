@@ -5,6 +5,7 @@ import { useViewStore } from '../store/viewStore'
 import { ModelTitle } from './ModelTitle'
 import { ShareMenu } from './ShareMenu'
 import { SyncBadge } from './SyncBadge'
+import { Tip } from './Tip'
 import { ToolButtons } from './ToolButtons'
 import { ICON, iconButton } from './ui'
 
@@ -34,21 +35,24 @@ export function Toolbar() {
       <div className="ml-auto flex shrink-0 items-center gap-4 narrow:gap-2">
         <SyncBadge withLabel={false} />
         <div className="flex gap-1" role="group" aria-label="Historik">
-          <button
-            className={iconButton}
-            disabled={!canUndo}
-            aria-label="Ångra"
-            title="Ångra (⌘Z)"
-            onClick={() => {
-              useToolStore.getState().setOp(null)
-              undo()
-            }}
-          >
-            <Undo2 {...ICON} />
-          </button>
-          <button className={iconButton} disabled={!canRedo} aria-label="Gör om" title="Gör om (⇧⌘Z)" onClick={redo}>
-            <Redo2 {...ICON} />
-          </button>
+          <Tip label="Ångra" keys="⌘Z">
+            <button
+              className={iconButton}
+              disabled={!canUndo}
+              aria-label="Ångra"
+              onClick={() => {
+                useToolStore.getState().setOp(null)
+                undo()
+              }}
+            >
+              <Undo2 {...ICON} />
+            </button>
+          </Tip>
+          <Tip label="Gör om" keys="⇧⌘Z">
+            <button className={iconButton} disabled={!canRedo} aria-label="Gör om" onClick={redo}>
+              <Redo2 {...ICON} />
+            </button>
+          </Tip>
         </div>
         <ShareMenu buttonClass={iconButton} />
         {/*
@@ -56,15 +60,16 @@ export function Toolbar() {
           (som i Xcode och VS Code). Bara på bred skärm; på smal är den ett blad längst ner.
         */}
         <span aria-hidden className="h-6 w-px shrink-0 bg-line narrow:hidden" />
-        <button
-          className={`${iconButton} narrow:hidden`}
-          aria-expanded={panelOpen}
-          aria-label="Detaljpanel"
-          title={panelOpen ? 'Dölj detaljpanelen' : 'Visa detaljpanelen'}
-          onClick={togglePanel}
-        >
-          {panelOpen ? <PanelRightClose {...ICON} /> : <PanelRightOpen {...ICON} />}
-        </button>
+        <Tip label={panelOpen ? 'Dölj detaljpanelen' : 'Visa detaljpanelen'}>
+          <button
+            className={`${iconButton} narrow:hidden`}
+            aria-expanded={panelOpen}
+            aria-label="Detaljpanel"
+            onClick={togglePanel}
+          >
+            {panelOpen ? <PanelRightClose {...ICON} /> : <PanelRightOpen {...ICON} />}
+          </button>
+        </Tip>
       </div>
     </header>
   )

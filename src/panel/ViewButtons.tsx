@@ -1,5 +1,6 @@
 import { House, Maximize2, Minimize2 } from 'lucide-react'
 import { useViewStore } from '../store/viewStore'
+import { Tip } from './Tip'
 
 /**
  * Knappar ovanpå 3D-vyn för kameran. Uppe till höger, så att de inte krockar med måttfältet på mobil.
@@ -13,24 +14,26 @@ export function ViewButtons() {
   const FocusIcon = focusMode ? Minimize2 : Maximize2
   return (
     <div className="absolute top-3 right-3 flex gap-1 narrow:flex-col">
-      <button
-        aria-label="Visa allt"
-        title="Visa hela modellen (⇧Z)"
-        onClick={() => requestFit('all')}
-        className="flex h-9 cursor-pointer items-center gap-1.5 rounded-lg bg-panel/95 px-2.5 text-[13px] font-medium shadow-md hover:bg-hover narrow:size-11 narrow:justify-center narrow:px-0"
-      >
-        <House size={18} strokeWidth={1.75} aria-hidden />
-        <span className="narrow:hidden">Visa allt</span>
-      </button>
-      <button
-        aria-label={focusMode ? 'Avsluta fokusläge' : 'Fokusläge'}
-        aria-pressed={focusMode}
-        title={focusMode ? 'Visa panelerna igen (Tab)' : 'Fokusläge: bara 3D-vyn (Tab)'}
-        onClick={toggleFocusMode}
-        className="grid size-9 cursor-pointer place-items-center rounded-lg bg-panel/95 shadow-md hover:bg-hover aria-pressed:bg-accent-soft aria-pressed:text-accent narrow:size-11"
-      >
-        <FocusIcon size={18} strokeWidth={1.75} aria-hidden />
-      </button>
+      <Tip label="Visa hela modellen" keys="⇧Z">
+        <button
+          aria-label="Visa allt"
+          onClick={() => requestFit('all')}
+          className="flex h-9 cursor-pointer items-center gap-1.5 rounded-lg bg-panel/95 px-2.5 text-[13px] font-medium shadow-md hover:bg-hover narrow:size-11 narrow:justify-center narrow:px-0"
+        >
+          <House size={18} strokeWidth={1.75} aria-hidden />
+          <span className="narrow:hidden">Visa allt</span>
+        </button>
+      </Tip>
+      <Tip label={focusMode ? 'Visa panelerna igen' : 'Fokusläge: bara 3D-vyn'} keys="Tab">
+        <button
+          aria-label={focusMode ? 'Avsluta fokusläge' : 'Fokusläge'}
+          aria-pressed={focusMode}
+          onClick={toggleFocusMode}
+          className="grid size-9 cursor-pointer place-items-center rounded-lg bg-panel/95 shadow-md hover:bg-hover aria-pressed:bg-accent-soft aria-pressed:text-accent narrow:size-11"
+        >
+          <FocusIcon size={18} strokeWidth={1.75} aria-hidden />
+        </button>
+      </Tip>
     </div>
   )
 }

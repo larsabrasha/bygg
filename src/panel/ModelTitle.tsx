@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { useLibraryStore } from '../store/libraryStore'
 import { renameModel, showGallery } from '../sync/session'
 import { field } from './ui'
+import { Tip } from './Tip'
 
 /**
  * Tillbaka till startvyn, och modellens namn. Namnet är text, inte en knapp:
@@ -23,14 +24,15 @@ export function ModelTitle() {
   return (
     <div className="flex min-w-0 items-center gap-1 narrow:gap-2">
       {/* 40 px, 44 px med finger (också på iPad, som har bred layout); bredare än hög på smal skärm. */}
-      <button
-        className="grid size-10 shrink-0 cursor-pointer place-items-center rounded-lg hover:bg-hover pointer-coarse:size-11 narrow:h-11 narrow:w-12"
-        aria-label="Alla modeller"
-        title="Alla modeller"
-        onClick={() => void showGallery()}
-      >
-        <ChevronLeft size={24} strokeWidth={1.75} aria-hidden />
-      </button>
+      <Tip label="Alla modeller">
+        <button
+          className="grid size-10 shrink-0 cursor-pointer place-items-center rounded-lg hover:bg-hover pointer-coarse:size-11 narrow:h-11 narrow:w-12"
+          aria-label="Alla modeller"
+          onClick={() => void showGallery()}
+        >
+          <ChevronLeft size={24} strokeWidth={1.75} aria-hidden />
+        </button>
+      </Tip>
       {renaming ? (
         <input
           className={`${field} min-w-24 font-semibold`}
@@ -46,16 +48,17 @@ export function ModelTitle() {
           }}
         />
       ) : (
-        <h1
-          className="min-w-0 truncate font-semibold select-none"
-          title="Dubbelklicka för att byta namn"
-          onDoubleClick={() => {
-            setName(currentName)
-            setRenaming(true)
-          }}
-        >
-          {currentName || 'Modell'}
-        </h1>
+        <Tip label="Dubbelklicka för att byta namn">
+          <h1
+            className="min-w-0 truncate font-semibold select-none"
+            onDoubleClick={() => {
+              setName(currentName)
+              setRenaming(true)
+            }}
+          >
+            {currentName || 'Modell'}
+          </h1>
+        </Tip>
       )}
     </div>
   )

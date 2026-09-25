@@ -4,6 +4,7 @@ import { useDocumentStore } from '../store/documentStore'
 import { useToolStore } from '../store/toolStore'
 import { useViewStore } from '../store/viewStore'
 import { beginPushPull } from '../tools/actions'
+import { Tip } from './Tip'
 
 const ICON = { size: 18, strokeWidth: 1.75, 'aria-hidden': true } as const
 
@@ -24,7 +25,6 @@ function BarButton({
   return (
     <button
       aria-label={label}
-      title={label}
       aria-pressed={pressed}
       onClick={onClick}
       className={`flex h-9 cursor-pointer items-center gap-1.5 rounded-lg px-2 hover:bg-hover aria-pressed:bg-accent-soft aria-pressed:text-accent narrow:size-11 narrow:justify-center narrow:px-0 ${danger ? 'text-danger' : ''}`}
@@ -83,14 +83,15 @@ export function SelectionBar() {
       <BarButton label="Ta bort" Icon={Trash2} onClick={deleteSelection} danger />
       {/* Avmarkera gör inget med delen, så den står för sig: bara ett kryss, som på en etikett. */}
       <span aria-hidden className="mx-0.5 h-6 w-px bg-line" />
-      <button
-        aria-label="Avmarkera"
-        title="Avmarkera"
-        onClick={() => select(null)}
-        className="grid size-9 shrink-0 cursor-pointer place-items-center rounded-full text-muted hover:bg-hover hover:text-ink narrow:size-11"
-      >
-        <X size={16} strokeWidth={2} aria-hidden />
-      </button>
+      <Tip label="Avmarkera">
+        <button
+          aria-label="Avmarkera"
+          onClick={() => select(null)}
+          className="grid size-9 shrink-0 cursor-pointer place-items-center rounded-full text-muted hover:bg-hover hover:text-ink narrow:size-11"
+        >
+          <X size={16} strokeWidth={2} aria-hidden />
+        </button>
+      </Tip>
     </div>
   )
 }

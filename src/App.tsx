@@ -8,6 +8,7 @@ import { Sidebar } from './panel/Sidebar'
 import { Toolbar } from './panel/Toolbar'
 import { ToolRail } from './panel/ToolButtons'
 import { ViewButtons } from './panel/ViewButtons'
+import { TipProvider } from './panel/Tip'
 import { Viewport } from './scene/Viewport'
 import { useLibraryStore } from './store/libraryStore'
 import { useViewStore } from './store/viewStore'
@@ -19,7 +20,7 @@ export function App() {
   const panelOpen = useViewStore((s) => s.panelOpen)
   const focusMode = useViewStore((s) => s.focusMode)
   return (
-    <>
+    <TipProvider>
       {/* minmax(0, …): annars får raden inte bli lägre än canvasens nuvarande höjd.
           Vid utskrift döljs appen och bara kaplistan skrivs ut. */}
       {/* inert: under startvyn går 3D-vyns knappar inte att nå med Tab eller skärmläsare. */}
@@ -52,6 +53,6 @@ export function App() {
       {/* Startvyn ligger ovanpå; 3D-vyn hålls kvar under så att den kan ta bilder och öppnas snabbt. */}
       {screen === 'gallery' && <Gallery />}
       <PrintCutList />
-    </>
+    </TipProvider>
   )
 }

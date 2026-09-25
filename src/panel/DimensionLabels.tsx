@@ -5,6 +5,7 @@ import { dimensionsFor, registerLabel } from '../scene/dimensionLabels'
 import { useDocumentStore } from '../store/documentStore'
 import { useToolStore } from '../store/toolStore'
 import { ExprInput } from './ExprInput'
+import { Tip } from './Tip'
 
 const fmt = new Intl.NumberFormat('sv-SE', { maximumFractionDigits: 1, useGrouping: false })
 
@@ -97,22 +98,23 @@ function DimensionLabel({
           )}
         </span>
       ) : (
-        <button
-          type="button"
-          aria-label={`${name} ${fmt.format(size)} mm, ändra`}
-          title={expr ? `${name} = ${expr}` : `${name}: tryck för att ändra`}
-          onClick={() => {
-            setText(current)
-            setEditing(true)
-            open.current = true
-          }}
-          className="flex h-7 cursor-pointer items-center gap-1 rounded-lg border border-line bg-panel/95 px-2 whitespace-nowrap shadow-md hover:border-accent narrow:h-9"
-        >
-          <span className="text-[11px] font-semibold text-muted">{letter}</span>
-          <span className={`text-[13px] font-semibold tabular-nums ${expr ? 'text-accent' : 'text-ink'}`}>
-            {fmt.format(size)}
-          </span>
-        </button>
+        <Tip label={expr ? `${name} = ${expr}` : `${name}: klicka för att ändra`} side="top">
+          <button
+            type="button"
+            aria-label={`${name} ${fmt.format(size)} mm, ändra`}
+            onClick={() => {
+              setText(current)
+              setEditing(true)
+              open.current = true
+            }}
+            className="flex h-7 cursor-pointer items-center gap-1 rounded-lg border border-line bg-panel/95 px-2 whitespace-nowrap shadow-md hover:border-accent narrow:h-9"
+          >
+            <span className="text-[11px] font-semibold text-muted">{letter}</span>
+            <span className={`text-[13px] font-semibold tabular-nums ${expr ? 'text-accent' : 'text-ink'}`}>
+              {fmt.format(size)}
+            </span>
+          </button>
+        </Tip>
       )}
     </div>
   )

@@ -13,6 +13,7 @@ import { ExprInput } from './ExprInput'
 import { Group } from './Group'
 import { dangerButton, field, fieldLabel, primaryButton, secondaryButton, sectionTitle } from './ui'
 import { useDraft } from './useDraft'
+import { Tip } from './Tip'
 
 const fmt = new Intl.NumberFormat('sv-SE', { maximumFractionDigits: 1, useGrouping: false })
 
@@ -219,14 +220,12 @@ function GrainControls({ body, def }: { body: Body; def: PartDef }) {
           ))}
         </select>
       </label>
-      <button
-        className={secondaryButton}
-        title="Byt längd och bredd: fibern går längs det andra måttet"
-        onClick={() => updatePart(body.id, { grainAxis: widthAxis(def) })}
-      >
-        <RotateCw size={16} strokeWidth={1.75} aria-hidden />
-        Vrid fibern 90°
-      </button>
+      <Tip label="Byt längd och bredd: fibern går längs det andra måttet">
+        <button className={secondaryButton} onClick={() => updatePart(body.id, { grainAxis: widthAxis(def) })}>
+          <RotateCw size={16} strokeWidth={1.75} aria-hidden />
+          Vrid fibern 90°
+        </button>
+      </Tip>
     </div>
   )
 }
@@ -309,14 +308,12 @@ export function Properties() {
                 Länkad kopia
               </button>
               {copies > 1 && (
-                <button
-                  className={secondaryButton}
-                  title="Ge den här kopian en egen form"
-                  onClick={() => makeUnique(body.id)}
-                >
-                  <Unlink {...ICON_SM} />
-                  Gör unik
-                </button>
+                <Tip label="Ge den här kopian en egen form">
+                  <button className={secondaryButton} onClick={() => makeUnique(body.id)}>
+                    <Unlink {...ICON_SM} />
+                    Gör unik
+                  </button>
+                </Tip>
               )}
             </div>
           </Group>
