@@ -16,6 +16,7 @@ import { AXIS_COLORS, SCENE } from './colors'
 import { MoveGizmo } from './MoveGizmo'
 import { HoverMarker, OpOverlay } from './OpPreview'
 import { PushPullHandle } from './PushPullHandle'
+import { RulerOverlay } from './RulerOverlay'
 import { SketchMesh } from './SketchMesh'
 import { ThumbnailCapturer } from './ThumbnailCapturer'
 import { ToolController } from './ToolController'
@@ -89,6 +90,7 @@ function Scene() {
       {dims && <DimensionGuides key={dims.body.id} body={dims.body} live={dims.live} />}
       {op && <OpOverlay op={op} />}
       {!op && hoverPoint && <HoverMarker hover={hoverPoint} />}
+      <RulerOverlay />
     </>
   )
 }

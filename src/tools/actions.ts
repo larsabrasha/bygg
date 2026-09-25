@@ -2,6 +2,7 @@ import { faceBounds, faceFrame, GROUND_FRAME, rotateFrame, toLocal2D, toWorld } 
 import { isConstant } from '../model/expr'
 import { bodyCenter, bodyExtents, rectFromCorners } from '../model/geometry'
 import { evaluateIn } from '../model/params'
+import { rulerPointOn, type RulerPoint } from '../model/ruler'
 import { resolveBodies } from '../model/resolve'
 import { bodyKeyPoints, offsetTargets, planeTargets, snapDelta, snapValue, type PlaneTargets } from '../model/snapping'
 import type { Body, DimExprs, Face, Frame, Rect, Vec2, Vec3 } from '../model/types'
@@ -132,6 +133,11 @@ export function tap(hit: Hit | null, tol: number) {
   }
   if (hit?.target.kind === 'rotate') {
     beginRotate(hit.target.axis)
+    return
+  }
+
+  if (tool === 'measure') {
+    rulerTap(hit, tol)
     return
   }
 
@@ -288,6 +294,37 @@ function angleOf(op: RotateOp, ray: Ray): number | null {
   const p = intersectPlane(ray, op.plane)
   if (!p || Math.hypot(p[0], p[1]) < 1e-6) return null
   return (Math.atan2(p[1], p[0]) * 180) / Math.PI
+}
+
+/** Golvets normal; golvet räknas som en yta, så att man kan mäta höjden från golvet. */
+const UP: Vec3 = [0, 1, 0]
+
+/** Punkten för en träff med Mät. Null för det som inte går att mäta till. */
+function rulerPointFor(hit: Hit, tol: number): RulerPoint | null {
+  const t = hit.target
+  if (t.kind === 'ground') return rulerPointOn(bodies(), hit.point, UP, tol)
+  if (t.kind === 'sketch') {
+    const s = docs().doc.sketches.find((x) => x.id === t.id)
+    return s ? { point: hit.point, normal: s.frame.n, snap: null } : null
+  }
+  if (t.kind !== 'body') return null
+  const b = findBody(t.id)
+  return b ? rulerPointOn(bodies(), hit.point, faceFrame(b, t.face).n, tol) : null
+}
+
+/** Tryck med Mät: första punkten, andra punkten, och sedan en ny mätning. */
+export function rulerTap(hit: Hit | null, tol: number) {
+  const p = hit && rulerPointFor(hit, tol)
+  if (!p) return
+  const { ruler, setRuler } = tools()
+  setRuler(ruler.length === 1 ? [ruler[0]!, p] : [p])
+}
+
+/** Muspekaren med Mät: visa vart punkten skulle hamna, och avståndet dit från första punkten. */
+export function rulerHoverAt(hit: Hit | null, tol: number) {
+  const p = hit ? rulerPointFor(hit, tol) : null
+  const prev = tools().rulerHover
+  if (JSON.stringify(p) !== JSON.stringify(prev)) tools().setRulerHover(p)
 }
 
 /** Muspekaren rör sig utan pågående operation: visa var första hörnet skulle hamna. */

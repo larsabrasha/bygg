@@ -10,20 +10,31 @@ import { ToolRail } from './panel/ToolButtons'
 import { ViewButtons } from './panel/ViewButtons'
 import { Viewport } from './scene/Viewport'
 import { useLibraryStore } from './store/libraryStore'
+import { useViewStore } from './store/viewStore'
 import { useShortcuts } from './tools/useShortcuts'
 
 export function App() {
   useShortcuts()
   const screen = useLibraryStore((s) => s.screen)
+  const panelOpen = useViewStore((s) => s.panelOpen)
+  const focusMode = useViewStore((s) => s.focusMode)
   return (
     <>
       {/* minmax(0, …): annars får raden inte bli lägre än canvasens nuvarande höjd.
           Vid utskrift döljs appen och bara kaplistan skrivs ut. */}
       {/* inert: under startvyn går 3D-vyns knappar inte att nå med Tab eller skärmläsare. */}
+      {/* Dold detaljpanel (bara bred skärm): 3D-vyn tar hela bredden. Fokusläge: bara 3D-vyn. */}
       <div
         inert={screen === 'gallery'}
-        className="grid h-dvh grid-cols-[minmax(0,1fr)_360px] grid-rows-[auto_minmax(0,1fr)] [grid-template-areas:'toolbar_toolbar''viewport_sidebar'] print:hidden
-          narrow:grid-cols-[minmax(0,1fr)] narrow:grid-rows-[auto_minmax(0,1fr)_auto] narrow:[grid-template-areas:'toolbar''viewport''sidebar']"
+        className={`grid h-dvh print:hidden ${
+          focusMode
+            ? "grid-cols-[minmax(0,1fr)] grid-rows-[minmax(0,1fr)] [grid-template-areas:'viewport']"
+            : `grid-rows-[auto_minmax(0,1fr)] narrow:grid-cols-[minmax(0,1fr)] narrow:grid-rows-[auto_minmax(0,1fr)_auto] narrow:[grid-template-areas:'toolbar''viewport''sidebar'] ${
+                panelOpen
+                  ? "grid-cols-[minmax(0,1fr)_360px] [grid-template-areas:'toolbar_toolbar''viewport_sidebar']"
+                  : "grid-cols-[minmax(0,1fr)] [grid-template-areas:'toolbar''viewport']"
+              }`
+        }`}
       >
         <Toolbar />
         <main className="relative min-h-0 min-w-0 [grid-area:viewport]">

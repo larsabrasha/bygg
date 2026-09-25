@@ -633,3 +633,42 @@ describe('ändra efteråt', () => {
     expect(doc()).toBe(before)
   })
 })
+
+describe('mät', () => {
+  it('mäter från golvet till ovansidan av en del, vinkelrätt', () => {
+    const b = extrude(drawGroundRect(), '22')
+    tools().setTool('measure')
+    tap({ point: [1000, 0, 500], target: { kind: 'ground' } }, 0)
+    expect(tools().ruler).toHaveLength(1)
+    tap({ point: [300, 22, -200], target: { kind: 'body', id: b.id, face: 'n+' } }, 1)
+    const [a, c] = tools().ruler
+    expect(a!.normal).toEqual([0, 1, 0])
+    expect(c).toMatchObject({ point: [300, 22, -200], snap: null })
+  })
+
+  it('snäpper till ett hörn och börjar om vid tredje trycket', () => {
+    const b = extrude(drawGroundRect(), '22')
+    tools().setTool('measure')
+    tap({ point: [3, 22, -2], target: { kind: 'body', id: b.id, face: 'n+' } }, 10)
+    expect(tools().ruler[0]).toMatchObject({ point: [0, 22, 0], snap: 'corner' })
+    tap({ point: [600, 22, -400], target: { kind: 'body', id: b.id, face: 'n+' } }, 10)
+    tap({ point: [0, 0, 0], target: { kind: 'ground' } }, 0)
+    expect(tools().ruler).toHaveLength(1)
+  })
+
+  it('gör inget med tryck bredvid modellen och rör inte valet', () => {
+    const b = extrude(drawGroundRect(), '22')
+    docs().select({ kind: 'body', id: b.id })
+    tools().setTool('measure')
+    tap(null, 0)
+    expect(tools().ruler).toHaveLength(0)
+    expect(docs().selection).toEqual({ kind: 'body', id: b.id })
+  })
+
+  it('glömmer mätningen när man byter verktyg', () => {
+    tools().setTool('measure')
+    tap({ point: [0, 0, 0], target: { kind: 'ground' } }, 0)
+    tools().setTool('select')
+    expect(tools().ruler).toHaveLength(0)
+  })
+})

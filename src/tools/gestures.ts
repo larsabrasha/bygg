@@ -10,6 +10,21 @@ export type PointerKind = 'mouse' | 'pen' | 'touch'
 
 /** Hur långt pekaren får röra sig och ändå räknas som ett tryck, i px. */
 export const TAP_SLOP: Record<PointerKind, number> = { mouse: 4, pen: 6, touch: 10 }
+/**
+ * Hur nära ett mål (en kant, ett hörn) pekaren måste vara för att snäppa, i px.
+ * Ett finger är bredare än en muspekare och skymmer det man siktar på.
+ */
+const SNAP_PX: Record<PointerKind, number> = { mouse: 15, pen: 18, touch: 24 }
+/**
+ * Med Mät snäpper man till punkter (hörn och kantmitter), och det är nästan
+ * alltid dem man vill åt; därför ännu mer förlåtande med finger och penna.
+ */
+const RULER_SNAP_PX: Record<PointerKind, number> = { mouse: 15, pen: 28, touch: 44 }
+
+export function snapPx(tool: Tool, kind: PointerKind): number {
+  return (tool === 'measure' ? RULER_SNAP_PX : SNAP_PX)[kind]
+}
+
 /** Längsta tid mellan två tryck som räknas som dubbeltryck, i ms. */
 export const DOUBLE_TAP_MS = 350
 /** Längsta tid för ett tryck med två eller tre fingrar (ångra/gör om), i ms. */
@@ -37,6 +52,9 @@ export function pressOwner(tool: Tool, opActive: boolean, kind: PointerKind, tar
       return target === 'sketch' || target === 'body' ? 'tool' : 'camera'
     case 'move':
       return target === 'body' ? 'tool' : 'camera'
+    // Man mäter med tryck (när man släpper), så kameran vrider som i Välj.
+    case 'measure':
+      return 'camera'
   }
 }
 
@@ -54,18 +72,20 @@ export interface CameraButtons {
 /**
  * Vad musknappar och fingrar gör med kameran under ett tryck.
  * När verktyget äger trycket gör vänsterknappen och ett finger inget med
- * kameran; då vrider mittknappen (som i SketchUp). I Välj-läget panorerar två
+ * kameran; då vrider mittknappen (som i SketchUp). I Välj och Mät panorerar två
  * fingrar; i verktygslägena, där ett finger ofta tillhör verktyget, vrider de.
  * Tre fingrar panorerar alltid.
  */
-export function cameraButtons(tool: Tool, owner: Owner): CameraButtons {
+export function cameraButtons(tool: Tool, owner: Owner, spacePan = false): CameraButtons {
   const toolOwns = owner === 'tool'
   return {
-    left: toolOwns ? 'none' : 'rotate',
-    middle: toolOwns ? 'rotate' : 'dolly',
+    // Mellanslag nere: vänsterknappen panorerar, som handen i Photoshop.
+    left: spacePan ? 'truck' : toolOwns ? 'none' : 'rotate',
+    // Mittknappen panorerar (zoom har scrollhjulet); under en operation vrider den, som i SketchUp.
+    middle: toolOwns ? 'rotate' : 'truck',
     right: 'truck',
     one: toolOwns ? 'none' : 'rotate',
-    two: tool === 'select' ? 'dollyTruck' : 'dollyRotate',
+    two: tool === 'select' || tool === 'measure' ? 'dollyTruck' : 'dollyRotate',
     three: 'truck',
   }
 }

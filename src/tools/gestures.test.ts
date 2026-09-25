@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { cameraButtons, fingerTap, isDoubleTap, pressOwner } from './gestures'
+import { cameraButtons, fingerTap, isDoubleTap, pressOwner, snapPx } from './gestures'
 
 describe('pressOwner', () => {
   it('ger alltid verktyget trycket under en operation', () => {
@@ -11,6 +11,11 @@ describe('pressOwner', () => {
     expect(pressOwner('select', false, 'touch', 'body')).toBe('camera')
     expect(pressOwner('select', false, 'touch', 'handle')).toBe('tool')
     expect(pressOwner('rect', false, 'mouse', 'handle')).toBe('tool')
+  })
+
+  it('låter Mät vrida kameran; man mäter med ett tryck', () => {
+    expect(pressOwner('measure', false, 'touch', 'body')).toBe('camera')
+    expect(cameraButtons('measure', 'camera').two).toBe('dollyTruck')
   })
 
   it('ritar rektangel med finger och penna men vrider kameran med mus', () => {
@@ -69,5 +74,21 @@ describe('fingerTap', () => {
     expect(fingerTap(2, 150, 40)).toBeNull()
     expect(fingerTap(2, 800, 0)).toBeNull()
     expect(fingerTap(1, 100, 0)).toBeNull()
+  })
+})
+
+describe('panorering', () => {
+  it('panorerar med mittknappen, och med vänsterknappen när mellanslag hålls nere', () => {
+    expect(cameraButtons('select', 'camera').middle).toBe('truck')
+    expect(cameraButtons('rect', 'camera', true).left).toBe('truck')
+    expect(cameraButtons('select', 'camera').left).toBe('rotate')
+  })
+})
+
+describe('snapPx', () => {
+  it('är mer förlåtande med finger än med mus, och mest med Mät', () => {
+    expect(snapPx('rect', 'touch')).toBeGreaterThan(snapPx('rect', 'mouse'))
+    expect(snapPx('measure', 'touch')).toBeGreaterThan(snapPx('rect', 'touch'))
+    expect(snapPx('measure', 'touch')).toBeGreaterThanOrEqual(44)
   })
 })

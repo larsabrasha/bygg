@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useDocumentStore } from '../store/documentStore'
+import { useViewStore } from '../store/viewStore'
 import { CutList } from './CutList'
 import { Params } from './Params'
 import { Properties } from './Properties'
@@ -15,7 +16,7 @@ const tabClass =
 
 /**
  * Egenskaper, Parametrar och Kaplista i var sin flik.
- * Desktop: fast sidopanel. Smal skärm: blad längst ner; tryck på aktiv flik fäller ihop det.
+ * Desktop: sidopanel som går att dölja (knappen i raden överst). Smal skärm: blad längst ner; tryck på aktiv flik fäller ihop det.
  * Öppet blad har fast höjd, så att 3D-vyn inte byter storlek när man byter flik.
  * Samma DOM i båda lägena; CSS väljer layout, så fältens state överlever en rotation.
  */
@@ -23,6 +24,9 @@ export function Sidebar() {
   const count = useDocumentStore((s) => s.doc.instances.length)
   const [tab, setTab] = useState<Tab>('properties')
   const [open, setOpen] = useState(false)
+  const panelOpen = useViewStore((s) => s.panelOpen)
+  // Döljs med CSS, inte tas bort, så att fältens state finns kvar när den visas igen.
+  const hidden = useViewStore((s) => s.focusMode) ? 'hidden' : panelOpen ? '' : 'hidden narrow:flex'
 
   const onTab = (t: Tab) => {
     // Bara bladet på smal skärm fälls ihop; på desktop är panelen alltid öppen.
@@ -43,9 +47,9 @@ export function Sidebar() {
     <aside
       data-tab={tab}
       data-open={open}
-      className="group/sheet flex flex-col overflow-hidden border-l border-line bg-panel [grid-area:sidebar]
+      className={`group/sheet flex flex-col ${hidden} overflow-hidden border-l border-line bg-panel [grid-area:sidebar]
         narrow:data-[open=true]:h-[50dvh] narrow:rounded-t-xl narrow:border-t narrow:border-l-0
-        narrow:pb-[env(safe-area-inset-bottom)] narrow:shadow-[0_-2px_12px_rgb(0_0_0/8%)]"
+        narrow:pb-[env(safe-area-inset-bottom)] narrow:shadow-[0_-2px_12px_rgb(0_0_0/8%)]`}
     >
       <div className="flex flex-none border-b border-line narrow:border-b-0" role="tablist">
         {tabs.map(([t, label]) => (

@@ -1,15 +1,17 @@
 import type { CameraControlsImpl } from '@react-three/drei'
 import { useThree } from '@react-three/fiber'
 import { useEffect, useMemo } from 'react'
-import { Raycaster, Vector2, type Intersection, type Object3D } from 'three'
+import { Raycaster, Vector2, type Intersection, type Object3D, type PerspectiveCamera } from 'three'
 import { FACES, type Vec3 } from '../model/types'
 import { useDocumentStore } from '../store/documentStore'
 import { useToolStore, type Op } from '../store/toolStore'
+import { useViewStore } from '../store/viewStore'
 import {
   cancel,
   commit,
   hoverAt,
   move,
+  rulerHoverAt,
   opFocus,
   regrab,
   repeatLastPushPull,
@@ -23,6 +25,7 @@ import {
   fingerTap,
   isDoubleTap,
   pressOwner,
+  snapPx,
   TAP_SLOP,
   type Owner,
   type PointerKind,
@@ -35,8 +38,6 @@ import { applyCameraButtons } from './camera'
  * delar (en 22 mm bräda är några px hög på avstånd) möjliga att träffa.
  */
 const PICK_RADIUS: Record<PointerKind, number> = { mouse: 6, pen: 8, touch: 16 }
-/** Snäpptolerans som andel av avståndet från kameran till träffpunkten (~15 px). */
-const SNAP_FRACTION = 0.015
 /** Golvet blir vridpunkt bara om det ligger högst så här många gånger längre bort än nuvarande vridpunkt. */
 const MAX_GROUND_PIVOT = 1.5
 
@@ -159,8 +160,18 @@ export function ToolController() {
       return ground
     }
 
-    const tolFor = (point: Vec3) =>
-      camera.position.distanceTo({ x: point[0], y: point[1], z: point[2] }) * SNAP_FRACTION
+    /** Pekaren som senast trycktes ned; operationen snäpper efter den. */
+    let lastKind: PointerKind = 'mouse'
+    /**
+     * Snäpptolerans i mm vid en punkt: snapPx pixlar omräknat med kamerans
+     * avstånd dit, så att den är lika stor på skärmen var man än är.
+     */
+    const tolFor = (point: Vec3, kind: PointerKind = lastKind) => {
+      const d = camera.position.distanceTo({ x: point[0], y: point[1], z: point[2] })
+      const fov = ((camera as PerspectiveCamera).fov * Math.PI) / 180
+      const mmPerPx = (2 * d * Math.tan(fov / 2)) / Math.max(1, el.clientHeight)
+      return mmPerPx * snapPx(useToolStore.getState().tool, kind)
+    }
     /**
      * Tolerans under en operation. Från kamerans avstånd till det man drar i,
      * inte till origo: kameran kan stå nära modellen men långt från origo.
@@ -224,8 +235,16 @@ export function ToolController() {
         if (controls) applyCameraButtons(controls, cameraButtons(tool, op ? 'tool' : 'camera'))
         return
       }
+      // Mellanslag nere: vänsterknappen panorerar och gör inget med verktyget.
+      const view = useViewStore.getState()
+      if (e.pointerType === 'mouse' && view.spacePan.held) {
+        view.setSpacePan({ held: true, used: true })
+        if (controls) applyCameraButtons(controls, cameraButtons(tool, 'camera', true))
+        return
+      }
 
       const kind = kindOf(e)
+      lastKind = kind
       const hit = pick(e.clientX, e.clientY, kind)
       const owner = pressOwner(tool, op !== null, kind, hit?.target.kind ?? null)
       if (controls) applyCameraButtons(controls, cameraButtons(tool, owner))
@@ -264,8 +283,8 @@ export function ToolController() {
         move(rayOf(e), tolForOp())
         return
       }
-      // Hover bara med mus; touch har ingen hover.
-      if (e.pointerType !== 'mouse' || e.buttons !== 0) return
+      // Hover bara med mus; touch har ingen hover. Med mellanslaget nere visas handen i stället.
+      if (e.pointerType !== 'mouse' || e.buttons !== 0 || useViewStore.getState().spacePan.held) return
       if (tool === 'select') {
         // Handen visar att pilen går att dra i.
         const onHandle =
@@ -274,9 +293,14 @@ export function ToolController() {
         return
       }
       const hit = pick(e.clientX, e.clientY, 'mouse')
+      if (tool === 'measure') {
+        el.style.cursor = 'crosshair'
+        rulerHoverAt(hit, hit ? tolFor(hit.point, 'mouse') : 0)
+        return
+      }
       el.style.cursor = hit && ON_TOP.has(hit.target.kind) ? 'grab' : ''
       if (tool === 'rect') {
-        hoverAt(hit, hit ? tolFor(hit.point) : 0)
+        hoverAt(hit, hit ? tolFor(hit.point, 'mouse') : 0)
         return
       }
       const t = hit?.target
@@ -324,8 +348,9 @@ export function ToolController() {
         return
       }
       if (isTap && p.owner === 'camera') {
-        const hit = pick(e.clientX, e.clientY, kindOf(e))
-        tap(hit, hit ? tolFor(hit.point) : 0)
+        const kind = kindOf(e)
+        const hit = pick(e.clientX, e.clientY, kind)
+        tap(hit, hit ? tolFor(hit.point, kind) : 0)
       }
     }
 
@@ -340,7 +365,13 @@ export function ToolController() {
       const t = useToolStore.getState()
       t.setHover(null)
       t.setHoverPoint(null)
+      if (t.rulerHover) t.setRulerHover(null)
     }
+
+    // Handen visar att man kan panorera medan mellanslaget är nere.
+    const unsubscribePan = useViewStore.subscribe((s, prev) => {
+      if (s.spacePan.held !== prev.spacePan.held) el.style.cursor = s.spacePan.held ? 'grab' : ''
+    })
 
     el.addEventListener('pointerdown', onDown)
     el.addEventListener('pointermove', onMove)
@@ -353,6 +384,7 @@ export function ToolController() {
       el.removeEventListener('pointerup', onUp)
       el.removeEventListener('pointercancel', onCancel)
       el.removeEventListener('pointerleave', onLeave)
+      unsubscribePan()
       cancel()
     }
   }, [camera, gl, scene, raycaster, controls])

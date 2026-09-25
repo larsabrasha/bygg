@@ -1,10 +1,11 @@
 import { create, type StoreApi } from 'zustand'
+import type { RulerPoint } from '../model/ruler'
 import type { PlaneTargets } from '../model/snapping'
 import type { ModelDocument } from '../model/types'
 import { useDocumentStore, type Selection } from './documentStore'
 import type { Face, Frame, Rect, Vec2, Vec3 } from '../model/types'
 
-export type Tool = 'select' | 'rect' | 'pushpull' | 'move'
+export type Tool = 'select' | 'rect' | 'pushpull' | 'move' | 'measure'
 
 /** Pågående rektangel: första hörnet är satt, current följer pekaren. */
 export interface RectOp {
@@ -127,6 +128,10 @@ interface ToolSnapshot {
   copy: boolean
   lastCopy: LastCopy | null
   lastOp: LastOp | null
+  /** Punkterna man tryckt på med Mät: ingen, en (väntar på nästa) eller två (visar avståndet). */
+  ruler: RulerPoint[]
+  /** Punkten under muspekaren med Mät (bara mus). */
+  rulerHover: RulerPoint | null
 }
 
 interface ToolState extends ToolSnapshot {
@@ -140,6 +145,8 @@ interface ToolState extends ToolSnapshot {
   setCopy: (copy: boolean) => void
   setLastCopy: (last: LastCopy | null) => void
   setLastOp: (last: LastOp | null) => void
+  setRuler: (points: RulerPoint[]) => void
+  setRulerHover: (p: RulerPoint | null) => void
 }
 
 const idle = { op: null, measure: ['', ''] as [string, string], measureField: 0 as const }
@@ -155,6 +162,8 @@ const initial: ToolSnapshot = previous
       copy: previous.getState().copy ?? false,
       lastCopy: null,
       lastOp: null,
+      ruler: [],
+      rulerHover: null,
       ...idle,
     }
   : {
@@ -165,12 +174,25 @@ const initial: ToolSnapshot = previous
       copy: false,
       lastCopy: null,
       lastOp: null,
+      ruler: [],
+      rulerHover: null,
       ...idle,
     }
 
 export const useToolStore = create<ToolState>()((set) => ({
   ...initial,
-  setTool: (tool) => set({ tool, hover: null, hoverPoint: null, copy: false, lastCopy: null, lastOp: null, ...idle }),
+  setTool: (tool) =>
+    set({
+      tool,
+      hover: null,
+      hoverPoint: null,
+      copy: false,
+      lastCopy: null,
+      lastOp: null,
+      ruler: [],
+      rulerHover: null,
+      ...idle,
+    }),
   // En ny operation gör att förra kopieringen och förra operationen inte längre går att ändra.
   setOp: (op) => set(op ? { op, hoverPoint: null, lastCopy: null, lastOp: null } : idle),
   setHover: (hover) => set({ hover }),
@@ -186,6 +208,8 @@ export const useToolStore = create<ToolState>()((set) => ({
   setCopy: (copy) => set({ copy }),
   setLastCopy: (lastCopy) => set({ lastCopy }),
   setLastOp: (lastOp) => set({ lastOp }),
+  setRuler: (ruler) => set({ ruler }),
+  setRulerHover: (rulerHover) => set({ rulerHover }),
 }))
 
 /**

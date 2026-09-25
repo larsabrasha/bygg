@@ -2,7 +2,6 @@ import { ChevronLeft } from 'lucide-react'
 import { useState } from 'react'
 import { useLibraryStore } from '../store/libraryStore'
 import { renameModel, showGallery } from '../sync/session'
-import { SyncBadge } from './SyncBadge'
 import { field } from './ui'
 
 /**
@@ -23,9 +22,9 @@ export function ModelTitle() {
 
   return (
     <div className="flex min-w-0 items-center gap-1 narrow:gap-2">
-      {/* Bredare än hög på smal skärm, så att den är lätt att träffa. */}
+      {/* 40 px, 44 px med finger (också på iPad, som har bred layout); bredare än hög på smal skärm. */}
       <button
-        className="grid size-9 shrink-0 cursor-pointer place-items-center rounded-md hover:bg-hover narrow:h-11 narrow:w-12"
+        className="grid size-10 shrink-0 cursor-pointer place-items-center rounded-lg hover:bg-hover pointer-coarse:size-11 narrow:h-11 narrow:w-12"
         aria-label="Alla modeller"
         title="Alla modeller"
         onClick={() => void showGallery()}
@@ -58,7 +57,6 @@ export function ModelTitle() {
           {currentName || 'Modell'}
         </h1>
       )}
-      <SyncBadge withLabel={false} />
     </div>
   )
 }

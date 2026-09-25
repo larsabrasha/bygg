@@ -59,7 +59,7 @@ export function SelectionBar() {
     <div
       role="toolbar"
       aria-label="Det valda"
-      className="absolute top-3 left-3 flex max-w-[calc(100%-150px)] narrow:max-w-[calc(100%-80px)] items-center gap-0.5 rounded-lg border border-line bg-panel/95 p-0.5 shadow-md"
+      className="absolute top-3 left-3 flex max-w-[calc(100%-190px)] narrow:max-w-[calc(100%-80px)] items-center gap-0.5 rounded-lg border border-line bg-panel/95 p-0.5 shadow-md"
     >
       <span className="truncate px-2 text-[13px] font-semibold narrow:max-w-20">{body ? body.name : 'Skiss'}</span>
       {body ? (

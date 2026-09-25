@@ -13,8 +13,8 @@ function isEditable(t: EventTarget | null) {
 }
 
 /**
- * Kortkommandon som i SketchUp: R, P, M, mellanslag, Esc, Delete, ⌘Z / ⇧⌘Z, ⇧Z (visa allt),
- * Alt/Option (Kopia i Flytta-läget).
+ * Kortkommandon som i SketchUp: R, P, M, T (Mät), mellanslag, Esc, Delete, ⌘Z / ⇧⌘Z, ⇧Z (visa allt),
+ * Alt/Option (Kopia i Flytta-läget), Tab (fokusläge), mellanslag + dra (panorera).
  * P och M har ingen knapp i verktygsraden; där görs push/pull med pilen och flytt från knappraden.
  * Under en operation går siffror direkt till måttfältet utan att man klickar i det;
  * ; eller Tab byter fält.
@@ -76,14 +76,23 @@ export function useShortcuts() {
         }
       }
 
+      // Tab: fokusläge (som i Photoshop). Bara när inget har fokus, så att Tab
+      // fortfarande flyttar mellan knappar när man väl är i dem.
+      if (e.key === 'Tab' && !e.shiftKey && (e.target === document.body || e.target instanceof HTMLCanvasElement)) {
+        e.preventDefault()
+        useViewStore.getState().toggleFocusMode()
+        return
+      }
+
       switch (e.key) {
         case 'Escape':
           if (op) cancel()
           else tools.setTool('select')
           break
         case ' ':
+          // Hålls det nere kan man panorera med musen; Välj först när det släpps utan att man gjort det (onKeyUp).
           e.preventDefault()
-          tools.setTool('select')
+          if (!e.repeat) useViewStore.getState().setSpacePan({ held: true, used: false })
           break
         case 'r':
         case 'R':
@@ -97,6 +106,10 @@ export function useShortcuts() {
         case 'M':
           tools.setTool('move')
           break
+        case 't':
+        case 'T':
+          tools.setTool('measure')
+          break
         case 'Z':
           if (e.shiftKey) useViewStore.getState().requestFit('all')
           break
@@ -106,7 +119,22 @@ export function useShortcuts() {
           break
       }
     }
+    const onKeyUp = (e: KeyboardEvent) => {
+      if (e.key !== ' ') return
+      const view = useViewStore.getState()
+      if (!view.spacePan.held) return
+      if (!view.spacePan.used) useToolStore.getState().setTool('select')
+      view.setSpacePan({ held: false, used: false })
+    }
+    // Byter man fönster med mellanslaget nere kommer inget keyup.
+    const onBlur = () => useViewStore.getState().setSpacePan({ held: false, used: false })
     window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
+    window.addEventListener('keyup', onKeyUp)
+    window.addEventListener('blur', onBlur)
+    return () => {
+      window.removeEventListener('keydown', onKey)
+      window.removeEventListener('keyup', onKeyUp)
+      window.removeEventListener('blur', onBlur)
+    }
   }, [])
 }

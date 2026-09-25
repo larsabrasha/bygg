@@ -13,6 +13,7 @@ import {
   setCopy,
 } from '../tools/actions'
 import { ExprInput } from './ExprInput'
+import { rulerResult, type RulerPoint } from '../model/ruler'
 import { ghostButton, secondaryButton, toggleButton } from './ui'
 
 const fmt = new Intl.NumberFormat('sv-SE', { maximumFractionDigits: 1, useGrouping: false })
@@ -33,6 +34,8 @@ export function MeasureBox() {
   const last = useToolStore((s) => s.lastPushPull)
   const setTool = useToolStore((s) => s.setTool)
   const copy = useToolStore((s) => s.copy)
+  const ruler = useToolStore((s) => s.ruler)
+  const rulerHover = useToolStore((s) => s.rulerHover)
   // extendableCopy och amendableOp läser dessa; prenumerera så att rutan ritas om när de ändras.
   useToolStore((s) => s.lastCopy)
   useToolStore((s) => s.lastOp)
@@ -60,6 +63,7 @@ export function MeasureBox() {
               rect: 'Tryck där första hörnet ska vara – på golvet eller på en yta.',
               pushpull: 'Dra i en skiss eller en sida av en del, eller tryck på den.',
               move: 'Dra i en pil för att flytta längs X, Y eller Z, eller i en båge för att vrida. Du kan också dra i själva delen.',
+              measure: '',
             }[tool]
           : {
               rect: 'Tryck på andra hörnet, eller skriv längd och bredd.',
@@ -95,6 +99,8 @@ export function MeasureBox() {
       Kopia
     </button>
   )
+
+  if (tool === 'measure') return <RulerBox ruler={ruler} hover={rulerHover} onDone={() => setTool('select')} />
 
   return (
     <div className="absolute bottom-3 left-1/2 w-max max-w-[calc(100%-24px)] -translate-x-1/2 rounded-xl border border-line bg-panel/90 p-2 shadow-lg backdrop-blur-md">
@@ -185,6 +191,55 @@ export function MeasureBox() {
           )}
         </div>
       )}
+    </div>
+  )
+}
+
+/**
+ * Mät: avståndet mellan två punkter (eller två parallella ytor), uppdelat
+ * på X, Y och Z. Med mus visas avståndet till punkten under pekaren redan
+ * innan man tryckt på den.
+ */
+function RulerBox({ ruler, hover, onDone }: { ruler: RulerPoint[]; hover: RulerPoint | null; onDone: () => void }) {
+  const [a, b] = ruler.length === 2 ? ruler : [ruler[0], hover]
+  const result = a && b ? rulerResult(a, b) : null
+  const hint =
+    ruler.length === 0
+      ? 'Tryck på en punkt eller yta. Hörn och kantmitter snäpper. Två parallella ytor mäts vinkelrätt mot varandra.'
+      : ruler.length === 1
+        ? 'Tryck på nästa punkt eller yta.'
+        : 'Tryck igen för att mäta något nytt.'
+  return (
+    <div className="absolute bottom-3 left-1/2 w-max max-w-[calc(100%-24px)] -translate-x-1/2 rounded-xl border border-line bg-panel/90 p-2 shadow-lg backdrop-blur-md">
+      <p className="max-w-96 px-1 pb-1.5 text-xs text-muted">{hint}</p>
+      <div className="flex flex-wrap items-center gap-1.5">
+        <output
+          aria-live="polite"
+          className={`flex h-10 items-center gap-2 rounded-lg bg-field px-3 narrow:h-11 ${result && ruler.length === 2 ? '' : 'opacity-60'}`}
+        >
+          <span className="text-xs whitespace-nowrap text-muted">
+            {result?.kind === 'planes' ? 'Mellan ytorna' : 'Avstånd'}
+          </span>
+          <span className="min-w-12 text-right text-base font-semibold text-ink tabular-nums">
+            {result ? fmt.format(result.distance) : '–'}
+          </span>
+          <span className="text-[13px] text-unit">mm</span>
+        </output>
+        {/* Delarna längs axlarna; mellan två ytor är det bara en, så de visas bara mellan punkter. */}
+        {result?.kind === 'points' &&
+          ([0, 1, 2] as const).map((i) => (
+            <span key={i} className="flex h-10 items-center gap-1 px-1 text-[13px] tabular-nums narrow:h-11">
+              <b className="text-xs font-bold" style={{ color: AXIS_COLORS[i] }}>
+                {'XYZ'[i]}
+              </b>
+              {fmt.format(Math.abs(result.delta[i]))}
+            </span>
+          ))}
+        <span aria-hidden className="mx-0.5 h-6 w-px bg-line" />
+        <button type="button" className={secondaryButton} onClick={onDone}>
+          Klar
+        </button>
+      </div>
     </div>
   )
 }
