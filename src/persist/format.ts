@@ -2,7 +2,7 @@ import { axesFromLegacyGrain } from '../model/partAxes'
 import type { ModelDocument } from '../model/types'
 
 /** Höj när formatet ändras, och lägg till en konvertering i migrate. */
-export const FORMAT_VERSION = 6
+export const FORMAT_VERSION = 7
 
 export interface SavedFile {
   version: number
@@ -30,7 +30,13 @@ function isModelDocument(x: unknown): x is ModelDocument {
   return (
     Array.isArray(sketches) &&
     sketches.every(
-      (s) => isObj(s) && typeof s.id === 'string' && isFrame(s.frame) && isRect(s.rect) && isShape(s.shape),
+      (s) =>
+        isObj(s) &&
+        typeof s.id === 'string' &&
+        isFrame(s.frame) &&
+        isRect(s.rect) &&
+        isShape(s.shape) &&
+        (s.on === undefined || typeof s.on === 'string'),
     ) &&
     Array.isArray(defs) &&
     defs.every(
@@ -57,8 +63,9 @@ function isModelDocument(x: unknown): x is ModelDocument {
         (i.pos === undefined || (isObj(i.pos) && Object.values(i.pos).every((e) => typeof e === 'string'))) &&
         (i.combine === undefined ||
           (isObj(i.combine) &&
-            (i.combine.op === 'add' || i.combine.op === 'subtract') &&
-            typeof i.combine.host === 'string')),
+            (i.combine.op === 'add' || i.combine.op === 'subtract' || i.combine.op === 'joint') &&
+            typeof i.combine.host === 'string' &&
+            (i.combine.into === undefined || typeof i.combine.into === 'string'))),
     ) &&
     Array.isArray(params) &&
     params.every(
@@ -96,7 +103,9 @@ export function migrate(raw: unknown): LoadResult {
   // 3 → 4: kopior kan ha rest (viloläge för vinklarna) och stå snett. Frivilligt fält.
   // 4 → 5: skisser och former kan ha shape ('circle'). Frivilligt fält.
   // (Versionen höjs ändå, så att en äldre app inte läser cylindrar som lådor.)
-  // 5 → 6: kopior kan ha combine (verktyg som läggs till eller skärs ut). Frivilligt fält.
+  // 5 → 6: kopior kan ha combine (verktyg som läggs till eller skärs ut), och skisser on
+  // (delen de ritades på). Frivilliga fält.
+  // 6 → 7: combine kan vara en tapp (op 'joint', into). Äldre appar skulle avvisa den.
   if (!isModelDocument(doc)) return { ok: false, reason: 'Trasigt dokument' }
   return { ok: true, doc }
 }

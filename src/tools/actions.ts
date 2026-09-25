@@ -73,7 +73,7 @@ const bodies = () => resolveBodies(docs().doc)
 const findBody = (id: string): Body | undefined => bodies().find((b) => b.id === id)
 
 /** Planet och ytans kanter för en träff. Null om träffen inte går att rita på. */
-function planeForHit(hit: Hit): { frame: Frame; bounds: Rect | null } | null {
+function planeForHit(hit: Hit): { frame: Frame; bounds: Rect | null; on?: string } | null {
   switch (hit.target.kind) {
     case 'ground':
       return { frame: GROUND_FRAME, bounds: null }
@@ -90,7 +90,7 @@ function planeForHit(hit: Hit): { frame: Frame; bounds: Rect | null } | null {
       // På en cylinders runda sida: planet som nuddar cylindern längs en linje, i den av
       // de fyra huvudriktningarna man tryckte närmast (sidan på lådan runt cylindern).
       // Linjen där planet nuddar är ett snäppmål (kantmitt), så att man kan rita mitt på den.
-      return { frame: faceFrame(b, face), bounds: faceBounds(b, face) }
+      return { frame: faceFrame(b, face), bounds: faceBounds(b, face), on: b.id }
     }
     case 'handle':
     case 'axis':
@@ -146,7 +146,10 @@ export function tap(hit: Hit | null, tol: number) {
       tools().setCombining(null)
       return
     }
-    const error = docs().combine(hit.target.id, combining.op, combining.host)
+    const error =
+      combining.op === 'joint'
+        ? docs().joint(combining.host, hit.target.id)
+        : docs().combine(hit.target.id, combining.op, combining.host)
     tools().setCombining(error ? { ...combining, error } : null)
     return
   }
@@ -560,7 +563,7 @@ export function commit(op: Op | null = tools().op, exprs: { dims?: DimExprs; dep
   if (!op) return
   const d = docs()
   const before = d.doc
-  if (op.kind === 'rect') d.addSketch(op.frame, opRect(op), exprs.dims, op.shape)
+  if (op.kind === 'rect') d.addSketch(op.frame, opRect(op), exprs.dims, op.shape, op.on)
   else if (op.kind === 'move' || op.kind === 'rotate') {
     // Man stannar i Flytta, så att man kan flytta längs en axel till. Klar eller Esc går till Välj.
     const step = stepOf(op)
@@ -574,10 +577,15 @@ export function commit(op: Op | null = tools().op, exprs: { dims?: DimExprs; dep
     if (step?.kind === 'move') d.moveInstance(op.instanceId, step.delta)
     else if (step?.kind === 'rotate') d.rotateInstance(op.instanceId, step.center, step.axis, step.degrees)
   } else {
-    if (op.target.kind === 'sketch') d.pushPullSketch(op.target.id, op.distance, exprs.depth)
+    if (op.target.kind === 'sketch') d.pushPullSketch(op.target.id, op.distance, exprs.depth, op.mode)
     else d.pushPullBody(op.target.id, op.target.face, op.distance)
-    if (op.distance !== 0 && docs().doc !== before)
+    if (op.distance !== 0 && docs().doc !== before) {
       tools().setLastPushPull({ distance: op.distance, ...(exprs.depth && { expr: exprs.depth }) })
+      // Efter en utdragning är man i Välj, med delen vald: ett tryck utanför avmarkerar i
+      // stället för att börja en ny rektangel. Direkt, inte med setTool: den skulle stänga
+      // måttrutan, där man kan skriva ett annat djup.
+      if (tools().tool !== 'select') useToolStore.setState({ tool: 'select', hover: null, hoverPoint: null })
+    }
   }
   tools().setOp(null)
   // Måttrutan ligger kvar, så att man kan skriva ett annat värde (se amendLast).

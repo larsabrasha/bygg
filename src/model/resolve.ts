@@ -10,21 +10,27 @@ const cache = new WeakMap<ModelDocument, Body[]>()
 function toolsByDef(doc: ModelDocument, defs: Map<string, PartDef>): Map<string, ToolShape[]> {
   const byId = new Map<string, Instance>(doc.instances.map((i) => [i.id, i]))
   const out = new Map<string, ToolShape[]>()
+  const push = (on: Instance, op: ToolShape['op'], t: Instance, d: PartDef) => {
+    const list = out.get(on.defId) ?? []
+    list.push({
+      op,
+      profile: d.profile,
+      ...(d.shape && { shape: d.shape }),
+      z0: d.z0,
+      z1: d.z1,
+      frame: relativeFrame(on.frame, t.frame),
+    })
+    out.set(on.defId, list)
+  }
   for (const t of doc.instances) {
     if (!t.combine) continue
     const host = byId.get(t.combine.host)
     const d = defs.get(t.defId)
     if (!host || host.combine || !d) continue
-    const list = out.get(host.defId) ?? []
-    list.push({
-      op: t.combine.op,
-      profile: d.profile,
-      ...(d.shape && { shape: d.shape }),
-      z0: d.z0,
-      z1: d.z1,
-      frame: relativeFrame(host.frame, t.frame),
-    })
-    out.set(host.defId, list)
+    // En tapp: tillägg på värden och urtag i delen den går in i.
+    push(host, t.combine.op === 'subtract' ? 'subtract' : 'add', t, d)
+    const into = t.combine.op === 'joint' && t.combine.into ? byId.get(t.combine.into) : undefined
+    if (into && !into.combine) push(into, 'subtract', t, d)
   }
   return out
 }

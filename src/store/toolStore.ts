@@ -1,4 +1,5 @@
 import { create, type StoreApi } from 'zustand'
+import type { SketchMode } from '../model/combine'
 import type { RulerPoint } from '../model/ruler'
 import type { PlaneTargets } from '../model/snapping'
 import type { Combine, ModelDocument, Shape } from '../model/types'
@@ -15,6 +16,8 @@ export interface RectOp {
   kind: 'rect'
   shape?: Shape
   frame: Frame
+  /** Kopian man ritar på, om man ritar på en dels yta. */
+  on?: string
   /** Ytan man ritar på, i frame-koordinater. Null på golvet. */
   bounds: Rect | null
   /** Andra delars kanter projicerade på planet. */
@@ -41,6 +44,8 @@ export interface PushPullOp {
   /** Avstånd där ytan hamnar i jämnhöjd med en annan dels kant. */
   targets: number[]
   distance: number
+  /** För en skiss på en del: ny del, tillägg eller urtag (se SketchMode). Saknas = efter riktningen. */
+  mode?: SketchMode
   /** Minsta distance för en dels yta (se pushPullMin). Saknas eller −∞ för en skiss, som kan dras åt båda hållen. */
   min?: number
   onTarget: boolean

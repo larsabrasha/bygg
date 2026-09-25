@@ -6,21 +6,20 @@ import { add, scale } from '../model/vec'
 import type { HoverPoint, Op, PushPullOp, RotateOp } from '../store/toolStore'
 import { opRect } from '../tools/actions'
 import { opReadout } from '../tools/opReadout'
-import { ACCENT, AXIS_COLORS } from './colors'
+import { AXIS_COLORS } from './colors'
+import { PushPullHandle } from './PushPullHandle'
 import { SketchMesh } from './SketchMesh'
 import { SnapMarker } from './SnapMarker'
 
 /** Halva längden på hjälplinjen längs axeln, i mm. */
 const GUIDE = 20000
-/** Push/pull-pilens längd i mm. */
-const ARROW = 160
-
-/** Pil längs normalen, som visar åt vilket håll push/pull drar. */
+/**
+ * Pilen under push/pull: samma som före draget (PushPullHandle, lika stor på
+ * skärmen oavsett avstånd), vid ytan där den hamnar. En pil i millimeter blev
+ * stor och hoppade långt ut när man var inzoomad.
+ */
 function Arrow({ op }: { op: PushPullOp }) {
-  const dir = useMemo(() => new Vector3(...op.normal), [op.normal])
-  const tip = add(op.anchor, scale(op.normal, op.distance))
-  // ArrowHelper läser riktningen bara när den skapas, därav key.
-  return <arrowHelper key={op.normal.join()} args={[dir, new Vector3(), ARROW, ACCENT, 50, 30]} position={tip} />
+  return <PushPullHandle anchor={add(op.anchor, scale(op.normal, op.distance))} normal={op.normal} />
 }
 
 /**
@@ -30,7 +29,7 @@ function Arrow({ op }: { op: PushPullOp }) {
  * längre upp, så att fingret inte gör det.
  */
 function Readout({ op }: { op: Op }) {
-  const r = opReadout(op, ARROW)
+  const r = opReadout(op)
   if (!r) return null
   return (
     // Lågt z-index: under måttrutan och panelerna, som ligger ovanpå 3D-vyn.

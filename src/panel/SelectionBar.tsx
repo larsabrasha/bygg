@@ -1,10 +1,25 @@
-import { ArrowUpFromLine, Copy, Focus, SquareMinus, SquarePlus, Trash2, Unlink, X, type LucideIcon } from 'lucide-react'
+import {
+  ArrowUpFromLine,
+  Copy,
+  Focus,
+  SquareMinus,
+  Puzzle,
+  SquarePlus,
+  Trash2,
+  Unlink,
+  X,
+  type LucideIcon,
+} from 'lucide-react'
+import { useCallback, useRef, useState } from 'react'
 import { resolveBodies } from '../model/resolve'
+import type { Combine } from '../model/types'
 import { useDocumentStore } from '../store/documentStore'
 import { useToolStore } from '../store/toolStore'
 import { useViewStore } from '../store/viewStore'
 import { beginPushPull } from '../tools/actions'
+import { MenuItem } from './MenuItem'
 import { Tip } from './Tip'
+import { useDismiss } from './useDismiss'
 
 const ICON = { size: 18, strokeWidth: 1.75, 'aria-hidden': true } as const
 
@@ -33,6 +48,48 @@ function BarButton({
 }
 
 /**
+ * Skär ut, Lägg till och Tapp i en meny, så att raden får plats på en telefon.
+ * Efter valet trycker man på den andra delen (se CombineBar).
+ */
+function JoinMenu({ hostId }: { hostId: string }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+  const close = useCallback(() => setOpen(false), [])
+  useDismiss(ref, open, close)
+  const setCombining = useToolStore((s) => s.setCombining)
+  const choose = (op: Combine['op']) => {
+    close()
+    setCombining({ op, host: hostId })
+  }
+  return (
+    <div ref={ref} className="relative">
+      <button
+        aria-label="Foga"
+        aria-expanded={open}
+        onClick={() => setOpen((o) => !o)}
+        className="flex h-9 cursor-pointer items-center gap-1.5 rounded-lg px-2 hover:bg-hover aria-expanded:bg-accent-soft aria-expanded:text-accent narrow:size-11 narrow:justify-center narrow:px-0"
+      >
+        <Puzzle {...ICON} />
+        <span className="text-[13px] narrow:hidden">Foga</span>
+      </button>
+      {open && (
+        <div className="absolute top-full left-0 z-50 mt-1 w-60 rounded-lg border border-line bg-panel p-1 shadow-lg">
+          <MenuItem Icon={Puzzle} onClick={() => choose('joint')}>
+            Tapp i en annan del
+          </MenuItem>
+          <MenuItem Icon={SquareMinus} onClick={() => choose('subtract')}>
+            Skär ut en annan del
+          </MenuItem>
+          <MenuItem Icon={SquarePlus} onClick={() => choose('add')}>
+            Lägg till en annan del
+          </MenuItem>
+        </div>
+      )}
+    </div>
+  )
+}
+
+/**
  * Det man oftast gör med det valda, direkt i 3D-vyn: på mobil slipper man
  * öppna bladet. Uppe till vänster; uppe till höger ligger "Visa allt".
  */
@@ -45,7 +102,6 @@ export function SelectionBar() {
   const requestFit = useViewStore((s) => s.requestFit)
   const opActive = useToolStore((s) => s.op !== null)
   const combining = useToolStore((s) => s.combining)
-  const setCombining = useToolStore((s) => s.setCombining)
   const detach = useDocumentStore((s) => s.detach)
 
   // Medan man väljer verktyg för Skär ut / Lägg till visas CombineBar i stället.
@@ -69,16 +125,7 @@ export function SelectionBar() {
           ) : (
             <>
               <BarButton label="Länkad kopia" Icon={Copy} onClick={() => duplicateLinked(body.id)} />
-              <BarButton
-                label="Skär ut"
-                Icon={SquareMinus}
-                onClick={() => setCombining({ op: 'subtract', host: body.id })}
-              />
-              <BarButton
-                label="Lägg till"
-                Icon={SquarePlus}
-                onClick={() => setCombining({ op: 'add', host: body.id })}
-              />
+              <JoinMenu hostId={body.id} />
             </>
           )}
         </>

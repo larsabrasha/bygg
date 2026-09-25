@@ -26,6 +26,7 @@ import {
   cameraButtons,
   fingerTap,
   isDoubleTap,
+  pickable,
   pressOwner,
   snapPx,
   TAP_SLOP,
@@ -111,19 +112,25 @@ export function ToolController() {
       // Nya objekt har ingen giltig matrixWorld förrän nästa bildruta ritats,
       // och med frameloop="demand" kan det dröja. Räkna om före raycast.
       scene.updateMatrixWorld()
+      // Medan man väljer verktyg för Skär ut / Lägg till räknas inte värden: verktyget
+      // ligger ofta inuti den (ett tapphål), och trycket ska nå det.
+      const skip = useToolStore.getState().combining?.host
       const targets: Object3D[] = []
       scene.traverse((o) => {
-        if (o.userData.pick) targets.push(o)
+        if (o.userData.pick && pickable(o.userData.pick, skip)) targets.push(o)
       })
       return targets
     }
 
-    /** Närmaste objekt längs den senast kastade strålen. Skisser får företräde framför ytan de ligger på. */
+    /**
+     * Närmaste objekt längs den senast kastade strålen. Skisser och verktyg (spöken)
+     * får företräde framför ytan de ligger på, som ett tapphål i sin värds yta.
+     */
     const closestObject = (targets: Object3D[]): Intersection | null => {
       let best: { hit: Intersection; score: number } | null = null
       for (const hit of raycaster.intersectObjects(targets, false)) {
-        const kind = hit.object.userData.pick.kind
-        const score = ON_TOP.has(kind) ? -Infinity : hit.distance - (kind === 'sketch' ? 1 : 0)
+        const { kind, tool } = hit.object.userData.pick
+        const score = ON_TOP.has(kind) ? -Infinity : hit.distance - (kind === 'sketch' || tool ? 1 : 0)
         if (!best || score < best.score) best = { hit, score }
       }
       return best?.hit ?? null
@@ -409,7 +416,11 @@ export function ToolController() {
     const onLeave = () => {
       const t = useToolStore.getState()
       // Ingen knapp nere: operationen följde bara musen. Med en dragning pågår den till släppet.
-      if (t.op && !press && opAtStart) t.setOp(opAtStart)
+      // Valet Ny del / Lägg till / Skär ut i måttrutan görs utanför vyn och ska ligga kvar.
+      if (t.op && !press && opAtStart)
+        t.setOp(
+          opAtStart.kind === 'pushpull' && t.op.kind === 'pushpull' ? { ...opAtStart, mode: t.op.mode } : opAtStart,
+        )
       t.setHover(null)
       t.setHoverPoint(null)
       if (t.rulerHover) t.setRulerHover(null)

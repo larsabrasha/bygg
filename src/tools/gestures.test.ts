@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { cameraButtons, fingerTap, isDoubleTap, pressOwner, snapPx } from './gestures'
+import { cameraButtons, fingerTap, isDoubleTap, pickable, pressOwner, snapPx } from './gestures'
 
 describe('pressOwner', () => {
   it('ger alltid verktyget trycket under en operation', () => {
@@ -92,5 +92,15 @@ describe('snapPx', () => {
     expect(snapPx('rect', 'touch')).toBeGreaterThan(snapPx('rect', 'mouse'))
     expect(snapPx('measure', 'touch')).toBeGreaterThan(snapPx('rect', 'touch'))
     expect(snapPx('measure', 'touch')).toBeGreaterThanOrEqual(44)
+  })
+})
+
+describe('pickable', () => {
+  it('pilen (utan id) går alltid att träffa; värden inte medan man väljer verktyg', () => {
+    expect(pickable({}, undefined)).toBe(true)
+    expect(pickable({}, 'ben')).toBe(true)
+    expect(pickable({ id: 'ben' }, undefined)).toBe(true)
+    expect(pickable({ id: 'ben' }, 'ben')).toBe(false)
+    expect(pickable({ id: 'sarg' }, 'ben')).toBe(true)
   })
 })

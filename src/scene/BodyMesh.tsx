@@ -66,8 +66,9 @@ function BodyMeshImpl({
         emissiveIntensity: marked ? 0.45 : lit ? 0.2 : 0,
         transparent: preview || ghost,
         opacity: ghost ? (selected ? 0.3 : 0.15) : preview ? 0.8 : 1,
-        // Ett spöke skymmer inte det bakom sig.
+        // Ett spöke skymmer inte det bakom sig, och syns genom det framför (en tapp inne i ett ben).
         depthWrite: !ghost,
+        depthTest: !ghost,
       })
     })
   }, [solid, round, color, selected, highlightFace, preview, ghost])
@@ -91,11 +92,21 @@ function BodyMeshImpl({
         material={solid ? materials[0] : materials}
         geometry={solid ?? own}
         userData={
-          preview ? { pivot: true } : { pick: { kind: 'body', id: body.id, round, ...(solid && { box: boxOf(body) }) } }
+          preview
+            ? { pivot: true }
+            : { pick: { kind: 'body', id: body.id, round, tool: ghost, ...(solid && { box: boxOf(body) }) } }
         }
       >
         {ghost ? (
-          <Edges color={ACCENT} lineWidth={selected ? 2 : 1.5} dashed dashSize={10} gapSize={6} />
+          <Edges
+            color={ACCENT}
+            lineWidth={selected ? 2 : 1.5}
+            dashed
+            dashSize={10}
+            gapSize={6}
+            depthTest={false}
+            renderOrder={3}
+          />
         ) : (
           <Edges color={edge} lineWidth={selected ? 2.5 : sibling ? 1.8 : 1} />
         )}

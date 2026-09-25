@@ -1,6 +1,6 @@
 import type { Box } from './box'
 import { toLocal, toWorld } from './frame'
-import type { Frame, Instance, ModelDocument, Rect, ToolShape, Vec3 } from './types'
+import type { Combine, Frame, Instance, ModelDocument, Rect, Sketch, ToolShape, Vec3 } from './types'
 import { dot, sub } from './vec'
 
 /**
@@ -52,9 +52,49 @@ export function blankBox(box: Box, tools: readonly ToolShape[]): Box | null {
   return { profile, z0, z1 }
 }
 
-/** Kopian är värd för något verktyg. */
+/**
+ * Vad en skiss på en del blir när den dras ut: ny del, tillägg på delen eller
+ * urtag i den. 'auto' = efter riktningen: in i delen ett urtag, ut en ny del.
+ */
+export type SketchMode = 'auto' | 'new' | Combine['op']
+
+/**
+ * Tillägget eller urtaget en skiss blir när den dras ut distance, på delen den
+ * ritades på. Null = en ny, egen del (skissen ligger inte på en del, eller mode
+ * eller riktningen säger det).
+ */
+export function sketchCombine(
+  doc: ModelDocument,
+  sketch: Pick<Sketch, 'on'>,
+  distance: number,
+  mode: SketchMode = 'auto',
+): Combine | null {
+  const op = mode === 'auto' ? (distance < 0 ? 'subtract' : null) : mode === 'new' ? null : mode
+  if (!op || !sketch.on) return null
+  const host = doc.instances.find((i) => i.id === sketch.on)
+  // Ett verktyg har bara sin egen form (se combineError); där blir det en vanlig del.
+  return host && !host.combine ? { op, host: host.id } : null
+}
+
+/** Kopian är värd för något verktyg, eller har ett tapphål. */
 export function isHost(doc: ModelDocument, instanceId: string): boolean {
-  return doc.instances.some((i) => i.combine?.host === instanceId)
+  return doc.instances.some((i) => i.combine?.host === instanceId || i.combine?.into === instanceId)
+}
+
+/** Delarna ett verktyg påverkar: värden, och för en tapp även delen den går in i. */
+export function toolTargets(c: Combine): string[] {
+  return c.into ? [c.host, c.into] : [c.host]
+}
+
+/** Varför host inte kan få en tapp in i into, eller null om det går. */
+export function jointError(doc: ModelDocument, hostId: string, intoId: string): string | null {
+  const host = doc.instances.find((i) => i.id === hostId)
+  const into = doc.instances.find((i) => i.id === intoId)
+  if (!host || !into) return 'Delen finns inte'
+  if (hostId === intoId) return 'Tryck på en annan del'
+  if (host.defId === into.defId) return 'Länkade kopior av samma del kan inte tappas i varandra'
+  if (host.combine || into.combine) return 'Ett verktyg kan inte få en tapp'
+  return null
 }
 
 /** Varför tool inte kan läggas till på eller skäras ut ur host, eller null om det går. */
@@ -91,17 +131,20 @@ export function carryTools(before: ModelDocument, after: ModelDocument): ModelDo
   return changed ? { ...after, instances } : after
 }
 
-/** Verktyg vars värd inte finns längre blir vanliga delar igen. */
+/**
+ * Verktyg vars värd inte finns längre blir vanliga delar igen. En tapp vars
+ * del med tapphålet tagits bort blir ett vanligt tillägg på sin värd.
+ */
 export function detachOrphans(doc: ModelDocument): ModelDocument {
   const ids = new Set(doc.instances.map((i) => i.id))
-  if (doc.instances.every((i) => !i.combine || ids.has(i.combine.host))) return doc
+  const ok = (c: Combine) => ids.has(c.host) && (!c.into || ids.has(c.into))
+  if (doc.instances.every((i) => !i.combine || ok(i.combine))) return doc
   return {
     ...doc,
-    instances: doc.instances.map((i) => {
-      if (!i.combine || ids.has(i.combine.host)) return i
-      const { combine: _gone, ...rest } = i
-      void _gone
-      return rest
+    instances: doc.instances.map((i): Instance => {
+      if (!i.combine || ok(i.combine)) return i
+      const { combine, ...rest } = i
+      return ids.has(combine.host) ? { ...rest, combine: { op: 'add', host: combine.host } } : rest
     }),
   }
 }

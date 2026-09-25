@@ -21,7 +21,8 @@ const tabClass =
  * Samma DOM i båda lägena; CSS väljer layout, så fältens state överlever en rotation.
  */
 export function Sidebar() {
-  const count = useDocumentStore((s) => s.doc.instances.length)
+  // Verktyg (urtag, tillägg) är inga egna bitar i kaplistan.
+  const count = useDocumentStore((s) => s.doc.instances.filter((i) => !i.combine).length)
   const [tab, setTab] = useState<Tab>('properties')
   const [open, setOpen] = useState(false)
   const panelOpen = useViewStore((s) => s.panelOpen)

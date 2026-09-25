@@ -255,19 +255,27 @@ function CombineGroup({ body }: { body: Body }) {
   const select = useDocumentStore((s) => s.select)
   const detach = useDocumentStore((s) => s.detach)
   const bodies = resolveBodies(doc)
+  const link = (id: string) => (
+    <button className="cursor-pointer font-semibold text-accent" onClick={() => select({ kind: 'body', id })}>
+      {bodies.find((b) => b.id === id)?.name}
+    </button>
+  )
   if (body.tool) {
-    const host = bodies.find((b) => b.id === body.tool!.host)
+    const { op, host, into } = body.tool
     return (
-      <Group title={body.tool.op === 'subtract' ? 'Skärs ut' : 'Läggs till'}>
+      <Group title={{ subtract: 'Skärs ut', add: 'Läggs till', joint: 'Tapp' }[op]}>
         <p className="text-[13px] text-muted">
-          {body.tool.op === 'subtract' ? 'Skärs ut ur' : 'Läggs till på'}{' '}
-          <button
-            className="cursor-pointer font-semibold text-accent"
-            onClick={() => select({ kind: 'body', id: body.tool!.host })}
-          >
-            {host?.name}
-          </button>
-          , och alla länkade kopior av den. Flytta eller ändra den här delen så följer resultatet med.
+          {op === 'joint' && into ? (
+            <>
+              Tapp på {link(host)}, med tapphål i {link(into)}. Tapphålet har samma form som tappen, så de passar alltid
+              ihop.
+            </>
+          ) : (
+            <>
+              {op === 'subtract' ? 'Skärs ut ur' : 'Läggs till på'} {link(host)}.
+            </>
+          )}{' '}
+          Det gäller alla länkade kopior. Flytta eller ändra den här delen så följer resultatet med.
         </p>
         <button className={secondaryButton} onClick={() => detach(body.id)}>
           <Unlink {...ICON_SM} />
@@ -276,8 +284,17 @@ function CombineGroup({ body }: { body: Body }) {
       </Group>
     )
   }
-  const tools = bodies.filter((b) => b.tool?.host === body.id)
+  // Verktyg på delen, och tappar från andra delar som går in i den (tapphål).
+  const tools = bodies.filter((b) => b.tool?.host === body.id || b.tool?.into === body.id)
   if (tools.length === 0) return null
+  const label = (t: Body) =>
+    t.tool!.op === 'joint'
+      ? t.tool!.into === body.id
+        ? 'tapphål'
+        : 'tapp'
+      : t.tool!.op === 'subtract'
+        ? 'skärs ut'
+        : 'läggs till'
   return (
     <Group title="Urskärningar och tillägg">
       <ul className="flex flex-col">
@@ -288,7 +305,7 @@ function CombineGroup({ body }: { body: Body }) {
               onClick={() => select({ kind: 'body', id: t.id })}
             >
               <span className="font-semibold">{t.name}</span>
-              <span className="text-muted">{t.tool!.op === 'subtract' ? 'skärs ut' : 'läggs till'}</span>
+              <span className="text-muted">{label(t)}</span>
             </button>
           </li>
         ))}

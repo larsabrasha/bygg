@@ -120,3 +120,12 @@ export function fingerTap(fingers: number, durationMs: number, maxMovedPx: numbe
   if (fingers === 3) return 'redo'
   return null
 }
+
+/**
+ * Om ett objekt med userData.pick ska kunna träffas. skip = värden medan man
+ * väljer verktyg för Skär ut / Lägg till / Tapp: verktyget ligger ofta inuti
+ * den. Pilar och bågar har inget id och ska alltid kunna träffas.
+ */
+export function pickable(pick: { id?: string }, skip: string | undefined): boolean {
+  return !(skip && pick.id === skip)
+}

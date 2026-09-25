@@ -16,10 +16,11 @@ export function CombineBar() {
   if (!combining) return null
   const host = resolveBodies(doc).find((b) => b.id === combining.host)
   if (!host) return null
-  const text =
-    combining.op === 'subtract'
-      ? `Tryck på delen som ska skäras ut ur ${host.name}.`
-      : `Tryck på delen som ska läggas till på ${host.name}.`
+  const text = {
+    subtract: `Tryck på delen som ska skäras ut ur ${host.name}.`,
+    add: `Tryck på delen som ska läggas till på ${host.name}.`,
+    joint: `Tryck på delen som tappen på ${host.name} ska in i. Änden på ${host.name} ska ligga an mot den.`,
+  }[combining.op]
   return (
     <div
       role="status"

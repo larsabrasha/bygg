@@ -48,6 +48,8 @@ export interface Sketch {
   frame: Frame
   rect: Rect
   shape?: Shape
+  /** Kopian skissen ritades på. Dras skissen in i den blir det en urskärning (se sketchCombine). */
+  on?: string
   /** Uttryck för bredd (u) och höjd (v), om de skrevs in som uttryck. */
   dims?: DimExprs
 }
@@ -80,13 +82,16 @@ export type Orientation = Pick<Frame, 'u' | 'v' | 'n'>
 
 /**
  * Kopian är ett verktyg: den läggs till på (add) eller skärs ut ur (subtract)
- * kopian host. Den ligger kvar som egen del, så att den går att flytta,
- * ändra och lossa igen (icke-destruktivt). Resultatet gäller alla länkade
- * kopior av host, på samma ställe i förhållande till dem.
+ * kopian host. En tapp (joint) läggs till på host och skärs ut ur into, så att
+ * tapp och tapphål alltid passar ihop. Verktyget ligger kvar som egen del, så
+ * att det går att flytta, ändra och lossa igen (icke-destruktivt). Resultatet
+ * gäller alla länkade kopior, på samma ställe i förhållande till dem.
  */
 export interface Combine {
-  op: 'add' | 'subtract'
+  op: 'add' | 'subtract' | 'joint'
   host: string
+  /** Bara för joint: delen tappen går in i. */
+  into?: string
 }
 
 /** En placerad kopia av en PartDef. */
@@ -124,7 +129,7 @@ export interface ModelDocument {
  * och djup, och dess frame i formens egna koordinater (inte i världen).
  */
 export interface ToolShape {
-  op: Combine['op']
+  op: 'add' | 'subtract'
   profile: Rect
   shape?: Shape
   z0: number

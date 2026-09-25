@@ -150,10 +150,10 @@ export function pushPullMin(body: Box, face: Face): number {
   return MIN_SIZE - { u, v, n }[faceAxis(face)]
 }
 
-/** Första lediga namnet "Del N". */
-export function nextPartName(defs: readonly Pick<PartDef, 'name'>[]): string {
+/** Första lediga namnet "Del N" (eller med ett annat ord, t.ex. "Urtag N"). */
+export function nextPartName(defs: readonly Pick<PartDef, 'name'>[], word = 'Del'): string {
   const used = new Set(defs.map((b) => b.name))
   let n = 1
-  while (used.has(`Del ${n}`)) n++
-  return `Del ${n}`
+  while (used.has(`${word} ${n}`)) n++
+  return `${word} ${n}`
 }

@@ -1,10 +1,11 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { toWorld } from '../model/frame'
 import { bodyCenter } from '../model/geometry'
+import { buildCutList } from '../model/cutlist'
 import { resolveBodies } from '../model/resolve'
 import type { Vec3 } from '../model/types'
 import { resetDocumentStore, useDocumentStore } from '../store/documentStore'
-import { useToolStore } from '../store/toolStore'
+import { useToolStore, type PushPullOp } from '../store/toolStore'
 import {
   amendableOp,
   amendLast,
@@ -57,6 +58,54 @@ function extrude(sketchId: string, text: string) {
 }
 
 describe('skär ut och lägg till', () => {
+  it('en skiss på en del som dras in blir ett urtag i delen; utåt blir den en ny del', () => {
+    const leg = extrude(drawGroundRect(0, 0, 400, -40), '40')
+    tools().setTool('rect')
+    // På ovansidan (y = 40).
+    tap({ point: [100, 40, -10], target: { kind: 'body', id: leg.id, face: 'n+' } }, 0)
+    move(down(160, -20), 0)
+    commit()
+    const s = doc().sketches.at(-1)!
+    expect(s.on).toBe(leg.id)
+    tools().setTool('pushpull')
+    tap({ point: [120, 40, -15], target: { kind: 'sketch', id: s.id } }, 0)
+    // Medan man drar in syns urtaget i delen.
+    move({ origin: [120, 25, 3000], dir: [0, 0, -1] }, 0)
+    const shown = resolveBodies(previewDoc(tools().op!, doc())!.doc)
+    expect(shown.find((b) => b.id === leg.id)!.tools).toHaveLength(1)
+    tools().setMeasure(0, '-25')
+    applyMeasure()
+    const cut = bodies().at(-1)!
+    expect(cut).toMatchObject({ name: 'Urtag 1', tool: { op: 'subtract', host: leg.id } })
+    expect(docs().selection).toEqual({ kind: 'body', id: leg.id })
+    expect(buildCutList(bodies()).totalCount).toBe(1)
+
+    // Utåt från samma yta: en vanlig ny del.
+    tools().setTool('rect')
+    tap({ point: [300, 40, -10], target: { kind: 'body', id: leg.id, face: 'n+' } }, 0)
+    move(down(340, -30), 0)
+    commit()
+    extrude(doc().sketches.at(-1)!.id, '20')
+    expect(bodies().at(-1)!.tool).toBeUndefined()
+  })
+
+  it('med Lägg till blir en skiss på en del ett tillägg, och ämnet växer', () => {
+    const rail = extrude(drawGroundRect(0, 0, 400, -60), '20')
+    tools().setTool('rect')
+    tap({ point: [150, 20, -10], target: { kind: 'body', id: rail.id, face: 'n+' } }, 0)
+    move(down(250, -50), 0)
+    commit()
+    tools().setTool('pushpull')
+    tap({ point: [200, 20, -30], target: { kind: 'sketch', id: doc().sketches.at(-1)!.id } }, 0)
+    tools().setOp({ ...(tools().op as PushPullOp), mode: 'add' })
+    tools().setMeasure(0, '30')
+    applyMeasure()
+    expect(bodies().at(-1)).toMatchObject({ name: 'Tillägg 1', tool: { op: 'add', host: rail.id } })
+    // Ämnet: 400 × 60 × (20 + 30).
+    const row = buildCutList(bodies()).rows[0]!
+    expect([row.length, row.width, row.thickness]).toEqual([400, 60, 50])
+  })
+
   it('efter Skär ut väljer nästa tryck verktyget; fel visas och läget ligger kvar; golvet avbryter', () => {
     const host = extrude(drawGroundRect(), '22')
     const tool = extrude(drawGroundRect(100, -100, 200, -200), '40')
@@ -101,6 +150,7 @@ describe('cirkelverktyget', () => {
     const leg = extrude(s.id, '800')
     expect(leg).toMatchObject({ shape: 'circle', z0: 0, z1: 800 })
     // Den runda sidan: push/pull ändrar diametern, och delen förblir rund.
+    tools().setTool('pushpull')
     tap({ point: [20, 400, 0], target: { kind: 'body', id: leg.id, face: 'u+' } }, 0)
     tools().setMeasure(0, '10')
     applyMeasure()
@@ -199,6 +249,7 @@ describe('push/pull', () => {
 
   it('ändrar en befintlig dels sida, och det går att ångra', () => {
     const b = extrude(drawGroundRect(), '22')
+    tools().setTool('pushpull')
     tap({ point: [600, 11, -200], target: { kind: 'body', id: b.id, face: 'u+' } }, 0)
     tools().setMeasure(0, '100')
     applyMeasure()
@@ -211,6 +262,7 @@ describe('push/pull', () => {
 
   it('ytan stannar innan den går förbi motsatta sidan', () => {
     const b = extrude(drawGroundRect(), '22')
+    tools().setTool('pushpull')
     tap({ point: [600, 11, -200], target: { kind: 'body', id: b.id, face: 'u+' } }, 0)
     move({ origin: [-400, 11, 3000], dir: [0, 0, -1] }, 0)
     expect(tools().op).toMatchObject({ distance: 1 - 600 })
@@ -220,6 +272,7 @@ describe('push/pull', () => {
 
   it('avvisar ett inskrivet mått som går förbi motsatta sidan', () => {
     const b = extrude(drawGroundRect(), '22')
+    tools().setTool('pushpull')
     tap({ point: [600, 11, -200], target: { kind: 'body', id: b.id, face: 'u+' } }, 0)
     tools().setMeasure(0, '-700')
     expect(applyMeasure()).toBe(false)
@@ -635,14 +688,21 @@ describe('pilen på det valda', () => {
     expect(opFocus(tools().op!)).toEqual([300, 122, -200])
   })
 
-  it('fungerar direkt efter en ny rektangel, utan att byta till Välj', () => {
+  it('fungerar direkt efter en ny rektangel; efteråt är man i Välj och kan rätta djupet', () => {
     drawGroundRect()
     expect(tools().tool).toBe('rect')
     tap(handle, 0)
     tools().setMeasure(0, '22')
     applyMeasure()
     expect(bodies()[0]).toMatchObject({ z0: 0, z1: 22 })
-    expect(tools().tool).toBe('rect')
+    // Ett tryck utanför avmarkerar i stället för att börja en ny rektangel.
+    expect(tools().tool).toBe('select')
+    // Måttrutan finns kvar: ett annat djup ändrar utdragningen.
+    tools().setMeasure(0, '30')
+    expect(applyMeasure()).toBe(true)
+    expect(bodies()[0]).toMatchObject({ z1: 30 })
+    tap({ point: [3000, 0, 0], target: { kind: 'ground' } }, 0)
+    expect(docs().selection).toBeNull()
   })
 
   it('gör inget om delen är vald utan yta (t.ex. från kaplistan)', () => {

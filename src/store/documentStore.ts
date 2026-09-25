@@ -11,10 +11,11 @@ import {
   sketchToPart,
 } from '../model/geometry'
 import { rotateFrame } from '../model/frame'
-import { carryTools, combineError, detachOrphans } from '../model/combine'
+import { carryTools, combineError, detachOrphans, jointError, sketchCombine, type SketchMode } from '../model/combine'
+import { tenonFor } from '../model/joint'
 import { newId } from '../model/id'
 import { applyParams, evaluateParams, isNameUsed, paramScope, setBoxExtent } from '../model/params'
-import { withAxes } from '../model/partAxes'
+import { defaultAxes, withAxes } from '../model/partAxes'
 import { minCorner, placeAlong, WORLD_AXES, withoutPos } from '../model/placement'
 import { resolveBodies } from '../model/resolve'
 import type {
@@ -47,10 +48,13 @@ interface Snapshot {
 export type PartPatch = Partial<Pick<PartDef, 'name' | 'material' | 'grainAxis' | 'thicknessAxis'>>
 
 interface DocumentState extends Snapshot {
-  /** Returnerar skissens id, eller null om rektangeln är för liten. shape = cirkel inskriven i rect. */
-  addSketch: (frame: Frame, rect: Rect, dims?: DimExprs, shape?: Shape) => string | null
+  /**
+   * Returnerar skissens id, eller null om rektangeln är för liten. shape = cirkel
+   * inskriven i rect. on = kopian skissen ritas på.
+   */
+  addSketch: (frame: Frame, rect: Rect, dims?: DimExprs, shape?: Shape, on?: string) => string | null
   /** Drar ut en skiss till en ny del. Skissen försvinner. Returnerar kopians id. */
-  pushPullSketch: (sketchId: string, distance: number, depthExpr?: string) => string | null
+  pushPullSketch: (sketchId: string, distance: number, depthExpr?: string, mode?: SketchMode) => string | null
   /** Flyttar en sida på en del (och alla dess kopior). False om resultatet blir ogiltigt. */
   pushPullBody: (instanceId: string, face: Face, distance: number) => boolean
   moveInstance: (instanceId: string, delta: Vec3) => void
@@ -90,6 +94,11 @@ interface DocumentState extends Snapshot {
   combine: (toolId: string, op: Combine['op'], hostId: string) => string | null
   /** Lossar ett verktyg: det blir en vanlig del igen, där det står, och blir valt. */
   detach: (toolId: string) => void
+  /**
+   * En tapp på hostId (t.ex. en sarg) in i intoId (ett ben), med tapphål i
+   * intoId. Värden blir vald. Returnerar felmeddelande eller null.
+   */
+  joint: (hostId: string, intoId: string) => string | null
   select: (selection: Selection | null) => void
   /** Tömmer modellen. Går att ångra. */
   clearDocument: () => void
@@ -193,7 +202,7 @@ export const useDocumentStore = create<DocumentState>()((set, get) => {
   return {
     ...initial,
 
-    addSketch: (frame, rect, dims, shape) => {
+    addSketch: (frame, rect, dims, shape, on) => {
       if (!isValidRect(rect)) return null
       const { doc } = get()
       const sketch = {
@@ -201,34 +210,41 @@ export const useDocumentStore = create<DocumentState>()((set, get) => {
         frame,
         rect,
         ...(shape && { shape }),
+        ...(on && { on }),
         ...(dims && Object.keys(dims).length ? { dims } : {}),
       }
       commit({ ...doc, sketches: [...doc.sketches, sketch] }, { kind: 'sketch', id: sketch.id })
       return sketch.id
     },
 
-    pushPullSketch: (sketchId, distance, depthExpr) => {
+    pushPullSketch: (sketchId, distance, depthExpr, mode) => {
       const { doc } = get()
       const sketch = doc.sketches.find((s) => s.id === sketchId)
       if (!sketch) return null
+      // På en del: ett urtag i den eller ett tillägg på den, i stället för en ny del.
+      const combine = sketchCombine(doc, sketch, distance, mode)
+      const host = combine?.host
+      const name = nextPartName(doc.defs, !combine ? 'Del' : combine.op === 'subtract' ? 'Urtag' : 'Tillägg')
       const part = sketchToPart(
         sketch,
         distance,
-        { defId: newId(), instanceId: newId(), name: nextPartName(doc.defs), material: 'furu' },
+        { defId: newId(), instanceId: newId(), name, material: 'furu' },
         depthExpr,
       )
       if (!part) return null
+      const instance = combine ? { ...part.instance, combine } : part.instance
       commit(
         {
           ...doc,
           sketches: doc.sketches.filter((s) => s.id !== sketchId),
           defs: [...doc.defs, part.def],
-          instances: [...doc.instances, part.instance],
+          instances: [...doc.instances, instance],
         },
-        // Den utdragna ytan blir vald, så att man kan dra vidare i den.
-        { kind: 'body', id: part.instance.id, face: distance >= 0 ? 'n+' : 'n-' },
+        // Den utdragna ytan blir vald, så att man kan dra vidare i den. Ett urtag eller
+        // tillägg: delen det sitter på, så att man ser resultatet (och verktyget som spöke).
+        host ? { kind: 'body', id: host } : { kind: 'body', id: part.instance.id, face: distance >= 0 ? 'n+' : 'n-' },
       )
-      return part.instance.id
+      return instance.id
     },
 
     pushPullBody: (instanceId, face, distance) => {
@@ -455,6 +471,36 @@ export const useDocumentStore = create<DocumentState>()((set, get) => {
           ...doc,
           instances: doc.instances.map((i) => (i.id === toolId ? { ...i, combine: { op, host: hostId } } : i)),
         },
+        { kind: 'body', id: hostId },
+      )
+      return null
+    },
+
+    joint: (hostId, intoId) => {
+      const { doc } = get()
+      const error = jointError(doc, hostId, intoId)
+      if (error) return error
+      const bodies = resolveBodies(doc)
+      const host = bodies.find((b) => b.id === hostId)!
+      const into = bodies.find((b) => b.id === intoId)!
+      const tenon = tenonFor(host, into)
+      if (typeof tenon === 'string') return tenon
+      const box = { profile: tenon.profile, ...(tenon.shape && { shape: tenon.shape }), z0: 0, z1: tenon.depth }
+      const def: PartDef = {
+        id: newId(),
+        name: nextPartName(doc.defs, 'Tapp'),
+        material: host.material,
+        ...defaultAxes(box),
+        ...box,
+      }
+      const instance: Instance = {
+        id: newId(),
+        defId: def.id,
+        frame: tenon.frame,
+        combine: { op: 'joint', host: hostId, into: intoId },
+      }
+      commit(
+        { ...doc, defs: [...doc.defs, def], instances: [...doc.instances, instance] },
         { kind: 'body', id: hostId },
       )
       return null

@@ -9,16 +9,15 @@ const delta = numberFormat(1, false, true)
 const plain = numberFormat(1)
 
 /**
- * Värdet som ändras under en operation och var det ska visas i 3D: vid
- * pilspetsen (push/pull), vid det flyttade (flytta) eller vid ekern man vrider
- * (vrida), eller diametern vid pekaren (cirkel). Där tittar man medan man drar.
- * Null när inget har ändrats än, eller för en rektangel.
- * arrowLength = pilens längd i mm, så att värdet hamnar vid spetsen och inte vid ytan.
+ * Värdet som ändras under en operation och var det ska visas i 3D: vid ytan
+ * man drar i, där pilen sitter (push/pull), vid det flyttade (flytta) eller vid
+ * ekern man vrider (vrida), eller diametern vid pekaren (cirkel). Där tittar
+ * man medan man drar. Null när inget har ändrats än, eller för en rektangel.
  */
-export function opReadout(op: Op, arrowLength: number): { at: Vec3; text: string } | null {
+export function opReadout(op: Op): { at: Vec3; text: string } | null {
   if (op.kind === 'pushpull') {
     if (op.distance === 0) return null
-    const at = add(op.anchor, scale(op.normal, op.distance + arrowLength))
+    const at = add(op.anchor, scale(op.normal, op.distance))
     return { at, text: `${delta.format(op.distance)} mm` }
   }
   if (op.kind === 'move') {

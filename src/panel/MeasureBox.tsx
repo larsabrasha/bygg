@@ -53,7 +53,7 @@ export function MeasureBox() {
   useToolStore((s) => s.lastCopy)
   useToolStore((s) => s.lastOp)
   useDocumentStore((s) => s.selection)
-  useDocumentStore((s) => s.doc)
+  const doc = useDocumentStore((s) => s.doc)
 
   // Efter en kopia kan man skriva hur många det ska bli (som "5x" i SketchUp).
   const extending = !op && tool === 'move' ? extendableCopy() : null
@@ -115,6 +115,36 @@ export function MeasureBox() {
     </Tip>
   )
 
+  // En skiss på en del: ny del, tillägg på delen eller urtag i den. Förvalt efter riktningen.
+  const sketchOn = op?.kind === 'pushpull' && op.target.kind === 'sketch' ? op : null
+  const onPart =
+    sketchOn?.target.kind === 'sketch' &&
+    doc.sketches.some((s) => s.id === sketchOn.target.id && s.on && doc.instances.some((i) => i.id === s.on))
+  const effective = sketchOn ? (sketchOn.mode ?? 'auto') : 'auto'
+  const current = effective === 'auto' ? (sketchOn && sketchOn.distance < 0 ? 'subtract' : 'new') : effective
+  const modeToggle = sketchOn && onPart && (
+    <div role="group" aria-label="Blir" className="flex gap-0.5">
+      {(
+        [
+          ['new', 'Ny del', 'En egen del, med egen rad i kaplistan'],
+          ['add', 'Lägg till', 'Sitter ihop med delen skissen ligger på, t.ex. en tapp'],
+          ['subtract', 'Skär ut', 'Skärs ut ur delen skissen ligger på, t.ex. ett tapphål'],
+        ] as const
+      ).map(([mode, label, tip]) => (
+        <Tip key={mode} label={tip} side="top">
+          <button
+            type="button"
+            aria-pressed={current === mode}
+            onClick={() => useToolStore.getState().setOp({ ...sketchOn, mode })}
+            className={toggleButton}
+          >
+            {label}
+          </button>
+        </Tip>
+      ))}
+    </div>
+  )
+
   if (tool === 'measure') return <RulerBox ruler={ruler} hover={rulerHover} onDone={() => setTool('select')} />
 
   return (
@@ -170,6 +200,7 @@ export function MeasureBox() {
               </Tip>
             )}
             {copyToggle}
+            {modeToggle}
             <span aria-hidden className="mx-0.5 h-6 w-px bg-line" />
             {(op || amend) && (
               <Tip label={op ? 'Avbryt' : 'Ångra'} keys={op ? 'Esc' : '⌘Z'} side="top">

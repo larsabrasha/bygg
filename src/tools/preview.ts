@@ -1,3 +1,4 @@
+import { sketchCombine } from '../model/combine'
 import { pushPullBody, sketchToPart } from '../model/geometry'
 import type { ModelDocument } from '../model/types'
 import type { Op } from '../store/toolStore'
@@ -46,6 +47,9 @@ export function previewDoc(op: Op, doc: ModelDocument, copy = false): Preview | 
     const part =
       s && sketchToPart(s, op.distance, { defId: PREVIEW_ID, instanceId: PREVIEW_ID, name: '', material: 'furu' })
     if (!part) return null
+    // På en del: urtaget eller tillägget syns i delen medan man drar.
+    const combine = sketchCombine(doc, s, op.distance, op.mode)
+    if (combine) part.instance.combine = combine
     return {
       doc: {
         ...doc,

@@ -6,6 +6,7 @@ import { useDocumentStore } from '../store/documentStore'
 import { useToolStore } from '../store/toolStore'
 import { bodyCenter } from '../model/geometry'
 import { pushPullAnchor, pushPullTargetOf } from '../tools/actions'
+import { toolTargets } from '../model/combine'
 import { previewDoc } from '../tools/preview'
 import { BodyMesh } from './BodyMesh'
 import { HOME } from './camera'
@@ -59,7 +60,9 @@ function Scene() {
   return (
     <>
       {bodies.map((b) => {
-        if (b.tool && b.tool.host !== shownHost && !preview?.affected.has(b.id)) return null
+        // En tapp syns också när delen med tapphålet är vald.
+        if (b.tool && !(shownHost && toolTargets(b.tool).includes(shownHost)) && !preview?.affected.has(b.id))
+          return null
         return (
           <BodyMesh
             key={b.id}
