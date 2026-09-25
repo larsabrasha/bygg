@@ -1,7 +1,7 @@
-import { type Box, bodyExtents } from './box'
+import { type Box, bodyExtents, keepRound } from './box'
 import { defaultAxes } from './partAxes'
 
-export { bodyExtents, type Box } from './box'
+export { bodyExtents, keepRound, linkedAxes, type Box } from './box'
 import { toWorld } from './frame'
 import type { Axis, Body, Face, Instance, PartDef, Rect, Sketch, Vec2, Vec3 } from './types'
 
@@ -25,6 +25,24 @@ export function rectSize(r: Rect): Vec2 {
   return [r.x1 - r.x0, r.y1 - r.y0]
 }
 
+/** Kvadraten som en cirkel med mitten center och en punkt på kanten at ligger inskriven i. */
+export function circleRect(center: Vec2, at: Vec2): Rect {
+  const r = Math.hypot(at[0] - center[0], at[1] - center[1])
+  return { x0: center[0] - r, y0: center[1] - r, x1: center[0] + r, y1: center[1] + r }
+}
+
+/**
+ * Vilken sida en träff på en cylinder räknas som, från ytans normal i delens
+ * egna koordinater (u, v, n). Ändarna är n+ och n−. På den runda sidan: den
+ * av delens fyra sidor som normalen pekar mest mot, så att push/pull där
+ * ändrar diametern åt det hållet.
+ */
+export function circleFace([x, y, z]: Vec3): Face {
+  if (Math.abs(z) >= Math.max(Math.abs(x), Math.abs(y))) return z >= 0 ? 'n+' : 'n-'
+  if (Math.abs(x) >= Math.abs(y)) return x >= 0 ? 'u+' : 'u-'
+  return y >= 0 ? 'v+' : 'v-'
+}
+
 export function isValidRect(r: Rect): boolean {
   const [w, h] = rectSize(r)
   return w >= MIN_SIZE && h >= MIN_SIZE
@@ -45,7 +63,12 @@ export function sketchToPart(
   if (Math.abs(distance) < MIN_SIZE || !isValidRect(sketch.rect)) return null
   const dims = { ...sketch.dims }
   if (depthExpr) dims.n = { expr: depthExpr, anchor: distance >= 0 ? 'min' : 'max' }
-  const box = { profile: sketch.rect, z0: Math.min(0, distance), z1: Math.max(0, distance) }
+  const box = {
+    profile: sketch.rect,
+    ...(sketch.shape && { shape: sketch.shape }),
+    z0: Math.min(0, distance),
+    z1: Math.max(0, distance),
+  }
   const def: PartDef = {
     id: props.defId,
     name: props.name,
@@ -59,6 +82,7 @@ export function sketchToPart(
 
 /**
  * Flyttar en av kroppens sidor längs sidans normal. Positivt avstånd = utåt.
+ * På en cylinders runda sida ändras diametern (se keepRound).
  * Null om något mått skulle bli mindre än MIN_SIZE.
  */
 export function pushPullBody<T extends Box>(body: T, face: Face, distance: number): T | null {
@@ -85,7 +109,7 @@ export function pushPullBody<T extends Box>(body: T, face: Face, distance: numbe
       break
   }
   if (!isValidRect(p) || z1 - z0 < MIN_SIZE) return null
-  return { ...body, profile: p, z0, z1 }
+  return keepRound({ ...body, profile: p, z0, z1 }, faceAxis(face))
 }
 
 /**

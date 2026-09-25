@@ -2,9 +2,9 @@ import { Html, Line } from '@react-three/drei'
 import { useMemo } from 'react'
 import { Vector3, type Camera, type Object3D } from 'three'
 import { toWorld } from '../model/frame'
-import { rectFromCorners } from '../model/geometry'
 import { add, scale } from '../model/vec'
 import type { HoverPoint, Op, PushPullOp, RotateOp } from '../store/toolStore'
+import { opRect } from '../tools/actions'
 import { opReadout } from '../tools/opReadout'
 import { ACCENT, AXIS_COLORS } from './colors'
 import { SketchMesh } from './SketchMesh'
@@ -74,11 +74,11 @@ export function OpOverlay({ op }: { op: Op }) {
 
 function OpShapes({ op }: { op: Op }) {
   if (op.kind === 'rect') {
-    const r = rectFromCorners(op.first, op.current)
+    const r = opRect(op)
     const at = toWorld(op.frame, [op.current[0], op.current[1], 0])
     return (
       <>
-        {(r.x1 > r.x0 || r.y1 > r.y0) && <SketchMesh frame={op.frame} rect={r} emphasis="selected" />}
+        {(r.x1 > r.x0 || r.y1 > r.y0) && <SketchMesh frame={op.frame} rect={r} shape={op.shape} emphasis="selected" />}
         <SnapMarker position={at} onTarget={op.onTarget[0] || op.onTarget[1]} />
       </>
     )

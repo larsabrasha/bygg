@@ -1,10 +1,16 @@
-import type { CutList } from './cutlist'
+import type { CutList, CutListRow } from './cutlist'
 import { numberFormat } from './numberFormat'
 
 /** Utan tusentalsavgränsare: "1200", inte "1 200", så att kalkylprogram läser det som tal. */
 const mm = numberFormat(1)
 
 export const formatMm = (n: number) => mm.format(n)
+
+/** Namnen på raden; en rund del får sin diameter efter, eftersom L×B×T bara visar ämnet. */
+export function rowNames(row: CutListRow): string {
+  const names = row.names.join(', ')
+  return row.round ? `${names} (rund Ø ${formatMm(row.round.diameter)})` : names
+}
 
 const CSV_HEADER = ['Antal', 'Namn', 'Längd (mm)', 'Bredd (mm)', 'Tjocklek (mm)', 'Material']
 
@@ -21,7 +27,7 @@ export function cutListCsv(list: CutList): string {
     CSV_HEADER,
     ...list.rows.map((r) => [
       String(r.count),
-      r.names.join(', '),
+      rowNames(r),
       formatMm(r.length),
       formatMm(r.width),
       formatMm(r.thickness),

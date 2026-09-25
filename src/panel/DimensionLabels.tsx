@@ -121,8 +121,9 @@ function DimensionLabel({
   )
 }
 
-/** Bokstav och namn för en axel: L längs fibern, T tjockleken, B det som blir över. */
+/** Bokstav och namn för en axel: L längs fibern, T tjockleken, B det som blir över. Ø för en cirkels diameter. */
 function labelOf(def: PartDef, axis: Axis): [string, string] {
+  if (def.shape === 'circle' && axis !== 'n') return ['Ø', 'Diameter']
   if (axis === def.grainAxis) return ['L', 'Längd']
   if (axis === def.thicknessAxis) return ['T', 'Tjocklek']
   return axis === widthAxis(def) ? ['B', 'Bredd'] : ['', '']
@@ -141,16 +142,18 @@ export function DimensionLabels() {
   const op = useToolStore((s) => s.op)
   const target = dimensionsFor(doc, selection, tool, op)
   if (!target) return null
+  const round = target.def.shape === 'circle'
   return (
     <div key={target.body.id}>
-      {AXES.map((axis) => (
+      {/* En cirkel har ett mått för diametern, på u (v är samma mått). */}
+      {AXES.filter((axis) => !(round && axis === 'v')).map((axis) => (
         <DimensionLabel
           key={axis}
           body={target.body}
           def={target.def}
           axis={axis}
           live={target.live}
-          changing={target.changing === axis}
+          changing={target.changing === axis || (round && axis === 'u' && target.changing === 'v')}
         />
       ))}
     </div>

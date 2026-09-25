@@ -4,6 +4,7 @@ import { GreaterDepth, MeshStandardMaterial } from 'three'
 import { bodyExtents } from '../model/geometry'
 import { FACES, type Body, type Face } from '../model/types'
 import { ACCENT, ACCENT_LIGHT, EDGE, materialColor } from './colors'
+import { cylinderGeometry } from './cylinder'
 import { frameQuaternion } from './frameTransform'
 
 interface Props {
@@ -22,24 +23,32 @@ function BodyMeshImpl({ body, selected = false, sibling = false, highlightFace =
   const { x0, x1, y0, y1 } = body.profile
   const center: [number, number, number] = [(x0 + x1) / 2, (y0 + y1) / 2, (body.z0 + body.z1) / 2]
 
+  const round = body.shape === 'circle'
+
   // En material per sida (i BoxGeometrys ordning) så att en sida kan markeras,
   // och så att raycast ger materialIndex = vilken sida som träffades.
+  // En cylinder har tre: runda sidan, n+ och n− (CylinderGeometrys ordning).
   const color = materialColor(body.material)
-  const materials = useMemo(
-    () =>
-      FACES.map((face) => {
-        const lit = selected || face === highlightFace
-        return new MeshStandardMaterial({
-          color,
-          emissive: lit ? ACCENT : '#000000',
-          emissiveIntensity: face === highlightFace ? 0.45 : lit ? 0.2 : 0,
-          transparent: preview,
-          opacity: preview ? 0.8 : 1,
-        })
-      }),
-    [color, selected, highlightFace, preview],
-  )
+  const materials = useMemo(() => {
+    const parts: (readonly Face[])[] = round ? [['u+', 'u-', 'v+', 'v-'], ['n+'], ['n-']] : FACES.map((f) => [f])
+    return parts.map((faces) => {
+      const marked = !!highlightFace && faces.includes(highlightFace)
+      const lit = selected || marked
+      return new MeshStandardMaterial({
+        color,
+        emissive: lit ? ACCENT : '#000000',
+        emissiveIntensity: marked ? 0.45 : lit ? 0.2 : 0,
+        transparent: preview,
+        opacity: preview ? 0.8 : 1,
+      })
+    })
+  }, [round, color, selected, highlightFace, preview])
   useEffect(() => () => materials.forEach((m) => m.dispose()), [materials])
+
+  // Cylinderns axel längs n (three.js lägger den längs y). Ändarnas kanter blir cirklar;
+  // den runda sidan har inga kanter, eftersom vinkeln mellan segmenten är liten.
+  const cylinder = useMemo(() => (round ? cylinderGeometry(w, d) : null), [round, w, d])
+  useEffect(() => () => cylinder?.dispose(), [cylinder])
 
   const edge = selected || preview ? ACCENT : sibling ? ACCENT_LIGHT : EDGE
 
@@ -48,9 +57,10 @@ function BodyMeshImpl({ body, selected = false, sibling = false, highlightFace =
       <mesh
         position={center}
         material={materials}
-        userData={preview ? { pivot: true } : { pick: { kind: 'body', id: body.id } }}
+        {...(cylinder && { geometry: cylinder })}
+        userData={preview ? { pivot: true } : { pick: { kind: 'body', id: body.id, round } }}
       >
-        <boxGeometry args={[w, h, d]} />
+        {!cylinder && <boxGeometry args={[w, h, d]} />}
         <Edges color={edge} lineWidth={selected ? 2.5 : sibling ? 1.8 : 1} />
         {/*
           Den valda delens kanter där något ligger framför (en annan del eller
@@ -88,6 +98,7 @@ const sameBody = (a: Body, b: Body) =>
     a.profile === b.profile &&
     a.z0 === b.z0 &&
     a.z1 === b.z1 &&
+    a.shape === b.shape &&
     a.material === b.material)
 
 /**

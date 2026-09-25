@@ -2,7 +2,8 @@ import type { CameraControlsImpl } from '@react-three/drei'
 import { useThree } from '@react-three/fiber'
 import { useEffect, useMemo } from 'react'
 import { Raycaster, Vector2, Vector3, type Intersection, type Object3D, type PerspectiveCamera } from 'three'
-import { FACES, type Vec3 } from '../model/types'
+import { circleFace } from '../model/geometry'
+import { FACES, type Face, type Vec3 } from '../model/types'
 import { useDocumentStore } from '../store/documentStore'
 import { useToolStore, type Op } from '../store/toolStore'
 import { useViewStore } from '../store/viewStore'
@@ -130,12 +131,18 @@ export function ToolController() {
 
     const toHit = (hit: Intersection): Hit => {
       const p = hit.object.userData.pick as
-        { kind: 'body' | 'sketch'; id: string } | Extract<PickTarget, { kind: 'handle' | 'axis' | 'rotate' }>
+        | { kind: 'body' | 'sketch'; id: string; round?: boolean }
+        | Extract<PickTarget, { kind: 'handle' | 'axis' | 'rotate' }>
+      // En cylinders sida räknas fram ur normalen (i delens egna koordinater), en lådas ur materialet.
+      const face = (): Face =>
+        'round' in p && p.round && hit.face
+          ? circleFace(hit.face.normal.toArray() as Vec3)
+          : FACES[hit.face?.materialIndex ?? 0]!
       const target: PickTarget =
         p.kind === 'handle' || p.kind === 'axis' || p.kind === 'rotate'
           ? p
           : p.kind === 'body'
-            ? { kind: 'body', id: p.id, face: FACES[hit.face?.materialIndex ?? 0]! }
+            ? { kind: 'body', id: p.id, face: face() }
             : { kind: 'sketch', id: p.id }
       return { point: hit.point.toArray() as Vec3, target }
     }
@@ -319,7 +326,7 @@ export function ToolController() {
         return
       }
       el.style.cursor = hit && ON_TOP.has(hit.target.kind) ? 'grab' : ''
-      if (tool === 'rect') {
+      if (tool === 'rect' || tool === 'circle') {
         hoverAt(hit, hit ? tolFor(hit.point, 'mouse') : 0)
         return
       }

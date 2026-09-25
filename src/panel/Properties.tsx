@@ -123,13 +123,21 @@ const Computed = ({ value }: { value: number }) => <span className="text-xs text
  */
 function ExtentFields({ body, def }: { body: Body; def: PartDef }) {
   const setExtent = useDocumentStore((s) => s.setExtent)
-  const fields: [string, Axis][] = [
-    ['Längd', def.grainAxis],
-    ['Bredd', widthAxis(def)],
-    ['Tjocklek', def.thicknessAxis],
-  ]
+  const name = (axis: Axis) => (axis === def.grainAxis ? 'Längd' : axis === def.thicknessAxis ? 'Tjocklek' : 'Bredd')
+  // En cylinder har två mått: diametern (u och v är samma) och måttet längs den.
+  const fields: [string, Axis][] =
+    def.shape === 'circle'
+      ? [
+          ['Diameter', 'u'],
+          [name('n'), 'n'],
+        ]
+      : [
+          ['Längd', def.grainAxis],
+          ['Bredd', widthAxis(def)],
+          ['Tjocklek', def.thicknessAxis],
+        ]
   return (
-    <div className="grid grid-cols-3 gap-2">
+    <div className={`grid gap-2 ${fields.length === 2 ? 'grid-cols-2' : 'grid-cols-3'}`}>
       {fields.map(([label, axis]) => {
         const expr = def.dims?.[axis]?.expr
         const size = extent(body, axis)
@@ -333,7 +341,10 @@ export function Properties() {
         <div className="flex flex-col gap-4">
           <Group title="Skiss">
             <p className="text-base font-semibold tabular-nums">
-              {(([w, h]) => `${fmt.format(w)} × ${fmt.format(h)} mm`)(rectSize(sketch.rect))}
+              {(([w, h]) =>
+                sketch.shape === 'circle' ? `Ø ${fmt.format(w)} mm` : `${fmt.format(w)} × ${fmt.format(h)} mm`)(
+                rectSize(sketch.rect),
+              )}
             </p>
             <div className="grid grid-cols-2 gap-2">
               <button className={primaryButton} onClick={() => beginPushPull({ kind: 'sketch', id: sketch.id })}>

@@ -23,6 +23,7 @@ export function resolveBodies(doc: ModelDocument): Body[] {
       thicknessAxis: d.thicknessAxis,
       frame: inst.frame,
       profile: d.profile,
+      ...(d.shape && { shape: d.shape }),
       z0: d.z0,
       z1: d.z1,
     })

@@ -11,8 +11,8 @@ const plain = numberFormat(1)
 /**
  * Värdet som ändras under en operation och var det ska visas i 3D: vid
  * pilspetsen (push/pull), vid det flyttade (flytta) eller vid ekern man vrider
- * (vrida). Där tittar man medan man drar. Null när inget har ändrats än,
- * eller för en rektangel (den har måtten på sina kanter).
+ * (vrida), eller diametern vid pekaren (cirkel). Där tittar man medan man drar.
+ * Null när inget har ändrats än, eller för en rektangel.
  * arrowLength = pilens längd i mm, så att värdet hamnar vid spetsen och inte vid ytan.
  */
 export function opReadout(op: Op, arrowLength: number): { at: Vec3; text: string } | null {
@@ -28,6 +28,12 @@ export function opReadout(op: Op, arrowLength: number): { at: Vec3; text: string
     // Längs en pil har värdet ett tecken; fritt i planet är det bara hur långt.
     const text = op.axis !== null ? delta.format(du) : plain.format(Math.hypot(du, dv))
     return { at, text: `${text} mm` }
+  }
+  // En cirkel har inga kanter att visa måtten på, så diametern visas vid pekaren.
+  if (op.kind === 'rect' && op.shape === 'circle') {
+    const d = 2 * Math.hypot(op.current[0] - op.first[0], op.current[1] - op.first[1])
+    if (d === 0) return null
+    return { at: toWorld(op.frame, [op.current[0], op.current[1], 0]), text: `Ø ${plain.format(d)} mm` }
   }
   if (op.kind === 'rotate') {
     if (op.angle === 0) return null

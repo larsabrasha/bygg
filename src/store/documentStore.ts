@@ -5,11 +5,12 @@ import {
   bodyExtents,
   faceAxis,
   isValidRect,
+  linkedAxes,
   nextPartName,
   pushPullBody,
   sketchToPart,
 } from '../model/geometry'
-import { faceFrame, rotateFrame } from '../model/frame'
+import { rotateFrame } from '../model/frame'
 import { newId } from '../model/id'
 import { applyParams, evaluateParams, isNameUsed, paramScope, setBoxExtent } from '../model/params'
 import { withAxes } from '../model/partAxes'
@@ -24,6 +25,7 @@ import type {
   ModelDocument,
   PartDef,
   Rect,
+  Shape,
   Vec3,
   WorldAxis,
 } from '../model/types'
@@ -43,8 +45,8 @@ interface Snapshot {
 export type PartPatch = Partial<Pick<PartDef, 'name' | 'material' | 'grainAxis' | 'thicknessAxis'>>
 
 interface DocumentState extends Snapshot {
-  /** Returnerar skissens id, eller null om rektangeln är för liten. */
-  addSketch: (frame: Frame, rect: Rect, dims?: DimExprs) => string | null
+  /** Returnerar skissens id, eller null om rektangeln är för liten. shape = cirkel inskriven i rect. */
+  addSketch: (frame: Frame, rect: Rect, dims?: DimExprs, shape?: Shape) => string | null
   /** Drar ut en skiss till en ny del. Skissen försvinner. Returnerar kopians id. */
   pushPullSketch: (sketchId: string, distance: number, depthExpr?: string) => string | null
   /** Flyttar en sida på en del (och alla dess kopior). False om resultatet blir ogiltigt. */
@@ -108,9 +110,10 @@ function withDims(def: PartDef, dims: DimExprs): PartDef {
   return Object.keys(dims).length ? { ...rest, dims } : rest
 }
 
-function withoutAxis(dims: DimExprs | undefined, axis: Axis): DimExprs {
+/** dims utan axeln, och för en cirkel utan båda profilaxlarna: de styr samma diameter (se linkedAxes). */
+function withoutAxis(dims: DimExprs | undefined, axis: Axis, box: Pick<PartDef, 'shape'> = {}): DimExprs {
   const out = { ...dims }
-  delete out[axis]
+  for (const a of linkedAxes(box, axis)) delete out[a]
   return out
 }
 
@@ -179,10 +182,16 @@ export const useDocumentStore = create<DocumentState>()((set, get) => {
   return {
     ...initial,
 
-    addSketch: (frame, rect, dims) => {
+    addSketch: (frame, rect, dims, shape) => {
       if (!isValidRect(rect)) return null
       const { doc } = get()
-      const sketch = { id: newId(), frame, rect, ...(dims && Object.keys(dims).length ? { dims } : {}) }
+      const sketch = {
+        id: newId(),
+        frame,
+        rect,
+        ...(shape && { shape }),
+        ...(dims && Object.keys(dims).length ? { dims } : {}),
+      }
       commit({ ...doc, sketches: [...doc.sketches, sketch] }, { kind: 'sketch', id: sketch.id })
       return sketch.id
     },
@@ -216,16 +225,18 @@ export const useDocumentStore = create<DocumentState>()((set, get) => {
       const next = found && pushPullBody(found.def, face, distance)
       if (!next) return false
       // Handpåläggning vinner: axeln slutar styras av sitt uttryck.
-      const def = withDims(next, withoutAxis(next.dims, faceAxis(face)))
-      // Flyttas sidan närmast origo, slutar läget längs den axeln att styras av sitt uttryck,
-      // annars skulle delen flytta tillbaka och växa åt andra hållet.
+      const def = withDims(next, withoutAxis(next.dims, faceAxis(face), next))
+      // Flyttas hörnet närmast origo (sidan närmast origo, eller en cylinder som
+      // blir tjockare åt båda håll), slutar läget längs den axeln att styras av
+      // sitt uttryck, annars skulle delen flytta tillbaka och växa åt andra hållet.
       const doc = replaceDef(get().doc, def)
       const instances = doc.instances.map((i) => {
         if (i.defId !== def.id || !i.pos) return i
-        const n = faceFrame({ ...def, id: i.id, defId: def.id, frame: i.frame }, face).n
+        const before = minCorner(i, found.def)
+        const after = minCorner(i, def)
         return withoutPos(
           i,
-          WORLD_AXES.filter((_, k) => n[k]! < -0.5),
+          WORLD_AXES.filter((_, k) => Math.abs(after[k]! - before[k]!) > 1e-6),
         )
       })
       commit({ ...doc, instances }, { kind: 'body', id: instanceId, face })
@@ -329,7 +340,7 @@ export const useDocumentStore = create<DocumentState>()((set, get) => {
       const resized = setBoxExtent(found.def, axis, Math.abs(r.value), anchor)
       if (!resized) return 'För litet mått'
       // Bara uttryck med parametrar sparas; ett rent tal är bara ett tal.
-      const rest = withoutAxis(found.def.dims, axis)
+      const rest = withoutAxis(found.def.dims, axis, found.def)
       const dims = isConstant(text) ? rest : { ...rest, [axis]: { expr: text.trim(), anchor } }
       commit(replaceDef(doc, withDims(resized, dims)))
       return null

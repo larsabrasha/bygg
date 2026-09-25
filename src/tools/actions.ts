@@ -1,6 +1,6 @@
 import { faceBounds, faceFrame, GROUND_FRAME, rotateFrame, toLocal2D, toWorld } from '../model/frame'
 import { isConstant } from '../model/expr'
-import { bodyCenter, bodyExtents, pushPullMin, rectFromCorners } from '../model/geometry'
+import { bodyCenter, bodyExtents, circleRect, pushPullMin, rectFromCorners, rectSize } from '../model/geometry'
 import { evaluateIn } from '../model/params'
 import { rulerPointOn, type RulerPoint } from '../model/ruler'
 import { resolveBodies } from '../model/resolve'
@@ -18,6 +18,7 @@ import {
   type MoveOp,
   type Op,
   type PushPullTarget,
+  type RectOp,
   type RotateOp,
 } from '../store/toolStore'
 
@@ -83,7 +84,11 @@ function planeForHit(hit: Hit): { frame: Frame; bounds: Rect | null } | null {
     }
     case 'body': {
       const b = findBody(hit.target.id)
-      return b ? { frame: faceFrame(b, hit.target.face), bounds: faceBounds(b, hit.target.face) } : null
+      if (!b) return null
+      // På en cylinders runda sida: planet som nuddar cylindern längs en linje, i den av
+      // de fyra huvudriktningarna man tryckte närmast (sidan på lådan runt cylindern).
+      // Linjen där planet nuddar är ett snäppmål (kantmitt), så att man kan rita mitt på den.
+      return { frame: faceFrame(b, hit.target.face), bounds: faceBounds(b, hit.target.face) }
     }
     case 'handle':
     case 'axis':
@@ -184,14 +189,22 @@ export function tap(hit: Hit | null, tol: number) {
 
   if (!hit) return
 
-  if (tool === 'rect') {
+  if (tool === 'rect' || tool === 'circle') {
     const plane = planeForHit(hit)
     if (!plane) return
     const targets = rectTargets(plane.frame, plane.bounds)
     const { point, onTarget } = snapPoint(toLocal2D(plane.frame, hit.point), targets, tol)
     // Första hörnet blir också ett mål, så att man kan dra rakt ut från det.
     const withFirst = { xs: [...targets.xs, point[0]], ys: [...targets.ys, point[1]] }
-    setOp({ kind: 'rect', ...plane, targets: withFirst, first: point, current: point, onTarget })
+    setOp({
+      kind: 'rect',
+      ...(tool === 'circle' && { shape: 'circle' as const }),
+      ...plane,
+      targets: withFirst,
+      first: point,
+      current: point,
+      onTarget,
+    })
     return
   }
 
@@ -230,6 +243,11 @@ export function doubleTap(hit: Hit | null): boolean {
   docs().select({ kind: 'body', id: hit.target.id, face: hit.target.face })
   tools().setTool('move')
   return true
+}
+
+/** Rektangeln en pågående rektangel eller cirkel ritar; för en cirkel kvadraten den ligger inskriven i. */
+export function opRect(op: RectOp): Rect {
+  return op.shape === 'circle' ? circleRect(op.first, op.current) : rectFromCorners(op.first, op.current)
 }
 
 /** Det man gör push/pull på för ett val: skissen, eller delens valda yta. Null om ingen yta är vald. */
@@ -408,7 +426,7 @@ export function rulerHoverAt(hit: Hit | null, tol: number) {
 /** Muspekaren rör sig utan pågående operation: visa var första hörnet skulle hamna. */
 export function hoverAt(hit: Hit | null, tol: number) {
   const { tool, setHoverPoint } = tools()
-  if (tool !== 'rect' || !hit) {
+  if ((tool !== 'rect' && tool !== 'circle') || !hit) {
     if (tools().hoverPoint) setHoverPoint(null)
     return
   }
@@ -426,6 +444,15 @@ export function move(ray: Ray, tol: number) {
   if (op.kind === 'rect') {
     const p = intersectPlane(ray, op.frame)
     if (!p) return
+    if (op.shape === 'circle') {
+      // Diametern snäpper till rutnätet; punkten på kanten ligger kvar åt det håll pekaren är.
+      const [dx, dy] = [p[0] - op.first[0], p[1] - op.first[1]]
+      const dist = Math.hypot(dx, dy)
+      const d = snapValue(2 * dist, GRID_STEP, [], tol).value
+      const [ux, uy] = dist > 1e-9 ? [dx / dist, dy / dist] : [1, 0]
+      setOp({ ...op, current: [op.first[0] + (ux * d) / 2, op.first[1] + (uy * d) / 2], onTarget: [false, false] })
+      return
+    }
     const { point, onTarget } = snapPoint(p, op.targets, tol)
     setOp({ ...op, current: point, onTarget })
     return
@@ -519,7 +546,7 @@ export function commit(op: Op | null = tools().op, exprs: { dims?: DimExprs; dep
   if (!op) return
   const d = docs()
   const before = d.doc
-  if (op.kind === 'rect') d.addSketch(op.frame, rectFromCorners(op.first, op.current), exprs.dims)
+  if (op.kind === 'rect') d.addSketch(op.frame, opRect(op), exprs.dims, op.shape)
   else if (op.kind === 'move' || op.kind === 'rotate') {
     // Man stannar i Flytta, så att man kan flytta längs en axel till. Klar eller Esc går till Välj.
     const step = stepOf(op)
@@ -666,6 +693,7 @@ export function cancel() {
 
 /** Aktuella mått för förhandsvisningen: [längd, bredd] för rektangel, annars [avstånd]. */
 export function liveMeasure(op: Op): number[] {
+  if (op.kind === 'rect' && op.shape === 'circle') return [rectSize(opRect(op))[0]]
   if (op.kind === 'rect') return [Math.abs(op.current[0] - op.first[0]), Math.abs(op.current[1] - op.first[1])]
   if (op.kind === 'rotate') return [op.angle]
   if (op.kind === 'move') return [op.axis !== null ? op.delta[0] : Math.hypot(op.delta[0], op.delta[1])]
@@ -698,6 +726,16 @@ export function applyMeasure(): boolean {
   const exprOf = (text: string) => (text.trim() !== '' && !isConstant(text) ? text.trim() : undefined)
   const signed = (text: string, value: number, liveSign: number) =>
     /^[-−]/.test(text.trim()) ? value : (liveSign || 1) * Math.abs(value)
+
+  if (op.kind === 'rect' && op.shape === 'circle') {
+    const d = read(measure[0], liveMeasure(op)[0]!)
+    if (d === null) return false
+    const e = exprOf(measure[0])
+    // Diametern styr profilens u; v följer med (se keepRound).
+    const dims: DimExprs = e ? { u: { expr: e, anchor: 'min' } } : {}
+    commit({ ...op, current: [op.first[0] + Math.abs(d) / 2, op.first[1]] }, { dims })
+    return true
+  }
 
   if (op.kind === 'rect') {
     const [liveW, liveH] = liveMeasure(op) as [number, number]

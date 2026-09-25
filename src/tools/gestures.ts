@@ -54,6 +54,7 @@ export function pressOwner(
     // Med mus vrider vänsterknappen kameran även här; man ritar med två klick.
     // Med finger eller penna ritar man genom att dra från hörn till hörn.
     case 'rect':
+    case 'circle':
       return kind !== 'mouse' && target !== null ? 'tool' : 'camera'
     case 'pushpull':
       return target === 'sketch' || target === 'body' ? 'tool' : 'camera'

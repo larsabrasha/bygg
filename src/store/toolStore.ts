@@ -1,15 +1,19 @@
 import { create, type StoreApi } from 'zustand'
 import type { RulerPoint } from '../model/ruler'
 import type { PlaneTargets } from '../model/snapping'
-import type { ModelDocument } from '../model/types'
+import type { ModelDocument, Shape } from '../model/types'
 import { useDocumentStore, type Selection } from './documentStore'
 import type { Face, Frame, Rect, Vec2, Vec3 } from '../model/types'
 
-export type Tool = 'select' | 'rect' | 'pushpull' | 'move' | 'measure'
+export type Tool = 'select' | 'rect' | 'circle' | 'pushpull' | 'move' | 'measure'
 
-/** Pågående rektangel: första hörnet är satt, current följer pekaren. */
+/**
+ * Pågående rektangel: första hörnet är satt, current följer pekaren.
+ * Med shape 'circle' är first mitten och current en punkt på kanten.
+ */
 export interface RectOp {
   kind: 'rect'
+  shape?: Shape
   frame: Frame
   /** Ytan man ritar på, i frame-koordinater. Null på golvet. */
   bounds: Rect | null

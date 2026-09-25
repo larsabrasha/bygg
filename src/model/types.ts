@@ -21,6 +21,13 @@ export interface Rect {
   y1: number
 }
 
+/**
+ * Profilens form. Saknas = rektangel. En cirkel ligger inskriven i profilens
+ * rektangel, som då alltid är kvadratisk; rektangeln är cirkelns mått och det
+ * som snäppning, placering och kaplista räknar med.
+ */
+export type Shape = 'circle'
+
 /** Axel i en frame: u, v eller n. */
 export type Axis = 'u' | 'v' | 'n'
 
@@ -40,13 +47,15 @@ export interface Sketch {
   id: string
   frame: Frame
   rect: Rect
+  shape?: Shape
   /** Uttryck för bredd (u) och höjd (v), om de skrevs in som uttryck. */
   dims?: DimExprs
 }
 
 /**
  * Delens form, delad av alla kopior (som en komponent i SketchUp).
- * Profilen (rektangel) i u/v, utdragen längs n från z0 till z1, i lokala koordinater.
+ * Profilen (rektangel, eller cirkel inskriven i den) i u/v, utdragen längs n
+ * från z0 till z1, i lokala koordinater. En utdragen cirkel är en cylinder.
  */
 export interface PartDef {
   id: string
@@ -57,6 +66,7 @@ export interface PartDef {
   /** Axeln för tjockleken (T). Alltid en annan axel än grainAxis; den tredje är bredden (B). */
   thicknessAxis: Axis
   profile: Rect
+  shape?: Shape
   z0: number
   z1: number
   dims?: DimExprs
@@ -110,6 +120,7 @@ export interface Body {
   thicknessAxis: Axis
   frame: Frame
   profile: Rect
+  shape?: Shape
   z0: number
   z1: number
 }

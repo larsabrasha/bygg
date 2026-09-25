@@ -2,7 +2,7 @@ import { axesFromLegacyGrain } from '../model/partAxes'
 import type { ModelDocument } from '../model/types'
 
 /** Höj när formatet ändras, och lägg till en konvertering i migrate. */
-export const FORMAT_VERSION = 4
+export const FORMAT_VERSION = 5
 
 export interface SavedFile {
   version: number
@@ -21,6 +21,7 @@ const isOrientation = (x: unknown) => isObj(x) && isVec3(x.u) && isVec3(x.v) && 
 const isFrame = (x: unknown) => isOrientation(x) && isVec3((x as Record<string, unknown>).origin)
 const isAxis = (x: unknown) => x === 'u' || x === 'v' || x === 'n'
 const isRect = (x: unknown) => isObj(x) && isNum(x.x0) && isNum(x.y0) && isNum(x.x1) && isNum(x.y1)
+const isShape = (x: unknown) => x === undefined || x === 'circle'
 
 /** Grundlig nog formkontroll för att inte krascha på en trasig eller främmande fil. */
 function isModelDocument(x: unknown): x is ModelDocument {
@@ -28,7 +29,9 @@ function isModelDocument(x: unknown): x is ModelDocument {
   const { sketches, defs, instances, params } = x
   return (
     Array.isArray(sketches) &&
-    sketches.every((s) => isObj(s) && typeof s.id === 'string' && isFrame(s.frame) && isRect(s.rect)) &&
+    sketches.every(
+      (s) => isObj(s) && typeof s.id === 'string' && isFrame(s.frame) && isRect(s.rect) && isShape(s.shape),
+    ) &&
     Array.isArray(defs) &&
     defs.every(
       (d) =>
@@ -36,6 +39,7 @@ function isModelDocument(x: unknown): x is ModelDocument {
         typeof d.id === 'string' &&
         typeof d.name === 'string' &&
         isRect(d.profile) &&
+        isShape(d.shape) &&
         isNum(d.z0) &&
         isNum(d.z1) &&
         isAxis(d.grainAxis) &&
@@ -86,6 +90,8 @@ export function migrate(raw: unknown): LoadResult {
   if (raw.version < 2) doc = upgradeV1Doc(doc)
   // 2 → 3: kopior kan ha pos (läge som uttryck). Frivilligt fält, så inget att konvertera.
   // 3 → 4: kopior kan ha rest (viloläge för vinklarna) och stå snett. Frivilligt fält.
+  // 4 → 5: skisser och former kan ha shape ('circle'). Frivilligt fält.
+  // (Versionen höjs ändå, så att en äldre app inte läser cylindrar som lådor.)
   if (!isModelDocument(doc)) return { ok: false, reason: 'Trasigt dokument' }
   return { ok: true, doc }
 }

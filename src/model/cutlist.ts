@@ -1,3 +1,4 @@
+import { bodyExtents } from './box'
 import { partDims } from './partAxes'
 import type { Body } from './types'
 
@@ -8,6 +9,11 @@ export interface CutListRow {
   length: number
   width: number
   thickness: number
+  /**
+   * Rund del (cylinder): diametern och längden längs cylindern. L×B×T är
+   * ändå ämnet man kapar till, där två av måtten är diametern.
+   */
+  round?: { diameter: number; length: number }
   material: string
   bodyIds: string[]
 }
@@ -20,7 +26,7 @@ export interface CutList {
 }
 
 /** Mått avrundas till 0,1 mm så att flyttalsbrus inte delar upp lika delar. */
-const round = (n: number) => Math.round(n * 10) / 10
+const round01 = (n: number) => Math.round(n * 10) / 10
 
 /**
  * Kaplista: L×B×T mäts i varje dels egen riktning (L längs fibern, T tjockleken),
@@ -33,12 +39,15 @@ export function buildCutList(bodies: readonly Body[]): CutList {
 
   for (const b of bodies) {
     const d = partDims(b)
-    const length = round(d.length)
-    const width = round(d.width)
-    const thickness = round(d.thickness)
-    totalVolumeM3 += (d.length * d.width * d.thickness) / 1e9
+    const length = round01(d.length)
+    const width = round01(d.width)
+    const thickness = round01(d.thickness)
+    const [du, , dn] = bodyExtents(b)
+    const round = b.shape === 'circle' ? { diameter: round01(du), length: round01(dn) } : undefined
+    // En cylinder fyller π/4 av sin fyrkant.
+    totalVolumeM3 += ((round ? Math.PI / 4 : 1) * d.length * d.width * d.thickness) / 1e9
 
-    const key = `${b.material}|${length}|${width}|${thickness}`
+    const key = `${b.material}|${length}|${width}|${thickness}|${round ? 'rund' : ''}`
     const row = groups.get(key)
     if (row) {
       row.count++
@@ -52,6 +61,7 @@ export function buildCutList(bodies: readonly Body[]): CutList {
         length,
         width,
         thickness,
+        ...(round && { round }),
         material: b.material,
         bodyIds: [b.id],
       })

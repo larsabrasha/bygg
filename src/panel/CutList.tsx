@@ -48,7 +48,9 @@ export function CutList() {
                     <td className="text-right whitespace-nowrap tabular-nums">{row.count}</td>
                     <td>{row.names.join(', ')}</td>
                     <td className="text-right whitespace-nowrap tabular-nums">
-                      {num.format(row.length)} × {num.format(row.width)} × {num.format(row.thickness)}
+                      {row.round
+                        ? `Ø ${num.format(row.round.diameter)} × ${num.format(row.round.length)}`
+                        : `${num.format(row.length)} × ${num.format(row.width)} × ${num.format(row.thickness)}`}
                     </td>
                     <td>{row.material}</td>
                   </tr>

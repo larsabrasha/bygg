@@ -1,4 +1,4 @@
-import { MousePointer2, Ruler, Square, type LucideIcon } from 'lucide-react'
+import { Circle, MousePointer2, Ruler, Square, type LucideIcon } from 'lucide-react'
 import { useToolStore, type Tool } from '../store/toolStore'
 import { useViewStore } from '../store/viewStore'
 import { Tip } from './Tip'
@@ -7,10 +7,11 @@ import { ICON, iconButton } from './ui'
 const TOOLS: { tool: Tool; label: string; key: string; Icon: LucideIcon }[] = [
   { tool: 'select', label: 'Välj', key: 'Mellanslag', Icon: MousePointer2 },
   { tool: 'rect', label: 'Rektangel', key: 'R', Icon: Square },
+  { tool: 'circle', label: 'Cirkel', key: 'C', Icon: Circle },
   { tool: 'measure', label: 'Mät', key: 'T', Icon: Ruler },
 ]
 
-/** Välj, Rektangel och Mät. Namnet finns i aria-label (skärmläsare) och i tooltipen med kortkommandot. */
+/** Välj, Rektangel, Cirkel och Mät. Namnet finns i aria-label (skärmläsare) och i tooltipen med kortkommandot. */
 export function ToolButtons({ tipSide = 'bottom' }: { tipSide?: 'bottom' | 'left' }) {
   const tool = useToolStore((s) => s.tool)
   const setTool = useToolStore((s) => s.setTool)

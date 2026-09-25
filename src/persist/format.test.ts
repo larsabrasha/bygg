@@ -22,6 +22,13 @@ const doc: ModelDocument = {
 }
 
 describe('format', () => {
+  it('läser en cylinder och avvisar en okänd form', () => {
+    const round = { ...doc, defs: [{ ...doc.defs[0]!, shape: 'circle' as const }] }
+    expect(migrate(JSON.parse(JSON.stringify(serialize(round))))).toEqual({ ok: true, doc: round })
+    const odd = { ...doc, defs: [{ ...doc.defs[0]!, shape: 'hexagon' }] }
+    expect(migrate({ version: FORMAT_VERSION, savedAt: '', doc: odd }).ok).toBe(false)
+  })
+
   it('läser tillbaka det som sparats, även efter JSON (som IndexedDB-kloning)', () => {
     const saved = JSON.parse(JSON.stringify(serialize(doc, new Date('2026-09-25T12:00:00Z'))))
     expect(saved.version).toBe(FORMAT_VERSION)

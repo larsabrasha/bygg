@@ -3,6 +3,7 @@ import { USDZExporter } from 'three/examples/jsm/exporters/USDZExporter.js'
 import { bodyExtents } from '../model/geometry'
 import type { Body } from '../model/types'
 import { materialColor } from './colors'
+import { cylinderGeometry } from './cylinder'
 import { frameQuaternion } from './frameTransform'
 
 /** Appen ritar i millimeter, USDZ-filen är i meter. */
@@ -24,7 +25,8 @@ export function buildArScene(bodies: readonly Body[]): Scene {
     }
     const [w, h, d] = bodyExtents(b)
     const { x0, x1, y0, y1 } = b.profile
-    const mesh = new Mesh(new BoxGeometry(w, h, d), material)
+    const geometry = b.shape === 'circle' ? cylinderGeometry(w, d) : new BoxGeometry(w, h, d)
+    const mesh = new Mesh(geometry, material)
     mesh.name = b.name
     mesh.position.set((x0 + x1) / 2, (y0 + y1) / 2, (b.z0 + b.z1) / 2)
     const part = new Group()

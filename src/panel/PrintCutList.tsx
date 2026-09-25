@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import { buildCutList } from '../model/cutlist'
-import { formatMm } from '../model/cutlistExport'
+import { formatMm, rowNames } from '../model/cutlistExport'
 import { useBodies } from '../store/documentStore'
 import { useLibraryStore } from '../store/libraryStore'
 import { numberFormat } from '../model/numberFormat'
@@ -42,7 +42,7 @@ export function PrintCutList() {
                 <span className="block size-4 border border-black" />
               </td>
               <td className="text-right">{row.count}</td>
-              <td>{row.names.join(', ')}</td>
+              <td>{rowNames(row)}</td>
               <td className="text-right">{formatMm(row.length)}</td>
               <td className="text-right">{formatMm(row.width)}</td>
               <td className="text-right">{formatMm(row.thickness)}</td>

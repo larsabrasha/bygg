@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest'
+import { toWorld } from '../model/frame'
 import { bodyCenter } from '../model/geometry'
 import { resolveBodies } from '../model/resolve'
 import type { Vec3 } from '../model/types'
@@ -9,10 +10,12 @@ import {
   amendLast,
   applyMeasure,
   beginPushPull,
+  cancel,
   commit,
   doubleTap,
   extendCopies,
   hoverAt,
+  liveMeasure,
   move,
   opFocus,
   regrab,
@@ -52,6 +55,55 @@ function extrude(sketchId: string, text: string) {
   applyMeasure()
   return bodies().at(-1)!
 }
+
+describe('cirkelverktyget', () => {
+  it('ritar från mitten, och diametern snäpper till rutnätet', () => {
+    tools().setTool('circle')
+    tap({ point: [100, 0, -100], target: { kind: 'ground' } }, 0)
+    // 152 mm ut från mitten: diametern 304 blir 300.
+    move(down(252, -100), 10)
+    expect(liveMeasure(tools().op!)).toEqual([300])
+    commit()
+    const s = doc().sketches[0]!
+    expect(s).toMatchObject({ shape: 'circle', rect: { x0: -50, y0: -50, x1: 250, y1: 250 } })
+    expect(tools().tool).toBe('circle')
+  })
+
+  it('tar diametern från måttfältet, och drar ut till en cylinder', () => {
+    tools().setTool('circle')
+    tap({ point: [0, 0, 0], target: { kind: 'ground' } }, 0)
+    move(down(70, 0), 0)
+    tools().setMeasure(0, '40')
+    expect(applyMeasure()).toBe(true)
+    const s = doc().sketches[0]!
+    expect(s.rect).toEqual({ x0: -20, y0: -20, x1: 20, y1: 20 })
+    const leg = extrude(s.id, '800')
+    expect(leg).toMatchObject({ shape: 'circle', z0: 0, z1: 800 })
+    // Den runda sidan: push/pull ändrar diametern, och delen förblir rund.
+    tap({ point: [20, 400, 0], target: { kind: 'body', id: leg.id, face: 'u+' } }, 0)
+    tools().setMeasure(0, '10')
+    applyMeasure()
+    expect(bodies()[0]!.profile).toEqual({ x0: -20, y0: -25, x1: 30, y1: 25 })
+  })
+
+  it('ritar på en cylinders ände, och på den runda sidan i planet som nuddar den', () => {
+    tools().setTool('circle')
+    tap({ point: [0, 0, 0], target: { kind: 'ground' } }, 0)
+    move(down(20, 0), 0)
+    commit()
+    const leg = extrude(doc().sketches[0]!.id, '800')
+    tools().setTool('rect')
+    tap({ point: [0, 800, 0], target: { kind: 'body', id: leg.id, face: 'n+' } }, 0)
+    expect(tools().op).toMatchObject({ kind: 'rect', frame: { origin: [0, 800, 0] } })
+    cancel()
+    // Sidan åt +x: planet x = 20 nuddar cylindern, och linjen där den nuddar (z = 0) är ett mål.
+    tap({ point: [19, 400, -3], target: { kind: 'body', id: leg.id, face: 'u+' } }, 10)
+    const op = tools().op
+    expect(op?.kind === 'rect' && op.frame.n).toEqual([1, 0, 0])
+    expect(op?.kind === 'rect' && op.frame.origin[0]).toBe(20)
+    expect(op?.kind === 'rect' && toWorld(op.frame, [op.first[0], op.first[1], 0])[2]).toBeCloseTo(0)
+  })
+})
 
 describe('rektangelverktyget', () => {
   it('ritar en skiss på golvet med snäppning till 10 mm', () => {

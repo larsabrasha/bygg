@@ -1,9 +1,12 @@
 import { useEffect } from 'react'
 import { useDocumentStore } from '../store/documentStore'
 import { useLibraryStore } from '../store/libraryStore'
-import { useToolStore } from '../store/toolStore'
+import { useToolStore, type Op } from '../store/toolStore'
 import { useViewStore } from '../store/viewStore'
 import { amendableOp, applyMeasure, cancel, extendableCopy, setCopy } from './actions'
+
+/** Rektangeln har två fält (längd och bredd), som Tab växlar mellan; en cirkel bara diametern. */
+const hasTwoFields = (op: Op | null | undefined) => op?.kind === 'rect' && op.shape !== 'circle'
 
 /** Tecken som går direkt till måttfältet. Bokstäver (parameternamn) skrivs i fältet, så att R/P/M fungerar som kortkommandon. */
 const MEASURE_CHAR = /^[0-9.,+\-*/() ]$/
@@ -64,7 +67,7 @@ export function useShortcuts() {
           tools.setMeasure(measureField, measure[measureField].slice(0, -1))
           return
         }
-        if ((e.key === ';' || e.key === 'Tab') && (op ?? tools.lastOp?.op)?.kind === 'rect') {
+        if ((e.key === ';' || e.key === 'Tab') && hasTwoFields(op ?? tools.lastOp?.op)) {
           e.preventDefault()
           tools.setMeasureField(measureField === 0 ? 1 : 0)
           return
@@ -97,6 +100,10 @@ export function useShortcuts() {
         case 'r':
         case 'R':
           tools.setTool('rect')
+          break
+        case 'c':
+        case 'C':
+          tools.setTool('circle')
           break
         case 'p':
         case 'P':

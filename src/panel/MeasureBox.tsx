@@ -75,12 +75,16 @@ export function MeasureBox() {
           ? {
               select: '',
               rect: 'Tryck där första hörnet ska vara – på golvet eller på en yta.',
+              circle: 'Tryck där mitten ska vara – på golvet eller på en yta.',
               pushpull: 'Dra i en skiss eller en sida av en del, eller tryck på den.',
               move: 'Dra i en pil för att flytta längs X, Y eller Z, eller i en båge för att vrida. Du kan också dra i själva delen.',
               measure: '',
             }[tool]
           : {
-              rect: 'Tryck på andra hörnet, eller skriv längd och bredd.',
+              rect:
+                op.kind === 'rect' && op.shape === 'circle'
+                  ? 'Tryck där kanten ska vara, eller skriv diametern.'
+                  : 'Tryck på andra hörnet, eller skriv längd och bredd.',
               pushpull: 'Dra längs pilen, eller skriv avståndet.',
               move:
                 op.kind === 'move' && op.axis !== null
@@ -93,12 +97,14 @@ export function MeasureBox() {
   const axis = shown?.kind === 'rotate' ? shown.axis : shown?.kind === 'move' ? shown.axis : null
   const fields: { label: string; axis: Axis | null }[] = extending
     ? [{ label: 'Antal kopior', axis: null }]
-    : shown?.kind === 'rect'
-      ? [
-          { label: 'Längd', axis: null },
-          { label: 'Bredd', axis: null },
-        ]
-      : [{ label: shown?.kind === 'rotate' ? 'Vinkel runt' : 'Avstånd', axis }]
+    : shown?.kind === 'rect' && shown.shape === 'circle'
+      ? [{ label: 'Diameter', axis: null }]
+      : shown?.kind === 'rect'
+        ? [
+            { label: 'Längd', axis: null },
+            { label: 'Bredd', axis: null },
+          ]
+        : [{ label: shown?.kind === 'rotate' ? 'Vinkel runt' : 'Avstånd', axis }]
   const unit = extending ? 'st' : shown?.kind === 'rotate' ? '°' : 'mm'
 
   const copyToggle = tool === 'move' && (

@@ -44,7 +44,8 @@ function Scene() {
   const active = op?.kind === 'pushpull' ? op.target : hover
   const selectedBody = selection?.kind === 'body' ? bodies.find((b) => b.id === selection.id) : undefined
   // Pilen på det valda syns i Välj och Rektangel (så att en ny skiss kan dras ut direkt), när inget annat pågår.
-  const handleTarget = !op && (tool === 'select' || tool === 'rect') && selection ? pushPullTargetOf(selection) : null
+  const handleTarget =
+    !op && (tool === 'select' || tool === 'rect' || tool === 'circle') && selection ? pushPullTargetOf(selection) : null
   const handle = handleTarget && pushPullAnchor(handleTarget, doc)
   const selectedFace = handleTarget?.kind === 'body' ? handleTarget : null
   // I Flytta-läget får den valda delen tre färgade pilar i stället.
@@ -75,6 +76,7 @@ function Scene() {
           key={s.id}
           frame={s.frame}
           rect={s.rect}
+          shape={s.shape}
           pickId={s.id}
           emphasis={
             selection?.kind === 'sketch' && selection.id === s.id

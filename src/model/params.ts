@@ -1,7 +1,8 @@
 import { evaluate, identifiers, type EvalResult } from './expr'
 import { MIN_SIZE } from './geometry'
 import { applyPositions } from './placement'
-import type { Axis, DimExpr, DimExprs, ModelDocument, Param, Rect } from './types'
+import { keepRound, type Box } from './box'
+import type { Axis, DimExpr, DimExprs, ModelDocument, Param } from './types'
 
 /**
  * Beräknar alla parametrar. Parametrar får referera till varandra;
@@ -58,18 +59,19 @@ function withExtent(lo: number, hi: number, length: number, anchor: DimExpr['anc
   return anchor === 'min' ? [lo, lo + length] : [hi - length, hi]
 }
 
-type Box = { profile: Rect; z0: number; z1: number }
-
-/** Sätter en axels längd på en låda (profil + z). Null om längden är för liten. */
+/**
+ * Sätter en axels längd på en låda (profil + z). Null om längden är för liten.
+ * För en cirkel sätts diametern: den andra axeln följer med (se keepRound).
+ */
 export function setBoxExtent<T extends Box>(box: T, axis: Axis, length: number, anchor: DimExpr['anchor']): T | null {
   const p = box.profile
   if (axis === 'u') {
     const r = withExtent(p.x0, p.x1, length, anchor)
-    return r && { ...box, profile: { ...p, x0: r[0], x1: r[1] } }
+    return r && keepRound({ ...box, profile: { ...p, x0: r[0], x1: r[1] } }, 'u')
   }
   if (axis === 'v') {
     const r = withExtent(p.y0, p.y1, length, anchor)
-    return r && { ...box, profile: { ...p, y0: r[0], y1: r[1] } }
+    return r && keepRound({ ...box, profile: { ...p, y0: r[0], y1: r[1] } }, 'v')
   }
   const r = withExtent(box.z0, box.z1, length, anchor)
   return r && { ...box, z0: r[0], z1: r[1] }
@@ -108,7 +110,7 @@ export function applyParams(doc: ModelDocument): ModelDocument {
   const instances = doc.instances.some((i) => i.pos) ? applyPositions(doc.instances, defs, scope) : doc.instances
   const sketches = doc.sketches.map((s) => {
     if (!s.dims) return s
-    const box = applyDims({ profile: s.rect, z0: 0, z1: 1, dims: s.dims }, scope)
+    const box = applyDims({ profile: s.rect, ...(s.shape && { shape: s.shape }), z0: 0, z1: 1, dims: s.dims }, scope)
     return box.profile === s.rect ? s : { ...s, rect: box.profile }
   })
   return { ...doc, params, defs, sketches, instances }
