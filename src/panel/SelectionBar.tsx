@@ -1,6 +1,7 @@
 import {
   ArrowUpFromLine,
   Copy,
+  Ellipsis,
   Eye,
   EyeOff,
   ScanEye,
@@ -26,27 +27,50 @@ import { useCoversView } from './useCoversView'
 
 const ICON = { size: 18, strokeWidth: 1.75, 'aria-hidden': true } as const
 
+/**
+ * Ikon med ett kort ord under, som i en flikrad i iOS: med hela namnet bredvid
+ * blev raden så lång att den täckte Visa allt, och bara ikoner gick inte att
+ * förstå på en pekskärm, där tipsen inte visas. På telefon står bara det
+ * vanligaste i raden och resten under Mer (MoreMenu), så orden ryms där också.
+ * Hela namnet står i tipset och i aria-label.
+ */
+const barIcon =
+  'flex h-12 min-w-12 shrink-0 cursor-pointer flex-col items-center justify-center gap-1 rounded-lg px-1.5 hover:bg-hover aria-expanded:bg-accent-soft aria-expanded:text-accent narrow:h-11'
+
+/** Knappar som på telefon ligger under Mer i stället. */
+const wideOnly = 'narrow:hidden'
+
+function BarLabel({ Icon, short }: { Icon: LucideIcon; short: string }) {
+  return (
+    <>
+      <Icon {...ICON} />
+      <span className="text-[11px] leading-none">{short}</span>
+    </>
+  )
+}
+
 function BarButton({
   label,
+  short = label,
   Icon,
   onClick,
   danger = false,
+  className = '',
 }: {
   label: string
+  /** Ordet under ikonen, om namnet är för långt. */
+  short?: string
   Icon: LucideIcon
   onClick: () => void
   danger?: boolean
+  className?: string
 }) {
   return (
-    <button
-      aria-label={label}
-      onClick={onClick}
-      className={`flex h-9 shrink-0 cursor-pointer items-center gap-1.5 rounded-lg px-2 hover:bg-hover narrow:size-11 narrow:justify-center narrow:px-0 ${danger ? 'text-danger' : ''}`}
-    >
-      <Icon {...ICON} />
-      {/* På smal skärm bara ikonen; namnet finns i aria-label. */}
-      <span className="text-[13px] narrow:hidden">{label}</span>
-    </button>
+    <Tip label={label}>
+      <button aria-label={label} onClick={onClick} className={`${barIcon} ${danger ? 'text-danger' : ''} ${className}`}>
+        <BarLabel Icon={Icon} short={short} />
+      </button>
+    </Tip>
   )
 }
 
@@ -67,20 +91,15 @@ function ShapeMenu({ hostId, name }: { hostId: string; name: string }) {
     setCombining({ op, host: hostId })
   }
   return (
-    <div ref={ref} className="relative shrink-0 narrow:static">
-      <button
-        aria-label="Forma"
-        aria-expanded={open}
-        onClick={() => setOpen((o) => !o)}
-        className="flex h-9 cursor-pointer items-center gap-1.5 rounded-lg px-2 hover:bg-hover aria-expanded:bg-accent-soft aria-expanded:text-accent narrow:size-11 narrow:justify-center narrow:px-0"
-      >
-        <SquaresUnite {...ICON} />
-        <span className="text-[13px] narrow:hidden">Forma</span>
-      </button>
+    <div ref={ref} className={`relative shrink-0 ${wideOnly}`}>
+      <Tip label="Forma">
+        <button aria-label="Forma" aria-expanded={open} onClick={() => setOpen((o) => !o)} className={barIcon}>
+          <BarLabel Icon={SquaresUnite} short="Forma" />
+        </button>
+      </Tip>
       {open && (
-        // Åt vänster från knappen. På en telefon får den inte plats åt något håll från knappen;
-        // där ligger den under radens vänsterkant (knappens ruta är inte positionerad, narrow:static).
-        <div className="absolute top-full right-0 z-50 narrow:right-auto narrow:left-0 mt-1 w-max max-w-[calc(100vw-24px)] min-w-40 rounded-lg border border-line bg-panel p-1 shadow-lg">
+        // Åt höger från knappen: raden står vid vänsterkanten.
+        <div className="absolute top-full left-0 z-50 mt-1 w-max min-w-40 rounded-lg border border-line bg-panel p-1 shadow-lg">
           <MenuItem Icon={SquaresSubtract} onClick={() => choose('subtract')}>
             Skär ut en del ur {name}
           </MenuItem>
@@ -104,18 +123,14 @@ function VisibilityMenu({ id }: { id: string }) {
   const close = useCallback(() => setOpen(false), [])
   useDismiss(ref, open, close)
   return (
-    <div ref={ref} className="relative shrink-0">
-      <button
-        aria-label="Visa"
-        aria-expanded={open}
-        onClick={() => setOpen((o) => !o)}
-        className="flex h-9 cursor-pointer items-center gap-1.5 rounded-lg px-2 hover:bg-hover aria-expanded:bg-accent-soft aria-expanded:text-accent narrow:size-11 narrow:justify-center narrow:px-0"
-      >
-        <Eye {...ICON} />
-        <span className="text-[13px] narrow:hidden">Visa</span>
-      </button>
+    <div ref={ref} className={`relative shrink-0 ${wideOnly}`}>
+      <Tip label="Visa">
+        <button aria-label="Visa" aria-expanded={open} onClick={() => setOpen((o) => !o)} className={barIcon}>
+          <BarLabel Icon={Eye} short="Visa" />
+        </button>
+      </Tip>
       {open && (
-        <div className="absolute top-full right-0 z-50 mt-1 w-max min-w-40 rounded-lg border border-line bg-panel p-1 shadow-lg">
+        <div className="absolute top-full left-0 z-50 mt-1 w-max min-w-40 rounded-lg border border-line bg-panel p-1 shadow-lg">
           <MenuItem
             Icon={ScanEye}
             onClick={() => {
@@ -132,6 +147,54 @@ function VisibilityMenu({ id }: { id: string }) {
               hideSelection(id)
             }}
           >
+            Dölj
+          </MenuItem>
+        </div>
+      )}
+    </div>
+  )
+}
+
+/**
+ * Mer, bara på telefon: det som på bred skärm har egna knappar, med hela namnen.
+ * Menyn ligger under radens vänsterkant (knappens ruta är inte positionerad),
+ * eftersom den inte får plats från knappen.
+ */
+function MoreMenu({ id, name, onZoom, onCopy }: { id: string; name: string; onZoom: () => void; onCopy: () => void }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+  const close = useCallback(() => setOpen(false), [])
+  useDismiss(ref, open, close)
+  const setCombining = useToolStore((s) => s.setCombining)
+  const run = (action: () => void) => () => {
+    close()
+    action()
+  }
+  return (
+    <div ref={ref} className="hidden shrink-0 narrow:block">
+      <button aria-label="Mer" aria-expanded={open} onClick={() => setOpen((o) => !o)} className={barIcon}>
+        <BarLabel Icon={Ellipsis} short="Mer" />
+      </button>
+      {open && (
+        <div className="absolute top-full left-0 z-50 mt-1 w-max max-w-[calc(100vw-24px)] min-w-48 rounded-lg border border-line bg-panel p-1 shadow-lg">
+          <MenuItem Icon={Focus} onClick={run(onZoom)}>
+            Zooma till
+          </MenuItem>
+          <MenuItem Icon={Copy} onClick={run(onCopy)}>
+            Länkad kopia
+          </MenuItem>
+          <div role="separator" className="mx-2 my-1 h-px bg-line" />
+          <MenuItem Icon={SquaresSubtract} onClick={run(() => setCombining({ op: 'subtract', host: id }))}>
+            Skär ut en del ur {name}
+          </MenuItem>
+          <MenuItem Icon={SquaresUnite} onClick={run(() => setCombining({ op: 'add', host: id }))}>
+            Lägg ihop en del med {name}
+          </MenuItem>
+          <div role="separator" className="mx-2 my-1 h-px bg-line" />
+          <MenuItem Icon={ScanEye} onClick={run(() => isolateSelection(id))}>
+            Isolera
+          </MenuItem>
+          <MenuItem Icon={EyeOff} onClick={run(() => hideSelection(id))}>
             Dölj
           </MenuItem>
         </div>
@@ -175,13 +238,26 @@ export function SelectionBar() {
       </span>
       {body ? (
         <>
-          <BarButton label="Zooma till" Icon={Focus} onClick={() => requestFit('selection')} />
+          {/* Ett verktyg har få knappar; de ryms också på telefon. */}
+          <BarButton
+            label="Zooma till"
+            short="Zooma"
+            Icon={Focus}
+            onClick={() => requestFit('selection')}
+            className={body.tool ? '' : wideOnly}
+          />
           {body.tool ? (
             // Ett verktyg: lossa det, så blir det en vanlig del igen.
             <BarButton label="Lossa" Icon={Unlink} onClick={() => detach(body.id)} />
           ) : (
             <>
-              <BarButton label="Länkad kopia" Icon={Copy} onClick={() => duplicateLinked(body.id)} />
+              <BarButton
+                label="Länkad kopia"
+                short="Kopia"
+                Icon={Copy}
+                onClick={() => duplicateLinked(body.id)}
+                className={wideOnly}
+              />
               <BarButton label="Tapp" Icon={Puzzle} onClick={() => setCombining({ op: 'joint', host: body.id })} />
               <ShapeMenu hostId={body.id} name={body.name} />
               <VisibilityMenu id={body.id} />
@@ -196,10 +272,17 @@ export function SelectionBar() {
         />
       )}
       <BarButton label="Ta bort" Icon={Trash2} onClick={deleteSelection} danger />
+      {body && !body.tool && (
+        <MoreMenu
+          id={body.id}
+          name={body.name}
+          onZoom={() => requestFit('selection')}
+          onCopy={() => duplicateLinked(body.id)}
+        />
+      )}
       {/*
         Avmarkera gör inget med delen, så den står för sig: bara ett kryss, som på en etikett.
-        På smal skärm får sex knappar och namnet inte plats. Där visas namnet vid delen i vyn,
-        och ett tryck bredvid avmarkerar, så de två tas bort.
+        På smal skärm visas namnet vid delen i vyn, och ett tryck bredvid avmarkerar, så de två tas bort.
       */}
       <span aria-hidden className="mx-0.5 h-6 w-px bg-line narrow:hidden" />
       <Tip label="Avmarkera">
