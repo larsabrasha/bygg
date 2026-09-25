@@ -65,11 +65,19 @@ export interface PartDef {
 /** Världens axlar: x åt höger, y uppåt, z mot betraktaren (som axelkorset i 3D-vyn). */
 export type WorldAxis = 'x' | 'y' | 'z'
 
+/** En frames riktning utan läge. */
+export type Orientation = Pick<Frame, 'u' | 'v' | 'n'>
+
 /** En placerad kopia av en PartDef. */
 export interface Instance {
   id: string
   defId: string
   frame: Frame
+  /**
+   * Hur kopian låg innan den vreds första gången; vinklarna i detaljpanelen
+   * räknas härifrån. Saknas för kopior som aldrig vridits.
+   */
+  rest?: Orientation
   /** Uttryck för läget av delens hörn närmast origo, per världsaxel, om läget skrevs som ett uttryck. */
   pos?: Partial<Record<WorldAxis, string>>
 }

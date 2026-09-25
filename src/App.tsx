@@ -21,7 +21,7 @@ export function App() {
       {/* inert: under startvyn går 3D-vyns knappar inte att nå med Tab eller skärmläsare. */}
       <div
         inert={screen === 'gallery'}
-        className="grid h-dvh grid-cols-[minmax(0,1fr)_340px] grid-rows-[auto_minmax(0,1fr)] [grid-template-areas:'toolbar_toolbar''viewport_sidebar'] print:hidden
+        className="grid h-dvh grid-cols-[minmax(0,1fr)_360px] grid-rows-[auto_minmax(0,1fr)] [grid-template-areas:'toolbar_toolbar''viewport_sidebar'] print:hidden
           narrow:grid-cols-[minmax(0,1fr)] narrow:grid-rows-[auto_minmax(0,1fr)_auto] narrow:[grid-template-areas:'toolbar''viewport''sidebar']"
       >
         <Toolbar />

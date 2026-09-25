@@ -2,10 +2,17 @@ import { type Box } from './box'
 import { defaultAxes } from './partAxes'
 
 export { bodyExtents, type Box } from './box'
-import type { Axis, Face, Instance, PartDef, Rect, Sketch, Vec2 } from './types'
+import { toWorld } from './frame'
+import type { Axis, Body, Face, Instance, PartDef, Rect, Sketch, Vec2, Vec3 } from './types'
 
 /** Axeln som en sida sitter vinkelrätt mot. */
 export const faceAxis = (face: Face): Axis => face[0] as Axis
+
+/** Mitten av en del i världskoordinater; där flyttpilarna sitter och det den vrids runt. */
+export function bodyCenter(b: Body): Vec3 {
+  const { x0, x1, y0, y1 } = b.profile
+  return toWorld(b.frame, [(x0 + x1) / 2, (y0 + y1) / 2, (b.z0 + b.z1) / 2])
+}
 
 /** Minsta mått en skiss eller kropp får ha, i mm. */
 export const MIN_SIZE = 1

@@ -18,6 +18,8 @@
   /* Text på accentfärgad bakgrund (primärknappen). */
   --color-on-accent: #ffffff;
   --color-danger: #b3261e;
+  /* Bakgrund i knappen Ta bort. */
+  --color-danger-soft: #f8e1df;
   /* Bakgrund i inmatningsfält. */
   --color-field: #ffffff;
   /* Sekundärknappens bakgrund. */
@@ -47,6 +49,7 @@
     --color-accent-line: #34588a;
     --color-on-accent: #0c1a2e;
     --color-danger: #f28b82;
+    --color-danger-soft: #3d2422;
     --color-field: #1b1a18;
     --color-button: #36332e;
     --color-disabled: #5d5850;

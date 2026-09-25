@@ -2,7 +2,7 @@ import { axesFromLegacyGrain } from '../model/partAxes'
 import type { ModelDocument } from '../model/types'
 
 /** Höj när formatet ändras, och lägg till en konvertering i migrate. */
-export const FORMAT_VERSION = 3
+export const FORMAT_VERSION = 4
 
 export interface SavedFile {
   version: number
@@ -17,7 +17,8 @@ export function serialize(doc: ModelDocument, now = new Date()): SavedFile {
 const isObj = (x: unknown): x is Record<string, unknown> => typeof x === 'object' && x !== null
 const isNum = (x: unknown): x is number => typeof x === 'number' && Number.isFinite(x)
 const isVec3 = (x: unknown) => Array.isArray(x) && x.length === 3 && x.every(isNum)
-const isFrame = (x: unknown) => isObj(x) && isVec3(x.origin) && isVec3(x.u) && isVec3(x.v) && isVec3(x.n)
+const isOrientation = (x: unknown) => isObj(x) && isVec3(x.u) && isVec3(x.v) && isVec3(x.n)
+const isFrame = (x: unknown) => isOrientation(x) && isVec3((x as Record<string, unknown>).origin)
 const isAxis = (x: unknown) => x === 'u' || x === 'v' || x === 'n'
 const isRect = (x: unknown) => isObj(x) && isNum(x.x0) && isNum(x.y0) && isNum(x.x1) && isNum(x.y1)
 
@@ -48,6 +49,7 @@ function isModelDocument(x: unknown): x is ModelDocument {
         typeof i.id === 'string' &&
         typeof i.defId === 'string' &&
         isFrame(i.frame) &&
+        (i.rest === undefined || isOrientation(i.rest)) &&
         (i.pos === undefined || (isObj(i.pos) && Object.values(i.pos).every((e) => typeof e === 'string'))),
     ) &&
     Array.isArray(params) &&
@@ -83,6 +85,7 @@ export function migrate(raw: unknown): LoadResult {
   let doc = raw.doc
   if (raw.version < 2) doc = upgradeV1Doc(doc)
   // 2 → 3: kopior kan ha pos (läge som uttryck). Frivilligt fält, så inget att konvertera.
+  // 3 → 4: kopior kan ha rest (viloläge för vinklarna) och stå snett. Frivilligt fält.
   if (!isModelDocument(doc)) return { ok: false, reason: 'Trasigt dokument' }
   return { ok: true, doc }
 }

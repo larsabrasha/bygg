@@ -18,7 +18,7 @@ export function ToolButtons() {
       aria-label={label}
       title={`${label} (${key})`}
       onClick={() => setTool(t)}
-      className={`${iconButton} aria-pressed:border-accent-line aria-pressed:bg-accent-soft aria-pressed:text-accent`}
+      className={iconButton}
     >
       <Icon {...ICON} />
     </button>

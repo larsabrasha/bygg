@@ -4,7 +4,8 @@ import { useEffect } from 'react'
 import { resolveBodies } from '../model/resolve'
 import { useDocumentStore } from '../store/documentStore'
 import { useToolStore } from '../store/toolStore'
-import { bodyCenter, pushPullAnchor, pushPullTargetOf } from '../tools/actions'
+import { bodyCenter } from '../model/geometry'
+import { pushPullAnchor, pushPullTargetOf } from '../tools/actions'
 import { previewDoc } from '../tools/preview'
 import { BodyMesh } from './BodyMesh'
 import { HOME } from './camera'
@@ -33,7 +34,8 @@ function Scene() {
   const tool = useToolStore((s) => s.tool)
 
   // Under en operation ritas dokumentet som det skulle bli; berörda delar halvgenomskinliga.
-  const preview = op ? previewDoc(op, doc) : null
+  const copy = useToolStore((s) => s.copy)
+  const preview = op ? previewDoc(op, doc, copy) : null
   const shown = preview?.doc ?? doc
   const bodies = resolveBodies(shown)
   const active = op?.kind === 'pushpull' ? op.target : hover

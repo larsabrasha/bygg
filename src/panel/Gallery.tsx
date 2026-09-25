@@ -158,10 +158,7 @@ export function Gallery() {
         <div className="min-w-0 flex-1">
           <SyncBadge />
         </div>
-        <button
-          className={`${primaryButton} flex shrink-0 items-center gap-1.5`}
-          onClick={() => void openFromGallery('new')}
-        >
+        <button className={primaryButton} onClick={() => void openFromGallery('new')}>
           <Plus size={18} aria-hidden />
           Ny modell
         </button>

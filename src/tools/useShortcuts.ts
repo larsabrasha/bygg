@@ -3,7 +3,7 @@ import { useDocumentStore } from '../store/documentStore'
 import { useLibraryStore } from '../store/libraryStore'
 import { useToolStore } from '../store/toolStore'
 import { useViewStore } from '../store/viewStore'
-import { applyMeasure, cancel } from './actions'
+import { amendableOp, applyMeasure, cancel, extendableCopy, setCopy } from './actions'
 
 /** Tecken som går direkt till måttfältet. Bokstäver (parameternamn) skrivs i fältet, så att R/P/M fungerar som kortkommandon. */
 const MEASURE_CHAR = /^[0-9.,+\-*/() ]$/
@@ -13,7 +13,8 @@ function isEditable(t: EventTarget | null) {
 }
 
 /**
- * Kortkommandon som i SketchUp: R, P, M, mellanslag, Esc, Delete, ⌘Z / ⇧⌘Z, ⇧Z (visa allt).
+ * Kortkommandon som i SketchUp: R, P, M, mellanslag, Esc, Delete, ⌘Z / ⇧⌘Z, ⇧Z (visa allt),
+ * Alt/Option (Kopia i Flytta-läget).
  * P och M har ingen knapp i verktygsraden; där görs push/pull med pilen och flytt från knappraden.
  * Under en operation går siffror direkt till måttfältet utan att man klickar i det;
  * ; eller Tab byter fält.
@@ -40,21 +41,30 @@ export function useShortcuts() {
         docs.redo()
         return
       }
+      // Alt/Option slår av och på Kopia i Flytta-läget, som Ctrl/Option i SketchUp.
+      if (e.key === 'Alt' && !e.repeat && tools.tool === 'move') {
+        e.preventDefault()
+        setCopy(!tools.copy)
+        return
+      }
       if (mod || e.altKey) return
 
       const { op, measure, measureField } = tools
-      if (op) {
+      // Efter en kopia går siffror till antalet, och efter en avslutad operation
+      // till dess mått (för att ändra det), som under en operation.
+      if (op || (tools.tool === 'move' && extendableCopy()) || amendableOp()) {
         if (MEASURE_CHAR.test(e.key)) {
           e.preventDefault()
           tools.setMeasure(measureField, measure[measureField] + e.key)
           return
         }
-        if (e.key === 'Backspace') {
+        // Utan pågående operation och med tomt fält tar Backspace bort det valda som vanligt.
+        if (e.key === 'Backspace' && (op || measure[measureField] !== '')) {
           e.preventDefault()
           tools.setMeasure(measureField, measure[measureField].slice(0, -1))
           return
         }
-        if ((e.key === ';' || e.key === 'Tab') && op.kind === 'rect') {
+        if ((e.key === ';' || e.key === 'Tab') && (op ?? tools.lastOp?.op)?.kind === 'rect') {
           e.preventDefault()
           tools.setMeasureField(measureField === 0 ? 1 : 0)
           return

@@ -1,5 +1,7 @@
 import { create, type StoreApi } from 'zustand'
 import type { PlaneTargets } from '../model/snapping'
+import type { ModelDocument } from '../model/types'
+import { useDocumentStore, type Selection } from './documentStore'
 import type { Face, Frame, Rect, Vec2, Vec3 } from '../model/types'
 
 export type Tool = 'select' | 'rect' | 'pushpull' | 'move'
@@ -79,6 +81,30 @@ export interface RotateOp {
 
 export type Op = RectOp | PushPullOp | MoveOp | RotateOp
 
+/** Ett steg i en rad kopior: en förflyttning eller en vridning runt en axel genom center. */
+export type CopyStep = { kind: 'move'; delta: Vec3 } | { kind: 'rotate'; center: Vec3; axis: Vec3; degrees: number }
+
+/** Senaste kopieringen i Flytta-läget, så att man kan skriva ett antal och få fler i samma steg. */
+export interface LastCopy {
+  sourceId: string
+  step: CopyStep
+  /** Antal kopior hittills; kopia k ligger k steg från originalet. */
+  count: number
+  /** Den senast gjorda kopian. Antalet går bara att ändra så länge den finns och är vald. */
+  lastId: string
+}
+
+/**
+ * Den senast avslutade operationen, så att måttrutan kan ligga kvar och man
+ * kan skriva ett nytt värde (som i SketchUp). Gäller bara så länge dokumentet
+ * och valet är som direkt efteråt.
+ */
+export interface LastOp {
+  op: Op
+  doc: ModelDocument
+  selection: Selection | null
+}
+
 /** Var första hörnet skulle hamna (rektangelverktyget, bara mus). */
 export interface HoverPoint {
   frame: Frame
@@ -97,6 +123,10 @@ interface ToolSnapshot {
   measureField: 0 | 1
   /** Senaste push/pull-djupet (med tecken), och uttrycket om det skrevs som ett. Glöms inte vid byte av verktyg. */
   lastPushPull: { distance: number; expr?: string } | null
+  /** Flytta-läget gör kopior i stället för att flytta. Slås av när man byter verktyg. */
+  copy: boolean
+  lastCopy: LastCopy | null
+  lastOp: LastOp | null
 }
 
 interface ToolState extends ToolSnapshot {
@@ -107,6 +137,9 @@ interface ToolState extends ToolSnapshot {
   setMeasure: (field: 0 | 1, text: string) => void
   setMeasureField: (field: 0 | 1) => void
   setLastPushPull: (last: { distance: number; expr?: string }) => void
+  setCopy: (copy: boolean) => void
+  setLastCopy: (last: LastCopy | null) => void
+  setLastOp: (last: LastOp | null) => void
 }
 
 const idle = { op: null, measure: ['', ''] as [string, string], measureField: 0 as const }
@@ -119,14 +152,27 @@ const initial: ToolSnapshot = previous
       hover: null,
       hoverPoint: null,
       lastPushPull: previous.getState().lastPushPull ?? null,
+      copy: previous.getState().copy ?? false,
+      lastCopy: null,
+      lastOp: null,
       ...idle,
     }
-  : { tool: 'select', hover: null, hoverPoint: null, lastPushPull: null, ...idle }
+  : {
+      tool: 'select',
+      hover: null,
+      hoverPoint: null,
+      lastPushPull: null,
+      copy: false,
+      lastCopy: null,
+      lastOp: null,
+      ...idle,
+    }
 
 export const useToolStore = create<ToolState>()((set) => ({
   ...initial,
-  setTool: (tool) => set({ tool, hover: null, hoverPoint: null, ...idle }),
-  setOp: (op) => set(op ? { op, hoverPoint: null } : idle),
+  setTool: (tool) => set({ tool, hover: null, hoverPoint: null, copy: false, lastCopy: null, lastOp: null, ...idle }),
+  // En ny operation gör att förra kopieringen och förra operationen inte längre går att ändra.
+  setOp: (op) => set(op ? { op, hoverPoint: null, lastCopy: null, lastOp: null } : idle),
   setHover: (hover) => set({ hover }),
   setHoverPoint: (hoverPoint) => set({ hoverPoint }),
   setMeasure: (field, text) =>
@@ -137,6 +183,21 @@ export const useToolStore = create<ToolState>()((set) => ({
     }),
   setMeasureField: (measureField) => set({ measureField }),
   setLastPushPull: (lastPushPull) => set({ lastPushPull }),
+  setCopy: (copy) => set({ copy }),
+  setLastCopy: (lastCopy) => set({ lastCopy }),
+  setLastOp: (lastOp) => set({ lastOp }),
 }))
 
-if (import.meta.hot) import.meta.hot.data.toolStore = useToolStore
+/**
+ * Flytta hör till det valda: avmarkerar man (eller tar bort delen) går man
+ * tillbaka till Välj, så att nästa del man väljer inte hamnar i Flytta.
+ */
+const unsubscribe = useDocumentStore.subscribe((s, prev) => {
+  if (prev.selection && !s.selection && useToolStore.getState().tool === 'move')
+    useToolStore.getState().setTool('select')
+})
+
+if (import.meta.hot) {
+  import.meta.hot.data.toolStore = useToolStore
+  import.meta.hot.dispose(unsubscribe)
+}

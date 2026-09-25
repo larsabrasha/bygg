@@ -1,9 +1,7 @@
-import { rotateFrame } from '../model/frame'
 import { pushPullBody, sketchToPart } from '../model/geometry'
 import type { ModelDocument } from '../model/types'
-import { add } from '../model/vec'
 import type { Op } from '../store/toolStore'
-import { moveDeltaWorld } from './actions'
+import { applyStep, stepOf } from './actions'
 
 export interface Preview {
   doc: ModelDocument
@@ -11,36 +9,31 @@ export interface Preview {
   affected: Set<string>
 }
 
+/** Id för kopian som förhandsvisas när Kopia är på. */
+export const COPY_PREVIEW_ID = 'preview-copy'
+
 /**
  * Dokumentet som det skulle se ut om operationen avslutades nu.
  * Null för rektangel (ritas separat) eller om resultatet är ogiltigt.
+ * copy = Flytta-lägets Kopia är på.
  */
-export function previewDoc(op: Op, doc: ModelDocument): Preview | null {
+export function previewDoc(op: Op, doc: ModelDocument, copy = false): Preview | null {
   if (op.kind === 'rect') return null
 
-  if (op.kind === 'rotate') {
-    const { origin, n } = op.plane
-    return {
-      doc: {
-        ...doc,
-        instances: doc.instances.map((i) =>
-          i.id === op.instanceId ? { ...i, frame: rotateFrame(i.frame, origin, n, op.angle) } : i,
-        ),
-      },
-      affected: new Set([op.instanceId]),
+  if (op.kind === 'move' || op.kind === 'rotate') {
+    const step = stepOf(op)
+    const src = doc.instances.find((i) => i.id === op.instanceId)
+    if (!src) return null
+    // Utan rörelse visas delen som den är, men halvgenomskinlig så att man ser vad man tagit i.
+    const moved = { ...src, frame: step ? applyStep(src.frame, step, 1) : src.frame }
+    // Med Kopia står originalet kvar och kopian visas där den hamnar.
+    if (copy) {
+      const ghost = { ...moved, id: COPY_PREVIEW_ID }
+      return { doc: { ...doc, instances: [...doc.instances, ghost] }, affected: new Set([COPY_PREVIEW_ID]) }
     }
-  }
-
-  if (op.kind === 'move') {
-    const delta = moveDeltaWorld(op)
     return {
-      doc: {
-        ...doc,
-        instances: doc.instances.map((i) =>
-          i.id === op.instanceId ? { ...i, frame: { ...i.frame, origin: add(i.frame.origin, delta) } } : i,
-        ),
-      },
-      affected: new Set([op.instanceId]),
+      doc: { ...doc, instances: doc.instances.map((i) => (i.id === src.id ? moved : i)) },
+      affected: new Set([src.id]),
     }
   }
 

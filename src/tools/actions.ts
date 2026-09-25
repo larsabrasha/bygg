@@ -1,13 +1,23 @@
-import { faceBounds, faceFrame, GROUND_FRAME, toLocal2D, toWorld } from '../model/frame'
+import { faceBounds, faceFrame, GROUND_FRAME, rotateFrame, toLocal2D, toWorld } from '../model/frame'
 import { isConstant } from '../model/expr'
-import { bodyExtents, rectFromCorners } from '../model/geometry'
+import { bodyCenter, bodyExtents, rectFromCorners } from '../model/geometry'
 import { evaluateIn } from '../model/params'
 import { resolveBodies } from '../model/resolve'
 import { bodyKeyPoints, offsetTargets, planeTargets, snapDelta, snapValue, type PlaneTargets } from '../model/snapping'
 import type { Body, DimExprs, Face, Frame, Rect, Vec2, Vec3 } from '../model/types'
 import { add, closestParamOnLine, dot, length, scale, sub } from '../model/vec'
 import { useDocumentStore, type Selection } from '../store/documentStore'
-import { useToolStore, type Axis, type MoveOp, type Op, type PushPullTarget, type RotateOp } from '../store/toolStore'
+import {
+  useToolStore,
+  type Axis,
+  type CopyStep,
+  type LastCopy,
+  type LastOp,
+  type MoveOp,
+  type Op,
+  type PushPullTarget,
+  type RotateOp,
+} from '../store/toolStore'
 
 /**
  * Verktygslogik utan three.js: scenen räknar ut träffar och strålar och
@@ -34,6 +44,9 @@ export interface Ray {
   origin: Vec3
   dir: Vec3
 }
+
+/** Flest kopior i en rad, så att ett felskrivet antal inte fryser appen. */
+export const MAX_COPIES = 200
 
 /** Rutnät för snäppning när man ritar och flyttar, i mm. */
 export const GRID_STEP = 10
@@ -223,7 +236,8 @@ function moveOp(b: Body, plane: Frame, axis: Axis | null): MoveOp {
     axis,
     grab: 0,
     moving: bodyKeyPoints(b).map((p) => toLocal2D(plane, p)),
-    targets: planeTargets(bodies(), plane, b.id),
+    // Med Kopia står originalet kvar och går att snäppa mot.
+    targets: planeTargets(bodies(), plane, tools().copy ? undefined : b.id),
     delta: [0, 0],
     onTarget: [false, false],
   }
@@ -234,12 +248,6 @@ const AXIS_PLANES: Record<Axis, Omit<Frame, 'origin'>> = {
   0: { u: [1, 0, 0], v: [0, 1, 0], n: [0, 0, 1] },
   1: { u: [0, 1, 0], v: [0, 0, 1], n: [1, 0, 0] },
   2: { u: [0, 0, 1], v: [1, 0, 0], n: [0, 1, 0] },
-}
-
-/** Mitten av en del i världskoordinater; där flyttpilarna sitter. */
-export function bodyCenter(b: Body): Vec3 {
-  const { x0, x1, y0, y1 } = b.profile
-  return toWorld(b.frame, [(x0 + x1) / 2, (y0 + y1) / 2, (b.z0 + b.z1) / 2])
 }
 
 /** Startar en flytt av den valda delen längs en världsaxel (pilarna i Flytta-läget). */
@@ -391,17 +399,122 @@ export function moveDeltaWorld(op: Extract<Op, { kind: 'move' }>): Vec3 {
 export function commit(op: Op | null = tools().op, exprs: { dims?: DimExprs; depth?: string } = {}) {
   if (!op) return
   const d = docs()
+  const before = d.doc
   if (op.kind === 'rect') d.addSketch(op.frame, rectFromCorners(op.first, op.current), exprs.dims)
-  else if (op.kind === 'rotate') d.rotateInstance(op.instanceId, op.plane.origin, op.plane.n, op.angle)
-  else if (op.kind === 'move') {
+  else if (op.kind === 'move' || op.kind === 'rotate') {
     // Man stannar i Flytta, så att man kan flytta längs en axel till. Klar eller Esc går till Välj.
-    if (op.delta[0] !== 0 || op.delta[1] !== 0) d.moveInstance(op.instanceId, moveDeltaWorld(op))
+    const step = stepOf(op)
+    const source = step && tools().copy ? d.doc.instances.find((i) => i.id === op.instanceId) : undefined
+    if (step && source) {
+      const [id] = d.addCopies(source.id, [applyStep(source.frame, step, 1)])
+      tools().setOp(null)
+      if (id) tools().setLastCopy({ sourceId: source.id, step, count: 1, lastId: id })
+      return
+    }
+    if (step?.kind === 'move') d.moveInstance(op.instanceId, step.delta)
+    else if (step?.kind === 'rotate') d.rotateInstance(op.instanceId, step.center, step.axis, step.degrees)
   } else {
     if (op.target.kind === 'sketch') d.pushPullSketch(op.target.id, op.distance, exprs.depth)
     else d.pushPullBody(op.target.id, op.target.face, op.distance)
     if (op.distance !== 0) tools().setLastPushPull({ distance: op.distance, ...(exprs.depth && { expr: exprs.depth }) })
   }
   tools().setOp(null)
+  // Måttrutan ligger kvar, så att man kan skriva ett annat värde (se amendLast).
+  const after = docs()
+  if (after.doc !== before) tools().setLastOp({ op, doc: after.doc, selection: after.selection })
+}
+
+/** Den senaste operationen, om den fortfarande går att ändra: inget har hänt sedan dess. */
+export function amendableOp(): LastOp | null {
+  const { lastOp } = tools()
+  const d = docs()
+  if (!lastOp || d.doc !== lastOp.doc) return null
+  return JSON.stringify(d.selection) === JSON.stringify(lastOp.selection) ? lastOp : null
+}
+
+/**
+ * Gör om senaste operationen med de inskrivna måtten: ångrar den och
+ * avslutar den igen, som om man skrivit måtten medan den pågick. Tomma fält
+ * behåller förra värdet. Går ett mått inte att beräkna ligger allt kvar som
+ * det var. Returnerar false då, eller om det inte finns något att ändra.
+ */
+export function amendLast(): boolean {
+  const last = amendableOp()
+  if (!last) return false
+  const measure = tools().measure
+  // Inget inskrivet: bara stäng rutan.
+  if (measure.every((m) => m.trim() === '')) {
+    dismissLast()
+    return true
+  }
+  docs().undo()
+  tools().setOp(last.op)
+  if (applyMeasure()) return true
+  // Återställ: operationen avslutad som förut, med det man skrev kvar i fältet.
+  tools().setOp(null)
+  docs().redo()
+  docs().select(last.selection)
+  tools().setLastOp({ ...last, doc: docs().doc })
+  tools().setMeasure(1, measure[1])
+  tools().setMeasure(0, measure[0])
+  return false
+}
+
+/** Stänger måttrutan efter en avslutad operation utan att ändra något. */
+export function dismissLast() {
+  tools().setLastOp(null)
+}
+
+/** Vad en flytt eller vridning gör, som ett steg som går att upprepa. Null om den inte gör något. */
+export function stepOf(op: MoveOp | RotateOp): CopyStep | null {
+  if (op.kind === 'rotate')
+    return op.angle % 360 === 0
+      ? null
+      : { kind: 'rotate', center: op.plane.origin, axis: op.plane.n, degrees: op.angle }
+  return op.delta[0] === 0 && op.delta[1] === 0 ? null : { kind: 'move', delta: moveDeltaWorld(op) }
+}
+
+/** Framen efter times steg. */
+export function applyStep(f: Frame, step: CopyStep, times: number): Frame {
+  return step.kind === 'move'
+    ? { ...f, origin: add(f.origin, scale(step.delta, times)) }
+    : rotateFrame(f, step.center, step.axis, step.degrees * times)
+}
+
+/** Den senaste kopieringen, om man fortfarande kan ändra antalet: sista kopian finns och är vald. */
+export function extendableCopy(): LastCopy | null {
+  const { lastCopy } = tools()
+  const sel = docs().selection
+  if (!lastCopy || sel?.kind !== 'body' || sel.id !== lastCopy.lastId) return null
+  return docs().doc.instances.some((i) => i.id === lastCopy.lastId) ? lastCopy : null
+}
+
+/**
+ * Gör raden kopior total lång, med samma steg som den senaste kopian (som
+ * "5x" i SketchUp). Går bara att öka; färre får man med Ångra.
+ * Returnerar false om det inte går.
+ */
+export function extendCopies(total: number): boolean {
+  const last = extendableCopy()
+  const n = Math.round(total)
+  if (!last || !(n > last.count) || n > MAX_COPIES) return false
+  const source = docs().doc.instances.find((i) => i.id === last.sourceId)
+  if (!source) return false
+  const frames = Array.from({ length: n - last.count }, (_, i) =>
+    applyStep(source.frame, last.step, last.count + 1 + i),
+  )
+  const ids = docs().addCopies(source.id, frames)
+  tools().setLastCopy({ ...last, count: n, lastId: ids.at(-1)! })
+  tools().setMeasure(0, '')
+  return true
+}
+
+/** Slår av eller på Kopia. Under en flytt blir originalet ett mål att snäppa mot när det står kvar. */
+export function setCopy(on: boolean) {
+  tools().setCopy(on)
+  const op = tools().op
+  if (op?.kind === 'move')
+    tools().setOp({ ...op, targets: planeTargets(bodies(), op.plane, on ? undefined : op.instanceId) })
 }
 
 /**
@@ -437,8 +550,14 @@ export function liveMeasure(op: Op): number[] {
  */
 export function applyMeasure(): boolean {
   const { op, measure } = tools()
-  if (!op) return false
   const { params } = docs().doc
+  if (!op) {
+    // Efter en avslutad operation: gör om den med de nya måtten.
+    if (amendableOp()) return amendLast()
+    // Efter en kopia: fältet är antalet kopior.
+    const r = evaluateIn(measure[0], params)
+    return r.ok && extendCopies(r.value)
+  }
 
   const read = (text: string, live: number): number | null => {
     if (text.trim() === '') return live

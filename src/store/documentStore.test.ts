@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import { GROUND_FRAME } from '../model/frame'
+import { GROUND_FRAME, toWorld } from '../model/frame'
+import { anglesOf } from '../model/orientation'
 import { minCorner } from '../model/placement'
 import { resolveBodies } from '../model/resolve'
 import { resetDocumentStore, useDocumentStore } from './documentStore'
@@ -133,6 +134,32 @@ describe('kopior (komponenter)', () => {
     expect(bodies()[0]!.frame.u).toEqual([0, 0, -1])
     s().undo()
     expect(bodies()[0]!.frame).toEqual(before)
+  })
+
+  it('vinklar från detaljpanelen vrider runt mitten och räknas från viloläget', () => {
+    const a = newPart()
+    // Del 800 × 120 × 22 på golvet: mitten (400, 11, −60).
+    expect(s().setAngle(a, 'y', '90')).toBeNull()
+    const inst = () => s().doc.instances[0]!
+    expect(inst().frame.u).toEqual([0, 0, -1])
+    expect(inst().rest).toEqual({ u: [1, 0, 0], v: [0, 0, -1], n: [0, 1, 0] })
+    const b = bodies()[0]!
+    expect(toWorld(b.frame, [400, 60, 11])).toEqual([400, 11, -60])
+    // Vrider man med bågarna efteråt räknas det från samma viloläge.
+    s().rotateInstance(a, [400, 11, -60], [0, 1, 0], -60)
+    expect(anglesOf(inst().frame, inst().rest!)).toEqual([0, 30, 0])
+    expect(s().setAngle(a, 'x', 'foo')).not.toBeNull()
+  })
+
+  it('kopior räknar vinklar från samma viloläge som originalet', () => {
+    const a = newPart()
+    s().setAngle(a, 'y', '30')
+    const copy = s().duplicateLinked(a)!
+    const c = s().doc.instances.find((i) => i.id === copy)!
+    expect(anglesOf(c.frame, c.rest!)[1]).toBeCloseTo(30)
+    const [more] = s().addCopies(a, [c.frame])
+    const m = s().doc.instances.find((i) => i.id === more)!
+    expect(anglesOf(m.frame, m.rest!)[1]).toBeCloseTo(30)
   })
 
   it('vridning ett helt varv sparas inte i historiken', () => {
@@ -294,6 +321,18 @@ describe('läge', () => {
     s().moveInstance(id, [50, 0, 0])
     expect(s().doc.instances[0]!.pos).toEqual({ y: 'a' })
     expect(corner()).toEqual([150, 100, -120])
+  })
+
+  it('kopior får inga lägesuttryck, annars drogs de tillbaka till originalet', () => {
+    const id = newPart()
+    const p = s().addParam()
+    s().updateParam(p, { name: 'a', expr: '100' })
+    s().setPosition(id, 'x', 'a')
+    const frame = s().doc.instances[0]!.frame
+    const [copy] = s().addCopies(id, [{ ...frame, origin: [frame.origin[0] + 1000, 0, 0] }])
+    const inst = s().doc.instances.find((i) => i.id === copy)!
+    expect(inst).not.toHaveProperty('pos')
+    expect(inst.frame.origin[0]).toBe(frame.origin[0] + 1000)
   })
 
   it('vridning tar bort uttrycket bara för axlar där hörnet flyttas', () => {

@@ -1,13 +1,33 @@
 import { create, type StoreApi } from 'zustand'
 import { evaluate, isConstant, NAME_PATTERN, renameIdentifier } from '../model/expr'
-import { bodyExtents, faceAxis, isValidRect, nextPartName, pushPullBody, sketchToPart } from '../model/geometry'
+import {
+  bodyCenter,
+  bodyExtents,
+  faceAxis,
+  isValidRect,
+  nextPartName,
+  pushPullBody,
+  sketchToPart,
+} from '../model/geometry'
 import { faceFrame, rotateFrame } from '../model/frame'
 import { newId } from '../model/id'
 import { applyParams, evaluateParams, isNameUsed, paramScope, setBoxExtent } from '../model/params'
 import { withAxes } from '../model/partAxes'
 import { minCorner, placeAlong, WORLD_AXES, withoutPos } from '../model/placement'
 import { resolveBodies } from '../model/resolve'
-import type { Axis, DimExprs, Face, Frame, ModelDocument, PartDef, Rect, Vec3, WorldAxis } from '../model/types'
+import type {
+  Axis,
+  DimExprs,
+  Face,
+  Frame,
+  Instance,
+  ModelDocument,
+  PartDef,
+  Rect,
+  Vec3,
+  WorldAxis,
+} from '../model/types'
+import { anglesOf, restOf, withAngles } from '../model/orientation'
 import { add, scale } from '../model/vec'
 
 /** Det valda. För en del också ytan man tryckte på; den får pilen för push/pull. */
@@ -32,6 +52,17 @@ interface DocumentState extends Snapshot {
   moveInstance: (instanceId: string, delta: Vec3) => void
   /** Vrider en kopia degrees grader runt en axel (enhetsvektor) genom center. */
   rotateInstance: (instanceId: string, center: Vec3, axis: Vec3, degrees: number) => void
+  /**
+   * Sätter en av vinklarna i detaljpanelen (grader, från viloläget) och vrider
+   * runt delens mitt. Tar emot uttryck, men sparar bara värdet. Returnerar felmeddelande eller null.
+   */
+  setAngle: (instanceId: string, axis: WorldAxis, text: string) => string | null
+  /**
+   * Länkade kopior av en kopia, en per frame, i ett steg. Den sista blir vald.
+   * Kopiorna får inga lägesuttryck (de skulle dra dem tillbaka till originalet).
+   * Returnerar de nya id:na.
+   */
+  addCopies: (sourceId: string, frames: readonly Frame[]) => string[]
   /** Ny kopia som delar form med originalet. Returnerar den nya kopians id. */
   duplicateLinked: (instanceId: string) => string | null
   /** Ger kopian en egen form, så att den inte längre ändras med de andra. */
@@ -117,6 +148,20 @@ export const useDocumentStore = create<DocumentState>()((set, get) => {
       past: [...past, doc].slice(-HISTORY_LIMIT),
       future: [],
     })
+  }
+
+  /**
+   * Ger en kopia ny riktning (och origo). Viloläget sparas första gången, så
+   * att vinklarna räknas från hur den låg innan. Som vid flytt: flyttas hörnet
+   * närmast origo längs en axel, slutar den axeln styras av sitt uttryck.
+   */
+  const reorient = (inst: Instance, def: PartDef, frame: Frame) => {
+    const next = { ...inst, frame, rest: restOf(inst) }
+    const before = minCorner(inst, def)
+    const after = minCorner(next, def)
+    const moved = WORLD_AXES.filter((_, k) => Math.abs(after[k]! - before[k]!) > 1e-6)
+    const { doc } = get()
+    commit({ ...doc, instances: doc.instances.map((i) => (i.id === inst.id ? withoutPos(next, moved) : i)) })
   }
 
   const findInstance = (id: string) => {
@@ -205,14 +250,35 @@ export const useDocumentStore = create<DocumentState>()((set, get) => {
     rotateInstance: (instanceId, center, axis, degrees) => {
       const found = findInstance(instanceId)
       if (!found || degrees % 360 === 0) return
+      reorient(found.inst, found.def, rotateFrame(found.inst.frame, center, axis, degrees))
+    },
+
+    setAngle: (instanceId, axis, text) => {
+      const found = findInstance(instanceId)
+      if (!found) return 'Delen finns inte'
+      const scope = paramScope(get().doc.params)
+      const r = evaluate(text, (n) => scope.get(n))
+      if (!r.ok) return r.error
       const { inst, def } = found
-      const next = { ...inst, frame: rotateFrame(inst.frame, center, axis, degrees) }
-      // Som vid flytt: flyttas hörnet närmast origo längs en axel, slutar den axeln styras av sitt uttryck.
-      const before = minCorner(inst, def)
-      const after = minCorner(next, def)
-      const moved = WORLD_AXES.filter((_, k) => Math.abs(after[k]! - before[k]!) > 1e-6)
+      const rest = restOf(inst)
+      const angles = anglesOf(inst.frame, rest)
+      const i = WORLD_AXES.indexOf(axis)
+      if (angles[i] === r.value) return null
+      angles[i] = r.value
+      const body = resolveBodies(get().doc).find((b) => b.id === instanceId)!
+      reorient(inst, def, withAngles(inst.frame, rest, bodyCenter(body), angles))
+      return null
+    },
+
+    addCopies: (sourceId, frames) => {
+      const found = findInstance(sourceId)
+      if (!found || frames.length === 0) return []
+      // Kopiorna räknar sina vinklar från samma viloläge som originalet.
+      const rest = restOf(found.inst)
+      const copies = frames.map((frame) => ({ id: newId(), defId: found.def.id, frame, rest }))
       const { doc } = get()
-      commit({ ...doc, instances: doc.instances.map((i) => (i.id === instanceId ? withoutPos(next, moved) : i)) })
+      commit({ ...doc, instances: [...doc.instances, ...copies] }, { kind: 'body', id: copies.at(-1)!.id })
+      return copies.map((c) => c.id)
     },
 
     duplicateLinked: (instanceId) => {
@@ -221,7 +287,12 @@ export const useDocumentStore = create<DocumentState>()((set, get) => {
       const { inst, def } = found
       const body = resolveBodies(get().doc).find((b) => b.id === instanceId)!
       const offset = scale(inst.frame.u, bodyExtents(body)[0] + DUPLICATE_GAP)
-      const copy = { id: newId(), defId: def.id, frame: { ...inst.frame, origin: add(inst.frame.origin, offset) } }
+      const copy = {
+        id: newId(),
+        defId: def.id,
+        frame: { ...inst.frame, origin: add(inst.frame.origin, offset) },
+        ...(inst.rest && { rest: inst.rest }),
+      }
       const { doc } = get()
       commit({ ...doc, instances: [...doc.instances, copy] }, { kind: 'body', id: copy.id })
       return copy.id

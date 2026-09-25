@@ -55,6 +55,14 @@ describe('format', () => {
     expect(migrate({ version: FORMAT_VERSION, doc: bad }).ok).toBe(false)
   })
 
+  it('läser viloläge för vinklar (version 4) och avvisar ett trasigt', () => {
+    const rest = { u: [0, 0, -1], v: [-1, 0, 0], n: [0, 1, 0] }
+    const withRest = { ...doc, instances: [{ ...doc.instances[0]!, rest }] } as typeof doc
+    expect(migrate(JSON.parse(JSON.stringify(serialize(withRest))))).toEqual({ ok: true, doc: withRest })
+    const bad = { ...doc, instances: [{ ...doc.instances[0]!, rest: { u: [0, 0] } }] }
+    expect(migrate({ version: FORMAT_VERSION, doc: bad }).ok).toBe(false)
+  })
+
   it('avvisar samma axel för fiber och tjocklek', () => {
     const bad = { ...doc, defs: [{ ...doc.defs[0]!, grainAxis: 'n', thicknessAxis: 'n' }] }
     expect(migrate({ version: FORMAT_VERSION, doc: bad }).ok).toBe(false)

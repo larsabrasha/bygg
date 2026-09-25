@@ -1,20 +1,25 @@
 import { beforeEach, describe, expect, it } from 'vitest'
+import { bodyCenter } from '../model/geometry'
 import { resolveBodies } from '../model/resolve'
 import type { Vec3 } from '../model/types'
 import { resetDocumentStore, useDocumentStore } from '../store/documentStore'
 import { useToolStore } from '../store/toolStore'
 import {
+  amendableOp,
+  amendLast,
   applyMeasure,
   beginPushPull,
-  bodyCenter,
   commit,
+  extendCopies,
   hoverAt,
   move,
   opFocus,
   regrab,
   repeatLastPushPull,
+  setCopy,
   tap,
 } from './actions'
+import { COPY_PREVIEW_ID, previewDoc } from './preview'
 
 const docs = () => useDocumentStore.getState()
 const doc = () => docs().doc
@@ -453,5 +458,178 @@ describe('välj', () => {
     expect(docs().selection).toEqual({ kind: 'body', id: 'x', face: 'n+' })
     tap({ point: [0, 0, 0], target: { kind: 'ground' } }, 0)
     expect(docs().selection).toBeNull()
+  })
+})
+
+describe('kopia i Flytta-läget', () => {
+  const front = (x: number, y: number) => ({ origin: [x, y, 3000] as Vec3, dir: [0, 0, -1] as Vec3 })
+
+  /** Del 600 × 22 × 400 på golvet, vald, i Flytta med Kopia på. */
+  function setup() {
+    const b = extrude(drawGroundRect(), '22')
+    docs().select({ kind: 'body', id: b.id })
+    tools().setTool('move')
+    setCopy(true)
+    return b
+  }
+
+  function dragX(dx: number) {
+    tap({ point: [300, 11, -200], target: { kind: 'axis', axis: 0 } }, 0)
+    regrab(front(300, 11))
+    move(front(300 + dx, 11), 0)
+  }
+
+  it('lämnar originalet och gör en länkad kopia där man släpper', () => {
+    const b = setup()
+    dragX(700)
+    commit()
+    expect(bodies().map((x) => x.frame.origin)).toEqual([
+      [0, 0, 0],
+      [700, 0, 0],
+    ])
+    const copy = bodies()[1]!
+    expect(copy.defId).toBe(b.defId)
+    expect(docs().selection).toEqual({ kind: 'body', id: copy.id })
+  })
+
+  it('förhandsvisar kopian och låter originalet stå kvar', () => {
+    setup()
+    dragX(700)
+    const p = previewDoc(tools().op!, doc(), true)!
+    expect(p.doc.instances.map((i) => i.frame.origin)).toEqual([
+      [0, 0, 0],
+      [700, 0, 0],
+    ])
+    expect([...p.affected]).toEqual([COPY_PREVIEW_ID])
+  })
+
+  it('ett antal efteråt ger en rad kopior med samma steg', () => {
+    setup()
+    dragX(700)
+    commit()
+    tools().setMeasure(0, '4')
+    expect(applyMeasure()).toBe(true)
+    expect(bodies().map((x) => x.frame.origin[0])).toEqual([0, 700, 1400, 2100, 2800])
+    // Ökar man igen fortsätter raden; färre går inte (det gör Ångra).
+    expect(extendCopies(5)).toBe(true)
+    expect(bodies()).toHaveLength(6)
+    expect(extendCopies(3)).toBe(false)
+  })
+
+  it('vridning med kopia och antal ger kopior i steg runt mitten', () => {
+    setup()
+    tap({ point: [300, 11, -200], target: { kind: 'rotate', axis: 1 } }, 0)
+    tools().setMeasure(0, '90')
+    applyMeasure()
+    expect(extendCopies(3)).toBe(true)
+    expect(bodies().map((x) => x.frame.u)).toEqual([
+      [1, 0, 0],
+      [0, 0, -1],
+      [-1, 0, 0],
+      [0, 0, 1],
+    ])
+  })
+
+  it('antalet gäller inte längre efter Ångra eller en ny flytt', () => {
+    setup()
+    dragX(700)
+    commit()
+    docs().undo()
+    expect(extendCopies(4)).toBe(false)
+
+    dragX(700)
+    commit()
+    setCopy(false)
+    dragX(100) // flyttar kopian
+    commit()
+    expect(extendCopies(4)).toBe(false)
+  })
+
+  it('avmarkerar man lämnar man Flytta, så att nästa val börjar i Välj', () => {
+    setup()
+    docs().select(null)
+    expect(tools().tool).toBe('select')
+    expect(tools().copy).toBe(false)
+  })
+
+  it('Kopia slås av när man lämnar Flytta', () => {
+    setup()
+    tools().setTool('select')
+    expect(tools().copy).toBe(false)
+  })
+
+  it('en nolldragning gör ingen kopia', () => {
+    setup()
+    dragX(0)
+    commit()
+    expect(bodies()).toHaveLength(1)
+  })
+})
+
+describe('ändra efteråt', () => {
+  it('en utdragen skiss kan få ett annat djup efteråt, i ett steg i historiken', () => {
+    const b = extrude(drawGroundRect(), '22')
+    expect(amendableOp()).not.toBeNull()
+    const steps = docs().past.length
+    tools().setMeasure(0, '44')
+    expect(applyMeasure()).toBe(true)
+    const after = bodies()
+    expect(after).toHaveLength(1)
+    expect(after[0]!.z1 - after[0]!.z0).toBe(44)
+    expect(after[0]!.id).not.toBe(b.id)
+    expect(docs().past.length).toBe(steps)
+    // Rutan ligger kvar med det nya värdet.
+    expect(amendableOp()?.op).toMatchObject({ distance: 44 })
+  })
+
+  it('en rektangel kan få andra mått efteråt; tomt fält behåller värdet', () => {
+    drawGroundRect(0, 0, 600, -400)
+    tools().setMeasure(1, '250')
+    expect(amendLast()).toBe(true)
+    expect(doc().sketches).toHaveLength(1)
+    expect(doc().sketches[0]!.rect).toEqual({ x0: 0, y0: 0, x1: 600, y1: 250 })
+  })
+
+  it('en flytt längs en pil kan få ett annat avstånd efteråt', () => {
+    const b = extrude(drawGroundRect(), '22')
+    docs().select({ kind: 'body', id: b.id })
+    tools().setTool('move')
+    tap({ point: [300, 11, -200], target: { kind: 'axis', axis: 0 } }, 0)
+    tools().setMeasure(0, '100')
+    applyMeasure()
+    tools().setMeasure(0, '-50')
+    expect(applyMeasure()).toBe(true)
+    expect(bodies()[0]!.frame.origin).toEqual([-50, 0, 0])
+  })
+
+  it('ett mått som inte går att beräkna ändrar inget', () => {
+    extrude(drawGroundRect(), '22')
+    const before = doc()
+    tools().setMeasure(0, 'okänd')
+    expect(applyMeasure()).toBe(false)
+    expect(bodies()[0]!.z1 - bodies()[0]!.z0).toBe(22)
+    expect(doc()).toEqual(before)
+    expect(tools().op).toBeNull()
+    expect(tools().measure[0]).toBe('okänd')
+    expect(amendableOp()).not.toBeNull()
+  })
+
+  it('går inte längre att ändra när något annat hänt', () => {
+    const b = extrude(drawGroundRect(), '22')
+    docs().updatePart(b.id, { name: 'Sida' })
+    expect(amendableOp()).toBeNull()
+
+    const c = extrude(drawGroundRect(1000, 0, 1200, -200), '22')
+    expect(amendableOp()).not.toBeNull()
+    docs().select({ kind: 'body', id: c.id }) // annat val (utan yta)
+    expect(amendableOp()).toBeNull()
+  })
+
+  it('tomt fält och Enter stänger bara rutan', () => {
+    extrude(drawGroundRect(), '22')
+    const before = doc()
+    expect(applyMeasure()).toBe(true)
+    expect(amendableOp()).toBeNull()
+    expect(doc()).toBe(before)
   })
 })

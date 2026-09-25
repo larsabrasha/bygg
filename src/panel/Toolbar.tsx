@@ -21,23 +21,26 @@ export function Toolbar() {
       <div className="flex gap-1 narrow:hidden" role="toolbar" aria-label="Verktyg">
         <ToolButtons />
       </div>
-      <div className="ml-auto flex shrink-0 gap-1">
+      {/* Ångra och gör om i en egen grupp; Dela längst till höger, med luft emellan. */}
+      <div className="ml-auto flex shrink-0 items-center gap-4 narrow:gap-2">
+        <div className="flex gap-1" role="group" aria-label="Historik">
+          <button
+            className={iconButton}
+            disabled={!canUndo}
+            aria-label="Ångra"
+            title="Ångra (⌘Z)"
+            onClick={() => {
+              useToolStore.getState().setOp(null)
+              undo()
+            }}
+          >
+            <Undo2 {...ICON} />
+          </button>
+          <button className={iconButton} disabled={!canRedo} aria-label="Gör om" title="Gör om (⇧⌘Z)" onClick={redo}>
+            <Redo2 {...ICON} />
+          </button>
+        </div>
         <ShareMenu buttonClass={iconButton} />
-        <button
-          className={iconButton}
-          disabled={!canUndo}
-          aria-label="Ångra"
-          title="Ångra (⌘Z)"
-          onClick={() => {
-            useToolStore.getState().setOp(null)
-            undo()
-          }}
-        >
-          <Undo2 {...ICON} />
-        </button>
-        <button className={iconButton} disabled={!canRedo} aria-label="Gör om" title="Gör om (⇧⌘Z)" onClick={redo}>
-          <Redo2 {...ICON} />
-        </button>
       </div>
     </header>
   )

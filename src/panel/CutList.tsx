@@ -1,3 +1,4 @@
+import { Download, Printer } from 'lucide-react'
 import { useMemo } from 'react'
 import { buildCutList } from '../model/cutlist'
 import { useBodies, useDocumentStore } from '../store/documentStore'
@@ -16,7 +17,7 @@ export function CutList() {
   const modelName = useLibraryStore((s) => s.currentName)
 
   return (
-    <section className="narrow:group-data-[tab=params]/sheet:hidden narrow:group-data-[tab=properties]/sheet:hidden">
+    <section className="group-data-[tab=params]/sheet:hidden group-data-[tab=properties]/sheet:hidden">
       <h2 className={sectionTitle}>Kaplista</h2>
       {cutList.rows.length === 0 ? (
         <p className="text-faint">Inga delar än. Rita en rektangel och dra i pilen.</p>
@@ -62,9 +63,11 @@ export function CutList() {
           </table>
           <div className="mt-3 flex gap-2">
             <button className={secondaryButton} onClick={() => printCutList(modelName)}>
+              <Printer size={16} strokeWidth={1.75} aria-hidden />
               Skriv ut / PDF
             </button>
             <button className={secondaryButton} onClick={() => downloadCutListCsv(cutList, modelName)}>
+              <Download size={16} strokeWidth={1.75} aria-hidden />
               Ladda ner CSV
             </button>
           </div>

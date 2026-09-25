@@ -1,4 +1,4 @@
-import { ArrowUpFromLine, Copy, Focus, Move, Trash2, X, type LucideIcon } from 'lucide-react'
+import { ArrowUpFromLine, Copy, Focus, Move3d, Trash2, X, type LucideIcon } from 'lucide-react'
 import { resolveBodies } from '../model/resolve'
 import { useDocumentStore } from '../store/documentStore'
 import { useToolStore } from '../store/toolStore'
@@ -27,7 +27,7 @@ function BarButton({
       title={label}
       aria-pressed={pressed}
       onClick={onClick}
-      className={`flex h-9 cursor-pointer items-center gap-1.5 rounded-md border border-transparent px-2 hover:bg-hover aria-pressed:border-accent-line aria-pressed:bg-accent-soft aria-pressed:text-accent narrow:size-11 narrow:justify-center narrow:px-0 ${danger ? 'text-danger' : ''}`}
+      className={`flex h-9 cursor-pointer items-center gap-1.5 rounded-lg px-2 hover:bg-hover aria-pressed:bg-accent-soft aria-pressed:text-accent narrow:size-11 narrow:justify-center narrow:px-0 ${danger ? 'text-danger' : ''}`}
     >
       <Icon {...ICON} />
       {/* På smal skärm bara ikonen; namnet finns i aria-label. */}
@@ -59,12 +59,17 @@ export function SelectionBar() {
     <div
       role="toolbar"
       aria-label="Det valda"
-      className="absolute top-3 left-3 flex max-w-[calc(100%-80px)] items-center gap-0.5 rounded-lg border border-line bg-panel/95 p-0.5 shadow-md"
+      className="absolute top-3 left-3 flex max-w-[calc(100%-150px)] narrow:max-w-[calc(100%-80px)] items-center gap-0.5 rounded-lg border border-line bg-panel/95 p-0.5 shadow-md"
     >
       <span className="truncate px-2 text-[13px] font-semibold narrow:max-w-20">{body ? body.name : 'Skiss'}</span>
       {body ? (
         <>
-          <BarButton label="Flytta" Icon={Move} pressed={moving} onClick={() => setTool(moving ? 'select' : 'move')} />
+          <BarButton
+            label="Flytta/vrid"
+            Icon={Move3d}
+            pressed={moving}
+            onClick={() => setTool(moving ? 'select' : 'move')}
+          />
           <BarButton label="Zooma till" Icon={Focus} onClick={() => requestFit('selection')} />
           <BarButton label="Länkad kopia" Icon={Copy} onClick={() => duplicateLinked(body.id)} />
         </>
@@ -76,7 +81,16 @@ export function SelectionBar() {
         />
       )}
       <BarButton label="Ta bort" Icon={Trash2} onClick={deleteSelection} danger />
-      <BarButton label="Avmarkera" Icon={X} onClick={() => select(null)} />
+      {/* Avmarkera gör inget med delen, så den står för sig: bara ett kryss, som på en etikett. */}
+      <span aria-hidden className="mx-0.5 h-6 w-px bg-line" />
+      <button
+        aria-label="Avmarkera"
+        title="Avmarkera"
+        onClick={() => select(null)}
+        className="grid size-9 shrink-0 cursor-pointer place-items-center rounded-full text-muted hover:bg-hover hover:text-ink narrow:size-11"
+      >
+        <X size={16} strokeWidth={2} aria-hidden />
+      </button>
     </div>
   )
 }
