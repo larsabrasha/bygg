@@ -1,6 +1,10 @@
 import { GizmoHelper, GizmoViewport, Grid } from '@react-three/drei'
+import { Object3D, PMREMGenerator } from 'three'
+import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js'
+import { bodyCorners } from '../model/drawing'
+import type { Body, Vec3 } from '../model/types'
 import { Canvas, useThree } from '@react-three/fiber'
-import { useEffect } from 'react'
+import { useEffect, useMemo } from 'react'
 import { resolveBodies } from '../model/resolve'
 import { useDocumentStore } from '../store/documentStore'
 import { useToolStore } from '../store/toolStore'
@@ -44,6 +48,7 @@ function Scene() {
   // Under glidningen ut och in står delarna också isär; läget att titta slutar när de är ihop igen.
   const explodeShown = useViewStore((s) => s.explodeShown)
   const showDims = useViewStore((s) => s.showDims)
+  const look = useViewStore((s) => s.look)
   const exploded = useViewStore((s) => s.exploded) || explodeShown > 0
 
   // Under en operation ritas dokumentet som det skulle bli; berörda delar halvgenomskinliga.
@@ -88,6 +93,7 @@ function Scene() {
             ghost={!!b.tool}
             offset={offsets?.get(b.id)}
             faded={fadedIds.has(b.id)}
+            look={look}
             preview={preview?.affected.has(b.id)}
             selected={selectedBody?.id === b.id}
             sibling={!!selectedBody && !b.tool && selectedBody.id !== b.id && selectedBody.defId === b.defId}
@@ -101,6 +107,7 @@ function Scene() {
           />
         )
       })}
+      {look === 'realistic' && <RealisticLight bodies={bodies} />}
       {offsets && <PartNames bodies={bodies} offsets={offsets} />}
       {!exploded &&
         shown.sketches.map((s) => (
@@ -129,17 +136,81 @@ function Scene() {
   )
 }
 
+/**
+ * Ljuset i det realistiska utseendet: ett rum runt modellen som ger reflexer
+ * och mjukt ljus från alla håll (RoomEnvironment, byggs i appen och fungerar
+ * offline), och ett riktat ljus med skugga på golvet och på andra delar.
+ */
+function RealisticLight({ bodies }: { bodies: readonly Body[] }) {
+  // Scenen hämtas med get(): den ändras här, och värden från en hook får inte ändras.
+  const get = useThree((s) => s.get)
+  useEffect(() => {
+    const { gl, scene, invalidate } = get()
+    const pmrem = new PMREMGenerator(gl)
+    const env = pmrem.fromScene(new RoomEnvironment(), 0.04).texture
+    scene.environment = env
+    scene.environmentIntensity = 0.45
+    invalidate()
+    return () => {
+      scene.environment = null
+      env.dispose()
+      pmrem.dispose()
+      invalidate()
+    }
+  }, [get])
+
+  // Ljuset och skuggan täcker modellen, med marginal.
+  const corners = bodies.filter((b) => !b.tool).flatMap((b) => bodyCorners(b))
+  const target = useMemo(() => new Object3D(), [])
+  if (corners.length === 0) return null
+  const lo = [0, 1, 2].map((k) => Math.min(...corners.map((c) => c[k]!)))
+  const hi = [0, 1, 2].map((k) => Math.max(...corners.map((c) => c[k]!)))
+  const center: Vec3 = [(lo[0]! + hi[0]!) / 2, (lo[1]! + hi[1]!) / 2, (lo[2]! + hi[2]!) / 2]
+  const radius = Math.max(200, Math.hypot(hi[0]! - lo[0]!, hi[1]! - lo[1]!, hi[2]! - lo[2]!) / 2)
+  const floor = radius * 3
+  return (
+    <group userData={{ noThumb: true }}>
+      <primitive object={target} position={center} />
+      {/* Solen snett ovanifrån, som huvudljuset i det skuggade utseendet. Skuggkameran rymmer modellen. */}
+      <directionalLight
+        position={[center[0] + radius * 1.6, center[1] + radius * 3, center[2] + radius * 2]}
+        target={target}
+        intensity={1.1}
+        castShadow
+        shadow-mapSize={[2048, 2048]}
+        shadow-bias={-0.0004}
+        shadow-normalBias={1.5}
+        shadow-radius={4}
+        shadow-camera-left={-radius * 1.5}
+        shadow-camera-right={radius * 1.5}
+        shadow-camera-top={radius * 1.5}
+        shadow-camera-bottom={-radius * 1.5}
+        shadow-camera-near={radius}
+        shadow-camera-far={radius * 8}
+      />
+      {/* Golvet tar bara emot skuggan; rutnätet syns som förut. */}
+      <mesh position={[center[0], 0.3, center[2]]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
+        <planeGeometry args={[floor, floor]} />
+        <shadowMaterial opacity={0.28} transparent depthWrite={false} />
+      </mesh>
+    </group>
+  )
+}
+
 // Scenen ritas i millimeter: 1 enhet = 1 mm.
 export function Viewport() {
   const colors = SCENE[useColorScheme()]
+  // Realistiskt: miljöljuset och solen i RealisticLight ersätter det jämna ljuset och huvudljuset.
+  const realistic = useViewStore((s) => s.look) === 'realistic'
 
   return (
     // frameloop="demand": ritar bara om när något ändras. Sparar batteri på mobil.
-    <Canvas frameloop="demand" camera={{ position: [...HOME.position], fov: 45, near: 1, far: 50000 }}>
+    // shadows: skuggkartor finns, men bara ljuset i RealisticLight kastar skugga.
+    <Canvas shadows frameloop="demand" camera={{ position: [...HOME.position], fov: 45, near: 1, far: 50000 }}>
       <color attach="background" args={[colors.background]} />
-      <ambientLight intensity={0.6} />
-      <directionalLight position={[2000, 4000, 3000]} intensity={1.6} />
-      <directionalLight position={[-3000, 2000, -1000]} intensity={0.4} />
+      <ambientLight intensity={realistic ? 0 : 0.6} />
+      <directionalLight position={[2000, 4000, 3000]} intensity={realistic ? 0 : 1.6} />
+      <directionalLight position={[-3000, 2000, -1000]} intensity={realistic ? 0.2 : 0.4} />
 
       {/* Lite under y=0 så att delarnas undersida inte flimrar mot linjerna. Inte med på modellbilderna. */}
       <group userData={{ noThumb: true }}>

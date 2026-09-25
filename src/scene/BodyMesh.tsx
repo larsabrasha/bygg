@@ -1,6 +1,15 @@
 import { Edges } from '@react-three/drei'
-import { memo, useEffect, useMemo } from 'react'
-import { BoxGeometry, GreaterDepth, MeshStandardMaterial } from 'three'
+import { useFrame } from '@react-three/fiber'
+import { memo, useEffect, useMemo, useRef } from 'react'
+import {
+  BoxGeometry,
+  BufferAttribute,
+  BufferGeometry,
+  GreaterDepth,
+  MeshStandardMaterial,
+  Vector3,
+  type LineSegments,
+} from 'three'
 import { bodyExtents, type Box } from '../model/geometry'
 import { FACES, type Body, type Face, type Vec3 } from '../model/types'
 import { add } from '../model/vec'
@@ -9,6 +18,11 @@ import { DRAG_SEGMENTS, SEGMENTS } from '../model/solid'
 import { solidGeometry, useManifold } from './csg'
 import { cylinderGeometry } from './cylinder'
 import { frameQuaternion } from './frameTransform'
+import { grainUvs, hash01 } from './grainUv'
+import { tangentPoints } from './silhouette'
+import { useColorScheme } from './useColorScheme'
+import { woodTexture } from './woodTexture'
+import type { Look } from '../store/viewStore'
 
 /** Formens låda, för att räkna ut vilken sida en träff på resultatet ligger på (faceOnBox). */
 /** Hur synlig en del är när en annan är isolerad. */
@@ -34,7 +48,17 @@ interface Props {
    * alla delar). Kameran kan vrida runt den.
    */
   faded?: boolean
+  /**
+   * Utseendet: skuggat (som på ritningen), bara kanter, eller trä med ådring
+   * längs fibern. Ytorna finns kvar i trådmodellen, osynliga, så att de går att trycka på.
+   */
+  look?: Look
 }
+
+/** Axeln längs fibern som index i delens koordinater (u, v, n = x, y, z). */
+const AXIS_INDEX = { u: 0, v: 1, n: 2 } as const
+/** Kanterna i trådmodellen i mörkt tema; EDGE syns inte mot den mörka bakgrunden. */
+const WIRE_DARK = '#e6d8c2'
 
 function BodyMeshImpl({
   body,
@@ -45,7 +69,9 @@ function BodyMeshImpl({
   ghost = false,
   offset,
   faded = false,
+  look = 'shaded',
 }: Props) {
+  const scheme = useColorScheme()
   const quaternion = useMemo(() => frameQuaternion(body.frame), [body.frame])
   const [w, h, d] = bodyExtents(body)
   const { x0, x1, y0, y1 } = body.profile
@@ -68,6 +94,8 @@ function BodyMeshImpl({
   // och så att raycast ger materialIndex = vilken sida som träffades.
   // En cylinder har tre: runda sidan, n+ och n− (CylinderGeometrys ordning).
   const color = materialColor(body.material)
+  const wire = look === 'wireframe'
+  const real = look === 'realistic' && !ghost
   const materials = useMemo(() => {
     // Resultatet med verktyg är en enda yta; där markeras hela delen.
     const parts: (readonly Face[])[] = solid
@@ -78,8 +106,18 @@ function BodyMeshImpl({
     return parts.map((faces) => {
       const marked = !solid && !!highlightFace && faces.includes(highlightFace)
       const lit = selected || marked
+      if (wire && !ghost) {
+        // Trådmodell: ytan syns bara som en svag fyllning när den är markerad eller vald.
+        return new MeshStandardMaterial({
+          color: ACCENT,
+          transparent: true,
+          opacity: marked ? 0.25 : selected ? 0.08 : 0,
+          depthWrite: false,
+        })
+      }
       return new MeshStandardMaterial({
-        color: ghost ? ACCENT : color,
+        color: ghost ? ACCENT : real ? '#ffffff' : color,
+        ...(real && { map: woodTexture(body.material), roughness: 0.62, metalness: 0 }),
         emissive: lit ? ACCENT : '#000000',
         emissiveIntensity: marked ? 0.45 : lit ? 0.2 : 0,
         transparent: preview || ghost || faded,
@@ -90,7 +128,7 @@ function BodyMeshImpl({
         depthTest: !ghost,
       })
     })
-  }, [solid, round, color, selected, highlightFace, preview, ghost, faded])
+  }, [solid, round, color, selected, highlightFace, preview, ghost, faded, wire, real, body.material])
   useEffect(() => () => materials.forEach((m) => m.dispose()), [materials])
 
   // Cylinderns axel längs n (three.js lägger den längs y). Ändarnas kanter blir cirklar;
@@ -100,16 +138,38 @@ function BodyMeshImpl({
   const own = useMemo(() => (round ? cylinderGeometry(w, d) : new BoxGeometry(w, h, d)), [round, w, h, d])
   useEffect(() => () => own.dispose(), [own])
 
-  const edge = selected || preview ? ACCENT : sibling ? ACCENT_LIGHT : EDGE
+  // Trä: texturkoordinater längs fibern, med ett eget mönster per del (se grainUv).
+  // I render, inte i en effekt: de ska finnas redan när delen ritas första gången.
+  const geometry = solid ?? own
+  const grain = AXIS_INDEX[body.grainAxis]
+  useMemo(() => {
+    if (!real) return
+    const pos = geometry.getAttribute('position')
+    const normal = geometry.getAttribute('normal')
+    if (!pos || !normal) return
+    const uv = grainUvs(pos.array, normal.array, grain, [hash01(body.id), hash01(body.id, 1)])
+    geometry.setAttribute('uv', new BufferAttribute(uv, 2))
+  }, [real, geometry, grain, body.id])
+
+  const edge = selected || preview ? ACCENT : sibling ? ACCENT_LIGHT : wire && scheme === 'dark' ? WIRE_DARK : EDGE
+  // Trä ritas utan kanter, som ett foto; det valda och kopiorna av det har dem ändå.
+  const plainReal = real && !selected && !sibling && !preview && !faded
 
   return (
     <group position={offset ? add(body.frame.origin, offset) : body.frame.origin} quaternion={quaternion}>
+      {/* En cylinders mantel har inga kanter; i trådmodellen syns den genom konturlinjerna. */}
+      {round && wire && !ghost && (
+        <Silhouette center={[(x0 + x1) / 2, (y0 + y1) / 2]} r={(x1 - x0) / 2} z0={body.z0} z1={body.z1} color={edge} />
+      )}
       <mesh
         // Resultatet med verktyg är redan i formens koordinater; lådan och cylindern ritas kring sin mitt.
         position={solid ? [0, 0, 0] : center}
         // En lista med material kräver grupper i geometrin; resultatet med verktyg har inga och ett material.
         material={solid ? materials[0] : materials}
-        geometry={solid ?? own}
+        geometry={geometry}
+        // Skuggor bara i det realistiska utseendet (se RealisticLight).
+        castShadow={real && !faded}
+        receiveShadow={real}
         userData={
           preview || faded
             ? { pivot: true }
@@ -128,7 +188,7 @@ function BodyMeshImpl({
           />
         ) : faded ? (
           <Edges color={edge} lineWidth={1} transparent opacity={FADED_OPACITY * 2} depthWrite={false} />
-        ) : (
+        ) : plainReal ? null : (
           <Edges color={edge} lineWidth={selected ? 2.5 : sibling ? 1.8 : 1} />
         )}
         {/*
@@ -137,7 +197,7 @@ function BodyMeshImpl({
           GreaterDepth ritar bara bakom något. polygonOffset drar linjen mot
           kameran, så att ytorna vid en synlig kant inte räknas som framför.
         */}
-        {selected && !preview && !ghost && (
+        {selected && !preview && !ghost && !wire && (
           <Edges
             color={ACCENT}
             lineWidth={1.5}
@@ -156,6 +216,57 @@ function BodyMeshImpl({
         )}
       </mesh>
     </group>
+  )
+}
+
+const cameraLocal = new Vector3()
+
+/**
+ * Konturlinjerna på en cylinder (axeln längs n, i formens koordinater): två
+ * linjer längs axeln där manteln vänder bort från kameran, som i en CAD-trådmodell.
+ * Följer kameran; räknas om före varje bildruta.
+ */
+function Silhouette({
+  center,
+  r,
+  z0,
+  z1,
+  color,
+}: {
+  center: [number, number]
+  r: number
+  z0: number
+  z1: number
+  color: string
+}) {
+  const ref = useRef<LineSegments>(null)
+  const geometry = useMemo(() => {
+    const g = new BufferGeometry()
+    g.setAttribute('position', new BufferAttribute(new Float32Array(12), 3))
+    return g
+  }, [])
+  useEffect(() => () => geometry.dispose(), [geometry])
+
+  useFrame(({ camera }) => {
+    const line = ref.current
+    if (!line) return
+    const p = line.worldToLocal(cameraLocal.copy(camera.position))
+    const points = tangentPoints(center, r, [p.x, p.y])
+    line.visible = !!points
+    if (!points) return
+    const pos = geometry.getAttribute('position') as BufferAttribute
+    points.forEach(([x, y], i) => {
+      pos.setXYZ(i * 2, x, y, z0)
+      pos.setXYZ(i * 2 + 1, x, y, z1)
+    })
+    pos.needsUpdate = true
+    geometry.computeBoundingSphere()
+  })
+
+  return (
+    <lineSegments ref={ref} geometry={geometry}>
+      <lineBasicMaterial color={color} />
+    </lineSegments>
   )
 }
 
@@ -186,5 +297,6 @@ export const BodyMesh = memo(
     a.preview === b.preview &&
     a.ghost === b.ghost &&
     a.offset?.join() === b.offset?.join() &&
-    a.faded === b.faded,
+    a.faded === b.faded &&
+    a.look === b.look,
 )

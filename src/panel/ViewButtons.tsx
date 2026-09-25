@@ -1,8 +1,19 @@
-import { Boxes, Eye, House, Maximize2, Minimize2, RulerDimensionLine } from 'lucide-react'
+import {
+  Box,
+  Boxes,
+  Cuboid,
+  Eye,
+  House,
+  Maximize2,
+  Minimize2,
+  RulerDimensionLine,
+  Sparkles,
+  type LucideIcon,
+} from 'lucide-react'
 import { useCallback, useRef, useState } from 'react'
 import { MenuItem } from './MenuItem'
 import { useDismiss } from './useDismiss'
-import { useViewStore } from '../store/viewStore'
+import { LOOKS, useViewStore, type Look } from '../store/viewStore'
 import { setExploded } from '../tools/actions'
 import { Tip } from './Tip'
 import { useCoversView } from './useCoversView'
@@ -10,8 +21,8 @@ import { useCoversView } from './useCoversView'
 /**
  * Knappar ovanpå 3D-vyn för kameran. Uppe till höger, så att de inte krockar med måttfältet på mobil.
  * Visa allt har text på desktop, så att den inte ser ut som fullskärm; på smal skärm bara huset.
- * Till höger om den: måtten (D), sprängskissen (E) och fokusläget (Tab), bara 3D-vyn. Knapparna behövs där
- * det inte finns något tangentbord. På smal skärm ligger de tre i menyn Vy under Visa allt (ViewMenu).
+ * Till höger om den: utseendet (V), måtten (D), sprängskissen (E) och fokusläget (Tab), bara 3D-vyn.
+ * Knapparna behövs där det inte finns något tangentbord. På smal skärm ligger de i menyn Vy under Visa allt (ViewMenu).
  */
 export function ViewButtons() {
   const requestFit = useViewStore((s) => s.requestFit)
@@ -36,6 +47,7 @@ export function ViewButtons() {
       </Tip>
       {/* På smal skärm i en meny (ViewMenu): två kolumner med knappar får inte plats när bladet är öppet. */}
       <div className="flex gap-1 narrow:hidden">
+        <LookMenu />
         <Tip label={showDims ? 'Dölj måtten' : 'Visa längd, bredd och tjocklek på det valda'} keys="D">
           <button
             aria-label="Mått"
@@ -72,8 +84,57 @@ export function ViewButtons() {
   )
 }
 
+/** Utseendena med namn och ikon, i den ordning V går igenom dem. */
+const LOOK_INFO: Record<Look, { label: string; Icon: LucideIcon }> = {
+  wireframe: { label: 'Trådmodell', Icon: Box },
+  shaded: { label: 'Skuggad', Icon: Cuboid },
+  realistic: { label: 'Realistisk', Icon: Sparkles },
+}
+
+/** Utseendet: knappen visar det valda, menyn de tre. */
+function LookMenu() {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+  const close = useCallback(() => setOpen(false), [])
+  useDismiss(ref, open, close)
+  const look = useViewStore((s) => s.look)
+  const setLook = useViewStore((s) => s.setLook)
+  const { Icon, label } = LOOK_INFO[look]
+  return (
+    <div ref={ref} className="relative">
+      <Tip label={`Utseende: ${label}`} keys="V">
+        <button
+          aria-label="Utseende"
+          aria-expanded={open}
+          onClick={() => setOpen((o) => !o)}
+          className="grid size-9 cursor-pointer place-items-center rounded-lg bg-panel/95 shadow-md hover:bg-hover aria-expanded:bg-accent-soft aria-expanded:text-accent"
+        >
+          <Icon size={18} strokeWidth={1.75} aria-hidden />
+        </button>
+      </Tip>
+      {open && (
+        <div className="absolute top-full right-0 z-50 mt-1 w-max min-w-44 rounded-lg border border-line bg-panel p-1 shadow-lg">
+          {LOOKS.map((l) => (
+            <MenuItem
+              key={l}
+              Icon={LOOK_INFO[l].Icon}
+              checked={l === look}
+              onClick={() => {
+                close()
+                setLook(l)
+              }}
+            >
+              {LOOK_INFO[l].label}
+            </MenuItem>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 /**
- * Mått, sprängskiss och fokusläge på smal skärm: en knapp med en meny, så att
+ * Mått, sprängskiss, fokusläge och utseende på smal skärm: en knapp med en meny, så att
  * kameraknapparna och verktygslisten får plats ovanför varandra vid högerkanten
  * också när vyn är låg (bladet öppet).
  */
@@ -87,6 +148,8 @@ function ViewMenu() {
   const exploded = useViewStore((s) => s.exploded)
   const showDims = useViewStore((s) => s.showDims)
   const toggleDims = useViewStore((s) => s.toggleDims)
+  const look = useViewStore((s) => s.look)
+  const setLook = useViewStore((s) => s.setLook)
   const pick = (fn: () => void) => () => {
     close()
     fn()
@@ -112,6 +175,12 @@ function ViewMenu() {
           <MenuItem Icon={focusMode ? Minimize2 : Maximize2} checked={focusMode} onClick={pick(toggleFocusMode)}>
             Fokusläge
           </MenuItem>
+          <div role="separator" className="mx-2 my-1 h-px bg-line" />
+          {LOOKS.map((l) => (
+            <MenuItem key={l} Icon={LOOK_INFO[l].Icon} checked={l === look} onClick={pick(() => setLook(l))}>
+              {LOOK_INFO[l].label}
+            </MenuItem>
+          ))}
         </div>
       )}
     </div>

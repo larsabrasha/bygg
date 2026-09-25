@@ -2,7 +2,7 @@ import { useEffect } from 'react'
 import { useDocumentStore } from '../store/documentStore'
 import { useLibraryStore } from '../store/libraryStore'
 import { useToolStore, type Op } from '../store/toolStore'
-import { useViewStore } from '../store/viewStore'
+import { LOOKS, useViewStore } from '../store/viewStore'
 import {
   amendableOp,
   applyMeasure,
@@ -29,7 +29,7 @@ function isEditable(t: EventTarget | null) {
 
 /**
  * Kortkommandon som i SketchUp: R, P, M, T (Mät), mellanslag, Esc, Delete, ⌘Z / ⇧⌘Z, ⇧Z (visa allt),
- * Alt/Option (Kopia i Flytta-läget), Tab (fokusläge), D (mått), E (sprängskiss), H / ⇧H / I (dölj, visa alla, isolera),
+ * Alt/Option (Kopia i Flytta-läget), Tab (fokusläge), D (mått), E (sprängskiss), V (utseende), H / ⇧H / I (dölj, visa alla, isolera),
  * mellanslag + dra (panorera).
  * P och M har ingen knapp i verktygsraden; där görs push/pull med pilen och flytt med dubbeltryck på delen.
  * Under en operation går siffror direkt till måttfältet utan att man klickar i det;
@@ -124,6 +124,13 @@ export function useShortcuts() {
         case 'D':
           useViewStore.getState().toggleDims()
           break
+        // V: nästa utseende (trådmodell, skuggad, realistisk).
+        case 'v':
+        case 'V': {
+          const view = useViewStore.getState()
+          view.setLook(LOOKS[(LOOKS.indexOf(view.look) + 1) % LOOKS.length]!)
+          break
+        }
         case 'e':
         case 'E':
           setExploded(!useViewStore.getState().exploded)

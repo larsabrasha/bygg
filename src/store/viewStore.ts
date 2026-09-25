@@ -2,6 +2,10 @@ import { create } from 'zustand'
 
 export type FitTarget = 'all' | 'selection'
 
+/** Hur delarna ritas: bara kanter, skuggade (som från början) eller med trä och miljöljus. */
+export type Look = 'wireframe' | 'shaded' | 'realistic'
+export const LOOKS: readonly Look[] = ['wireframe', 'shaded', 'realistic']
+
 export interface ViewState {
   /** Senaste begäran att zooma så att något syns. n ändras vid varje begäran, även till samma mål. */
   fit: { target: FitTarget; n: number } | null
@@ -38,6 +42,9 @@ export interface ViewState {
    */
   penMode: boolean
   setPenMode: (on: boolean) => void
+  /** Utseendet i 3D-vyn (inte på ritningen). Sparas per enhet. */
+  look: Look
+  setLook: (look: Look) => void
   /** Ritningen (sprängskiss och stycklista) visas över hela appen. Sparas inte. */
   drawing: boolean
   setDrawing: (on: boolean) => void
@@ -65,6 +72,25 @@ export function isShown(view: Pick<ViewState, 'hidden' | 'isolated'>, id: string
 }
 
 const PANEL_KEY = 'bygg.panelOpen'
+const LOOK_KEY = 'bygg.look'
+
+/** Utan lagring, eller med ett okänt värde, skuggat. */
+function readLook(): Look {
+  try {
+    const saved = localStorage.getItem(LOOK_KEY)
+    return LOOKS.find((l) => l === saved) ?? 'shaded'
+  } catch {
+    return 'shaded'
+  }
+}
+
+function saveLook(look: Look) {
+  try {
+    localStorage.setItem(LOOK_KEY, look)
+  } catch {
+    // Går inte att spara; valet gäller tills sidan laddas om.
+  }
+}
 
 /** Valet sparas per enhet. Utan lagring (privat fönster m.m.) är panelen öppen. */
 function readPanelOpen(): boolean {
@@ -106,6 +132,11 @@ export const useViewStore = create<ViewState>()((set) => ({
     ),
   isolate: (ids) => set({ isolated: ids }),
   showAll: () => set({ hidden: [], isolated: null }),
+  look: readLook(),
+  setLook: (look) => {
+    saveLook(look)
+    set({ look })
+  },
   drawing: false,
   setDrawing: (drawing) => set({ drawing }),
   showDims: false,
