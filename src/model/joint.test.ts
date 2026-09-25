@@ -80,4 +80,25 @@ describe('tapp och tapphål', () => {
     docs().deleteSelection()
     expect(bodies().find((b) => b.name === 'Tapp 1')!.tool).toEqual({ op: 'add', host: 'sarg' })
   })
+
+  it('tapphålet hamnar bara i benet tappen går in i, inte i dess länkade kopior', () => {
+    const doc = legAndApron()
+    docs().load({ ...doc, instances: [...doc.instances, { id: 'ben2', defId: 'ben', frame: identity(500, 0, 0) }] })
+    expect(docs().joint('sarg', 'ben')).toBeNull()
+    const leg = bodies().find((b) => b.id === 'ben')!
+    const copy = bodies().find((b) => b.id === 'ben2')!
+    expect(leg.tools).toEqual([expect.objectContaining({ op: 'subtract' })])
+    expect(copy.tools).toBeUndefined()
+    // Kaplistan räknar dem ändå som samma del.
+    expect(buildCutList(bodies()).rows.find((r) => r.names.includes('ben'))).toMatchObject({ count: 2 })
+  })
+
+  it('tappen finns på alla länkade kopior av sargen', () => {
+    const doc = legAndApron()
+    docs().load({ ...doc, instances: [...doc.instances, { id: 'sarg2', defId: 'sarg', frame: identity(40, 9, 100) }] })
+    docs().joint('sarg', 'ben')
+    const [a, b] = ['sarg', 'sarg2'].map((id) => bodies().find((x) => x.id === id)!)
+    expect(a!.tools).toEqual([expect.objectContaining({ op: 'add' })])
+    expect(b!.tools).toBe(a!.tools)
+  })
 })

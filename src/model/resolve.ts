@@ -3,15 +3,30 @@ import type { Body, Instance, ModelDocument, PartDef, ToolShape } from './types'
 
 const cache = new WeakMap<ModelDocument, Body[]>()
 
+interface Tools {
+  /** Per form: gäller alla länkade kopior (urtag, tillägg och tappar). */
+  byDef: Map<string, ToolShape[]>
+  /** Per kopia: tapphål. De hör till just den del tappen går in i, inte till dess länkade kopior. */
+  byInstance: Map<string, ToolShape[]>
+}
+
 /**
- * Verktygen per form: varje kopia med combine blir ett ToolShape i sin värds
- * form, i formens koordinater. Verktyg på verktyg räknas inte (se combineError).
+ * Verktygen som ToolShape i värdens koordinater. Verktyg på verktyg räknas
+ * inte (se combineError).
  */
-function toolsByDef(doc: ModelDocument, defs: Map<string, PartDef>): Map<string, ToolShape[]> {
+function collectTools(doc: ModelDocument, defs: Map<string, PartDef>): Tools {
   const byId = new Map<string, Instance>(doc.instances.map((i) => [i.id, i]))
-  const out = new Map<string, ToolShape[]>()
-  const push = (on: Instance, op: ToolShape['op'], t: Instance, d: PartDef) => {
-    const list = out.get(on.defId) ?? []
+  const byDef = new Map<string, ToolShape[]>()
+  const byInstance = new Map<string, ToolShape[]>()
+  const push = (
+    out: Map<string, ToolShape[]>,
+    key: string,
+    on: Instance,
+    op: ToolShape['op'],
+    t: Instance,
+    d: PartDef,
+  ) => {
+    const list = out.get(key) ?? []
     list.push({
       op,
       profile: d.profile,
@@ -20,7 +35,7 @@ function toolsByDef(doc: ModelDocument, defs: Map<string, PartDef>): Map<string,
       z1: d.z1,
       frame: relativeFrame(on.frame, t.frame),
     })
-    out.set(on.defId, list)
+    out.set(key, list)
   }
   for (const t of doc.instances) {
     if (!t.combine) continue
@@ -28,11 +43,11 @@ function toolsByDef(doc: ModelDocument, defs: Map<string, PartDef>): Map<string,
     const d = defs.get(t.defId)
     if (!host || host.combine || !d) continue
     // En tapp: tillägg på värden och urtag i delen den går in i.
-    push(host, t.combine.op === 'subtract' ? 'subtract' : 'add', t, d)
+    push(byDef, host.defId, host, t.combine.op === 'subtract' ? 'subtract' : 'add', t, d)
     const into = t.combine.op === 'joint' && t.combine.into ? byId.get(t.combine.into) : undefined
-    if (into && !into.combine) push(into, 'subtract', t, d)
+    if (into && !into.combine) push(byInstance, into.id, into, 'subtract', t, d)
   }
-  return out
+  return { byDef, byInstance }
 }
 
 /**
@@ -43,13 +58,17 @@ export function resolveBodies(doc: ModelDocument): Body[] {
   const hit = cache.get(doc)
   if (hit) return hit
   const defs = new Map(doc.defs.map((d) => [d.id, d]))
-  const tools = toolsByDef(doc, defs)
-  const blanks = new Map([...tools].map(([id, list]) => [id, blankBox(defs.get(id)!, list)]))
+  const { byDef, byInstance } = collectTools(doc, defs)
+  // Tapphål skärs ut och ändrar inte ämnet, så det räcker med formens verktyg.
+  const blanks = new Map([...byDef].map(([id, list]) => [id, blankBox(defs.get(id)!, list)]))
   const bodies: Body[] = []
   for (const inst of doc.instances) {
     const d = defs.get(inst.defId)
     if (!d) continue
-    const own = tools.get(d.id)
+    const shared = byDef.get(d.id)
+    const holes = byInstance.get(inst.id)
+    // Utan tapphål delar länkade kopior samma lista, och därmed samma geometri.
+    const own = holes ? [...(shared ?? []), ...holes] : shared
     const blank = blanks.get(d.id)
     bodies.push({
       id: inst.id,

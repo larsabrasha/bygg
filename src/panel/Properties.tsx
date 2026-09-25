@@ -268,14 +268,15 @@ function CombineGroup({ body }: { body: Body }) {
           {op === 'joint' && into ? (
             <>
               Tapp på {link(host)}, med tapphål i {link(into)}. Tapphålet har samma form som tappen, så de passar alltid
-              ihop.
+              ihop. Tappen finns på alla länkade kopior av {link(host)}, men tapphålet bara i den här {link(into)}, inte
+              i dess länkade kopior.
             </>
           ) : (
             <>
-              {op === 'subtract' ? 'Skärs ut ur' : 'Läggs till på'} {link(host)}.
+              {op === 'subtract' ? 'Skärs ut ur' : 'Läggs till på'} {link(host)}. Det gäller alla länkade kopior.
             </>
           )}{' '}
-          Det gäller alla länkade kopior. Flytta eller ändra den här delen så följer resultatet med.
+          Flytta eller ändra den här delen så följer resultatet med.
         </p>
         <button className={secondaryButton} onClick={() => detach(body.id)}>
           <Unlink {...ICON_SM} />
