@@ -62,11 +62,16 @@ export interface PartDef {
   dims?: DimExprs
 }
 
+/** Världens axlar: x åt höger, y uppåt, z mot betraktaren (som axelkorset i 3D-vyn). */
+export type WorldAxis = 'x' | 'y' | 'z'
+
 /** En placerad kopia av en PartDef. */
 export interface Instance {
   id: string
   defId: string
   frame: Frame
+  /** Uttryck för läget av delens hörn närmast origo, per världsaxel, om läget skrevs som ett uttryck. */
+  pos?: Partial<Record<WorldAxis, string>>
 }
 
 /** Namngivet värde som mått kan referera till. value är senast beräknade värde. */

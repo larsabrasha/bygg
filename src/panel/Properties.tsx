@@ -1,8 +1,9 @@
 import { useState } from 'react'
 import { rectSize } from '../model/geometry'
 import { AXES, extent, widthAxis } from '../model/partAxes'
+import { minCorner, WORLD_AXES } from '../model/placement'
 import { instanceCounts, resolveBodies } from '../model/resolve'
-import { MATERIALS, type Axis, type Body, type PartDef } from '../model/types'
+import { MATERIALS, type Axis, type Body, type Instance, type PartDef, type WorldAxis } from '../model/types'
 import { useDocumentStore } from '../store/documentStore'
 import { beginPushPull } from '../tools/actions'
 import { dangerButton, field, fieldLabel, primaryButton, secondaryButton, sectionTitle } from './ui'
@@ -83,6 +84,36 @@ function ExtentFields({ body, def }: { body: Body; def: PartDef }) {
   )
 }
 
+const AXIS_LABEL: Record<WorldAxis, string> = { x: 'X', y: 'Y (höjd)', z: 'Z' }
+
+/**
+ * Läget för delens hörn närmast origo, per världsaxel (som axelkorset).
+ * Ett uttryck med parametrar sparas och följer parametern; ett tal flyttar bara delen.
+ */
+function PositionFields({ inst, def }: { inst: Instance; def: PartDef }) {
+  const setPosition = useDocumentStore((s) => s.setPosition)
+  const corner = minCorner(inst, def)
+  return (
+    <div className="col-span-2 grid grid-cols-3 gap-2">
+      {WORLD_AXES.map((axis, i) => {
+        const expr = inst.pos?.[axis]
+        return (
+          <label key={axis} className={fieldLabel}>
+            <span>
+              {AXIS_LABEL[axis]} {expr && <span className="text-accent">= {fmt.format(corner[i]!)}</span>}
+            </span>
+            <CommitField
+              key={`${inst.id}:${axis}`}
+              value={expr ?? fmt.format(corner[i]!)}
+              onCommit={(t) => setPosition(inst.id, axis, t)}
+            />
+          </label>
+        )
+      })}
+    </div>
+  )
+}
+
 /** Vrid fibern (byt L och B) och välj vilket mått som är tjockleken. */
 function GrainControls({ body, def }: { body: Body; def: PartDef }) {
   const updatePart = useDocumentStore((s) => s.updatePart)
@@ -131,6 +162,7 @@ export function Properties() {
 
   const body = selection?.kind === 'body' ? resolveBodies(doc).find((b) => b.id === selection.id) : undefined
   const def = body && doc.defs.find((d) => d.id === body.defId)
+  const inst = body && doc.instances.find((i) => i.id === body.id)
   const copies = def ? (instanceCounts(doc).get(def.id) ?? 0) : 0
   const sketch = selection?.kind === 'sketch' ? doc.sketches.find((s) => s.id === selection.id) : undefined
   const isEmpty = doc.instances.length === 0 && doc.sketches.length === 0 && doc.params.length === 0
@@ -169,6 +201,12 @@ export function Properties() {
           <ExtentFields body={body} def={def} />
           <span />
           <GrainControls body={body} def={def} />
+          {inst && (
+            <>
+              <p className="col-span-2 mt-2 text-xs text-muted">Placering (hörnet närmast origo)</p>
+              <PositionFields inst={inst} def={def} />
+            </>
+          )}
           <p className="col-span-2 text-xs text-faint">
             Mått i mm. L går längs fibern. Skriv ett parameternamn, t.ex. <code>tjocklek</code>, så följer måttet
             parametern.

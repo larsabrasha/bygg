@@ -1,5 +1,6 @@
 import { evaluate, identifiers, type EvalResult } from './expr'
 import { MIN_SIZE } from './geometry'
+import { applyPositions } from './placement'
 import type { Axis, DimExpr, DimExprs, ModelDocument, Param, Rect } from './types'
 
 /**
@@ -92,7 +93,7 @@ function applyDims<T extends Box & { dims?: DimExprs }>(item: T, scope: Map<stri
 }
 
 /**
- * Räknar om parametervärden och alla mått som styrs av uttryck.
+ * Räknar om parametervärden och alla mått och lägen som styrs av uttryck.
  * Mått vars uttryck inte går att beräkna lämnas orörda.
  */
 export function applyParams(doc: ModelDocument): ModelDocument {
@@ -103,12 +104,14 @@ export function applyParams(doc: ModelDocument): ModelDocument {
   })
   const scope = paramScope(params)
   const defs = doc.defs.map((d) => (d.dims ? applyDims(d, scope) : d))
+  // Läget räknas efter måtten: hörnet närmast origo beror på delens storlek.
+  const instances = doc.instances.some((i) => i.pos) ? applyPositions(doc.instances, defs, scope) : doc.instances
   const sketches = doc.sketches.map((s) => {
     if (!s.dims) return s
     const box = applyDims({ profile: s.rect, z0: 0, z1: 1, dims: s.dims }, scope)
     return box.profile === s.rect ? s : { ...s, rect: box.profile }
   })
-  return { ...doc, params, defs, sketches }
+  return { ...doc, params, defs, sketches, instances }
 }
 
 /** Sant om någon parameter eller något mått i dokumentet använder namnet. */
@@ -116,6 +119,7 @@ export function isNameUsed(doc: ModelDocument, name: string): boolean {
   const exprs = [
     ...doc.params.map((p) => p.expr),
     ...[...doc.defs, ...doc.sketches].flatMap((x) => Object.values(x.dims ?? {}).map((d) => d.expr)),
+    ...doc.instances.flatMap((i) => Object.values(i.pos ?? {})),
   ]
   return exprs.some((e) => identifiers(e).includes(name))
 }

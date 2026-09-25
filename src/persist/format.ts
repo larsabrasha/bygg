@@ -2,7 +2,7 @@ import { axesFromLegacyGrain } from '../model/partAxes'
 import type { ModelDocument } from '../model/types'
 
 /** Höj när formatet ändras, och lägg till en konvertering i migrate. */
-export const FORMAT_VERSION = 2
+export const FORMAT_VERSION = 3
 
 export interface SavedFile {
   version: number
@@ -42,7 +42,14 @@ function isModelDocument(x: unknown): x is ModelDocument {
         d.grainAxis !== d.thicknessAxis,
     ) &&
     Array.isArray(instances) &&
-    instances.every((i) => isObj(i) && typeof i.id === 'string' && typeof i.defId === 'string' && isFrame(i.frame)) &&
+    instances.every(
+      (i) =>
+        isObj(i) &&
+        typeof i.id === 'string' &&
+        typeof i.defId === 'string' &&
+        isFrame(i.frame) &&
+        (i.pos === undefined || (isObj(i.pos) && Object.values(i.pos).every((e) => typeof e === 'string'))),
+    ) &&
     Array.isArray(params) &&
     params.every(
       (p) => isObj(p) && typeof p.id === 'string' && typeof p.name === 'string' && typeof p.expr === 'string',
@@ -75,6 +82,7 @@ export function migrate(raw: unknown): LoadResult {
   // En konvertering per versionssteg, i ordning.
   let doc = raw.doc
   if (raw.version < 2) doc = upgradeV1Doc(doc)
+  // 2 → 3: kopior kan ha pos (läge som uttryck). Frivilligt fält, så inget att konvertera.
   if (!isModelDocument(doc)) return { ok: false, reason: 'Trasigt dokument' }
   return { ok: true, doc }
 }

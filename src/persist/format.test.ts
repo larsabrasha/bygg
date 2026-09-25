@@ -47,6 +47,14 @@ describe('format', () => {
     expect(along.ok && 'grain' in along.doc.defs[0]!).toBe(false)
   })
 
+  it('läser version 2 utan konvertering, och läge som uttryck (version 3)', () => {
+    expect(migrate({ version: 2, doc })).toEqual({ ok: true, doc })
+    const withPos = { ...doc, instances: [{ ...doc.instances[0]!, pos: { y: 't * 2' } }] }
+    expect(migrate(JSON.parse(JSON.stringify(serialize(withPos))))).toEqual({ ok: true, doc: withPos })
+    const bad = { ...doc, instances: [{ ...doc.instances[0]!, pos: { y: 5 } }] }
+    expect(migrate({ version: FORMAT_VERSION, doc: bad }).ok).toBe(false)
+  })
+
   it('avvisar samma axel för fiber och tjocklek', () => {
     const bad = { ...doc, defs: [{ ...doc.defs[0]!, grainAxis: 'n', thicknessAxis: 'n' }] }
     expect(migrate({ version: FORMAT_VERSION, doc: bad }).ok).toBe(false)

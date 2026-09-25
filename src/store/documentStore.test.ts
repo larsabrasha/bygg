@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { GROUND_FRAME } from '../model/frame'
+import { minCorner } from '../model/placement'
 import { resolveBodies } from '../model/resolve'
 import { resetDocumentStore, useDocumentStore } from './documentStore'
 
@@ -224,5 +225,72 @@ describe('parametrar', () => {
     expect(s().deleteParam(p)).toBe(false)
     s().setExtent(a, 'n', '22')
     expect(s().deleteParam(p)).toBe(true)
+  })
+})
+
+describe('läge', () => {
+  beforeEach(() => resetDocumentStore())
+  const corner = () => {
+    const d = s().doc
+    return minCorner(d.instances[0]!, d.defs[0]!)
+  }
+
+  it('sätter läget från ett tal, och det går att ångra', () => {
+    const id = newPart()
+    expect(s().setPosition(id, 'y', '450')).toBeNull()
+    expect(corner()).toEqual([0, 450, -120])
+    expect(s().doc.instances[0]).not.toHaveProperty('pos')
+    s().undo()
+    expect(corner()).toEqual([0, 0, -120])
+  })
+
+  it('ett uttryck följer parametern', () => {
+    const id = newPart()
+    const p = s().addParam()
+    s().updateParam(p, { name: 'hojd', expr: '722' })
+    expect(s().setPosition(id, 'y', 'hojd - 22')).toBeNull()
+    expect(corner()[1]).toBe(700)
+    s().updateParam(p, { expr: '900' })
+    expect(corner()[1]).toBe(878)
+  })
+
+  it('byter namn på parametern i läget också', () => {
+    const id = newPart()
+    const p = s().addParam()
+    s().updateParam(p, { name: 'hojd', expr: '700' })
+    s().setPosition(id, 'y', 'hojd')
+    s().updateParam(p, { name: 'h' })
+    expect(s().doc.instances[0]!.pos).toEqual({ y: 'h' })
+  })
+
+  it('avvisar uttryck som inte går att beräkna', () => {
+    const id = newPart()
+    expect(s().setPosition(id, 'x', 'okänd + 1')).toMatch(/okänd/i)
+    expect(corner()).toEqual([0, 0, -120])
+  })
+
+  it('flytt för hand tar bort uttrycket för den axeln', () => {
+    const id = newPart()
+    const p = s().addParam()
+    s().updateParam(p, { name: 'a', expr: '100' })
+    s().setPosition(id, 'x', 'a')
+    s().setPosition(id, 'y', 'a')
+    s().moveInstance(id, [50, 0, 0])
+    expect(s().doc.instances[0]!.pos).toEqual({ y: 'a' })
+    expect(corner()).toEqual([150, 100, -120])
+  })
+
+  it('push/pull på sidan närmast origo tar bort uttrycket, annars flyttar delen tillbaka', () => {
+    const id = newPart()
+    const p = s().addParam()
+    s().updateParam(p, { name: 'a', expr: '100' })
+    s().setPosition(id, 'x', 'a')
+    s().pushPullBody(id, 'u-', 30)
+    expect(s().doc.instances[0]).not.toHaveProperty('pos')
+    expect(corner()[0]).toBe(70)
+    // Sidan bort från origo påverkar inte hörnet; uttrycket får ligga kvar.
+    s().setPosition(id, 'x', 'a')
+    s().pushPullBody(id, 'u+', 30)
+    expect(s().doc.instances[0]!.pos).toEqual({ x: 'a' })
   })
 })

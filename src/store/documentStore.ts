@@ -1,11 +1,13 @@
 import { create, type StoreApi } from 'zustand'
 import { evaluate, isConstant, NAME_PATTERN, renameIdentifier } from '../model/expr'
 import { bodyExtents, faceAxis, isValidRect, nextPartName, pushPullBody, sketchToPart } from '../model/geometry'
+import { faceFrame } from '../model/frame'
 import { newId } from '../model/id'
 import { applyParams, evaluateParams, isNameUsed, paramScope, setBoxExtent } from '../model/params'
 import { withAxes } from '../model/partAxes'
+import { placeAlong, WORLD_AXES, withoutPos } from '../model/placement'
 import { resolveBodies } from '../model/resolve'
-import type { Axis, DimExprs, Face, Frame, ModelDocument, PartDef, Rect, Vec3 } from '../model/types'
+import type { Axis, DimExprs, Face, Frame, ModelDocument, PartDef, Rect, Vec3, WorldAxis } from '../model/types'
 import { add, scale } from '../model/vec'
 
 /** Det valda. För en del också ytan man tryckte på; den får pilen för push/pull. */
@@ -35,6 +37,8 @@ interface DocumentState extends Snapshot {
   updatePart: (instanceId: string, patch: PartPatch) => void
   /** Sätter en axels längd från ett tal eller ett uttryck. Returnerar felmeddelande eller null. */
   setExtent: (instanceId: string, axis: Axis, text: string) => string | null
+  /** Sätter läget för delens hörn närmast origo längs en världsaxel, från ett tal eller ett uttryck. */
+  setPosition: (instanceId: string, axis: WorldAxis, text: string) => string | null
   addParam: () => string
   /** Returnerar felmeddelande eller null. */
   updateParam: (id: string, patch: { name?: string; expr?: string }) => string | null
@@ -166,7 +170,18 @@ export const useDocumentStore = create<DocumentState>()((set, get) => {
       if (!next) return false
       // Handpåläggning vinner: axeln slutar styras av sitt uttryck.
       const def = withDims(next, withoutAxis(next.dims, faceAxis(face)))
-      commit(replaceDef(get().doc, def), { kind: 'body', id: instanceId, face })
+      // Flyttas sidan närmast origo, slutar läget längs den axeln att styras av sitt uttryck,
+      // annars skulle delen flytta tillbaka och växa åt andra hållet.
+      const doc = replaceDef(get().doc, def)
+      const instances = doc.instances.map((i) => {
+        if (i.defId !== def.id || !i.pos) return i
+        const n = faceFrame({ ...def, id: i.id, defId: def.id, frame: i.frame }, face).n
+        return withoutPos(
+          i,
+          WORLD_AXES.filter((_, k) => n[k]! < -0.5),
+        )
+      })
+      commit({ ...doc, instances }, { kind: 'body', id: instanceId, face })
       return true
     },
 
@@ -175,7 +190,12 @@ export const useDocumentStore = create<DocumentState>()((set, get) => {
       commit({
         ...doc,
         instances: doc.instances.map((i) =>
-          i.id === instanceId ? { ...i, frame: { ...i.frame, origin: add(i.frame.origin, delta) } } : i,
+          i.id === instanceId
+            ? withoutPos(
+                { ...i, frame: { ...i.frame, origin: add(i.frame.origin, delta) } },
+                WORLD_AXES.filter((_, k) => delta[k] !== 0),
+              )
+            : i,
         ),
       })
     },
@@ -229,6 +249,20 @@ export const useDocumentStore = create<DocumentState>()((set, get) => {
       return null
     },
 
+    setPosition: (instanceId, axis, text) => {
+      const found = findInstance(instanceId)
+      if (!found) return 'Delen finns inte'
+      const { doc } = get()
+      const scope = paramScope(doc.params)
+      const r = evaluate(text, (n) => scope.get(n))
+      if (!r.ok) return r.error
+      const placed = placeAlong(withoutPos(found.inst, [axis]), found.def, axis, r.value)
+      // Bara uttryck med parametrar sparas; ett rent tal är bara ett läge.
+      const inst = isConstant(text) ? placed : { ...placed, pos: { ...placed.pos, [axis]: text.trim() } }
+      commit({ ...doc, instances: doc.instances.map((i) => (i.id === instanceId ? inst : i)) })
+      return null
+    },
+
     addParam: () => {
       const { doc } = get()
       const used = new Set(doc.params.map((p) => p.name))
@@ -263,6 +297,9 @@ export const useDocumentStore = create<DocumentState>()((set, get) => {
           params: next.params.map((p) => ({ ...p, name: p.id === id ? name : p.name, expr: rename(p.expr) })),
           defs: next.defs.map(renameDims),
           sketches: next.sketches.map(renameDims),
+          instances: next.instances.map((i) =>
+            i.pos ? { ...i, pos: Object.fromEntries(Object.entries(i.pos).map(([k, e]) => [k, rename(e)])) } : i,
+          ),
         }
       }
 
