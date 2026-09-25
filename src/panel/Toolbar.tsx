@@ -12,7 +12,7 @@ const TOOLS: { tool: Tool; label: string; key: string; Icon: LucideIcon }[] = [
 
 /** Kvadratisk ikonknapp: 36 px på desktop, 44 px (touchyta) på smal skärm. */
 const button =
-  'grid size-9 shrink-0 cursor-pointer place-items-center rounded-md border border-transparent hover:bg-hover narrow:size-11 disabled:cursor-default disabled:text-[#b5afa5] disabled:hover:bg-transparent'
+  'grid size-9 shrink-0 cursor-pointer place-items-center rounded-md border border-transparent hover:bg-hover narrow:size-11 disabled:cursor-default disabled:text-disabled disabled:hover:bg-transparent'
 
 const ICON = { size: 20, strokeWidth: 1.75, 'aria-hidden': true } as const
 

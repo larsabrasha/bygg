@@ -20,3 +20,9 @@ export const GRAIN = '#a0522d'
 export const SNAP_ON_TARGET = '#d6336c'
 /** Snäppmarkör på rutnätet. */
 export const SNAP_GRID = '#8f8a80'
+
+/** Bakgrund och rutnät följer temat. Bakgrunden ska matcha --color-canvas i src/index.css. */
+export const SCENE = {
+  light: { background: '#f2f1ee', gridCell: '#c9c6bf', gridSection: '#8f8a80' },
+  dark: { background: '#1b1a18', gridCell: '#45413b', gridSection: '#6b665d' },
+}

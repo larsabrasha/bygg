@@ -5,9 +5,11 @@ import { useDocumentStore } from '../store/documentStore'
 import { useToolStore } from '../store/toolStore'
 import { previewDoc } from '../tools/preview'
 import { BodyMesh } from './BodyMesh'
+import { SCENE } from './colors'
 import { HoverMarker, OpOverlay } from './OpPreview'
 import { SketchMesh } from './SketchMesh'
 import { ToolController } from './ToolController'
+import { useColorScheme } from './useColorScheme'
 
 function Scene() {
   const doc = useDocumentStore((s) => s.doc)
@@ -59,11 +61,12 @@ function Scene() {
 // Scenen ritas i millimeter: 1 enhet = 1 mm.
 export function Viewport() {
   const opActive = useToolStore((s) => s.op !== null)
+  const colors = SCENE[useColorScheme()]
 
   return (
     // frameloop="demand": ritar bara om när något ändras. Sparar batteri på mobil.
     <Canvas frameloop="demand" camera={{ position: [1500, 1200, 1500], fov: 45, near: 1, far: 50000 }}>
-      <color attach="background" args={['#f2f1ee']} />
+      <color attach="background" args={[colors.background]} />
       <ambientLight intensity={0.6} />
       <directionalLight position={[2000, 4000, 3000]} intensity={1.6} />
       <directionalLight position={[-3000, 2000, -1000]} intensity={0.4} />
@@ -73,10 +76,10 @@ export function Viewport() {
         position={[0, -0.5, 0]}
         cellSize={100}
         cellThickness={0.6}
-        cellColor="#c9c6bf"
+        cellColor={colors.gridCell}
         sectionSize={1000}
         sectionThickness={1.2}
-        sectionColor="#8f8a80"
+        sectionColor={colors.gridSection}
         fadeDistance={15000}
         fadeStrength={1.5}
         infiniteGrid
@@ -85,8 +88,9 @@ export function Viewport() {
       <Scene />
       <ToolController />
 
-      {/* Kameran står still under en operation, så att dragningen styr måttet. */}
-      <OrbitControls makeDefault enabled={!opActive} target={[0, 0, 0]} />
+      {/* Kameran står still under en operation, så att dragningen styr måttet.
+          Ingen tröghet: vyn stannar när man släpper, som i ett CAD-program. */}
+      <OrbitControls makeDefault enableDamping={false} enabled={!opActive} target={[0, 0, 0]} />
       <GizmoHelper alignment="bottom-left" margin={[70, 70]}>
         <GizmoViewport labelColor="white" />
       </GizmoHelper>

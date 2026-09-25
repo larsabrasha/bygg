@@ -13,6 +13,7 @@ const tabClass =
 /**
  * Desktop: fast sidopanel med alla sektioner.
  * Smal skärm: blad längst ner med flikar. Tryck på aktiv flik fäller ihop bladet.
+ * Öppet blad har fast höjd, så att 3D-vyn inte byter storlek när man byter flik.
  * Samma DOM i båda lägena; CSS väljer layout, så fältens state överlever en rotation.
  */
 export function Sidebar() {
@@ -39,7 +40,7 @@ export function Sidebar() {
       data-tab={tab}
       data-open={open}
       className="group/sheet overflow-y-auto border-l border-line bg-panel [grid-area:sidebar]
-        narrow:flex narrow:max-h-[60dvh] narrow:flex-col narrow:overflow-hidden narrow:rounded-t-xl narrow:border-t narrow:border-l-0
+        narrow:flex narrow:flex-col narrow:data-[open=true]:h-[50dvh] narrow:overflow-hidden narrow:rounded-t-xl narrow:border-t narrow:border-l-0
         narrow:pb-[env(safe-area-inset-bottom)] narrow:shadow-[0_-2px_12px_rgb(0_0_0/8%)]"
     >
       {/* Flikarna används bara på smal skärm. */}
@@ -50,7 +51,7 @@ export function Sidebar() {
           </button>
         ))}
       </div>
-      <div className="flex flex-col gap-6 p-4 narrow:overflow-y-auto narrow:overscroll-contain narrow:group-data-[open=false]/sheet:hidden">
+      <div className="flex flex-col gap-6 p-4 narrow:flex-1 narrow:overflow-y-auto narrow:overscroll-contain narrow:group-data-[open=false]/sheet:hidden">
         <Properties />
         <Params />
         <CutList />

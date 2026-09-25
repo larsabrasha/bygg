@@ -55,9 +55,9 @@ export function MeasureBox() {
                 onKeyDown={(e) => {
                   if (e.key === 'Escape') cancel()
                 }}
-                className="w-24 rounded border border-line bg-white py-1 pr-7 pl-1.5 text-ink tabular-nums narrow:min-h-11 narrow:w-22"
+                className="w-24 rounded border border-line bg-field py-1 pr-7 pl-1.5 text-ink tabular-nums narrow:min-h-11 narrow:w-22"
               />
-              <span className="absolute right-1.5 bottom-1.5 text-[#9a9489] narrow:bottom-3">mm</span>
+              <span className="absolute right-1.5 bottom-1.5 text-unit narrow:bottom-3">mm</span>
             </label>
           ))}
           <button type="submit" className={primaryButton}>
