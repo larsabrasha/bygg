@@ -6,6 +6,17 @@ const mm = numberFormat(1)
 
 export const formatMm = (n: number) => mm.format(n)
 
+/**
+ * Namnen på raden, kortare när alla börjar med samma ord:
+ * "Sarg fram, Sarg bak" blir "Sarg fram, bak".
+ */
+export function compactNames(names: readonly string[]): string {
+  const first = names[0]?.split(' ')[0]
+  const shared = names.length > 1 && names.every((n) => n.startsWith(`${first} `) && n.length > first!.length + 1)
+  if (!shared) return names.join(', ')
+  return [names[0], ...names.slice(1).map((n) => n.slice(first!.length + 1))].join(', ')
+}
+
 /** Namnen på raden; en rund del får sin diameter efter, eftersom L×B×T bara visar ämnet. */
 export function rowNames(row: CutListRow): string {
   const names = row.names.join(', ')

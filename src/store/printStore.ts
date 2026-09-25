@@ -9,8 +9,8 @@ export interface ViewImage {
 }
 
 interface PrintState {
-  /** Vad som skrivs ut: kaplistan (också med webbläsarens egen Skriv ut), eller sprängskissen. */
-  what: 'cutlist' | 'exploded'
+  /** Vad som skrivs ut: kaplistan (också med webbläsarens egen Skriv ut), sprängskissen eller ritningen. */
+  what: 'cutlist' | 'exploded' | 'drawing'
   image: ViewImage | null
   setPrint: (what: PrintState['what'], image?: ViewImage | null) => void
 }

@@ -38,8 +38,9 @@ function isEditable(t: EventTarget | null) {
 export function useShortcuts() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      // I startvyn finns ingen modell att arbeta i.
-      if (isEditable(e.target) || useLibraryStore.getState().screen === 'gallery') return
+      // I startvyn finns ingen modell att arbeta i, och i ritningen ändrar man inget (Esc stänger den själv).
+      if (isEditable(e.target) || useLibraryStore.getState().screen === 'gallery' || useViewStore.getState().drawing)
+        return
       const tools = useToolStore.getState()
       const docs = useDocumentStore.getState()
       const mod = e.metaKey || e.ctrlKey

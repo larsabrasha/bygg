@@ -6,6 +6,7 @@ import { Notices } from './panel/Notices'
 import { PrintCutList } from './panel/PrintCutList'
 import { PrintExploded } from './panel/PrintExploded'
 import { ExplodeBar } from './panel/ExplodeBar'
+import { Drawing } from './panel/Drawing'
 import { VisibilityBar } from './panel/VisibilityBar'
 import { SelectionBar } from './panel/SelectionBar'
 import { Sidebar } from './panel/Sidebar'
@@ -30,6 +31,7 @@ export function App() {
   const panelOpen = useViewStore((s) => s.panelOpen)
   const focusMode = useViewStore((s) => s.focusMode)
   const exploded = useViewStore((s) => s.exploded)
+  const drawing = useViewStore((s) => s.drawing)
   return (
     <TipProvider>
       {/* minmax(0, …): annars får raden inte bli lägre än canvasens nuvarande höjd.
@@ -39,7 +41,7 @@ export function App() {
       {/* --keyboard: tangentbordet på iPhone och iPad (useKeyboardInset); appen blir lägre, så att det
           som ligger längst ner (måttrutan, bladet) hamnar ovanför det. */}
       <div
-        inert={screen === 'gallery'}
+        inert={screen === 'gallery' || drawing}
         className={`grid h-[calc(100dvh-var(--keyboard,0px))] print:hidden ${
           focusMode
             ? "grid-cols-[minmax(0,1fr)] grid-rows-[minmax(0,1fr)] [grid-template-areas:'viewport']"
@@ -74,6 +76,8 @@ export function App() {
       </div>
       {/* Startvyn ligger ovanpå; 3D-vyn hålls kvar under så att den kan ta bilder och öppnas snabbt. */}
       {screen === 'gallery' && <Gallery />}
+      {/* Ritningen ligger ovanpå allt, som startvyn. */}
+      <Drawing />
       <PrintCutList />
       <PrintExploded />
     </TipProvider>

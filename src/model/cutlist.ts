@@ -16,6 +16,8 @@ export interface CutListRow {
   round?: { diameter: number; length: number }
   material: string
   bodyIds: string[]
+  /** Volymen för alla delar på raden, i kubikmeter. */
+  volumeM3: number
 }
 
 export interface CutList {
@@ -48,7 +50,8 @@ export function buildCutList(bodies: readonly Body[]): CutList {
     const [du, , dn] = bodyExtents(b)
     const round = b.shape === 'circle' && !b.blank ? { diameter: round01(du), length: round01(dn) } : undefined
     // En cylinder fyller π/4 av sin fyrkant.
-    totalVolumeM3 += ((round ? Math.PI / 4 : 1) * d.length * d.width * d.thickness) / 1e9
+    const volumeM3 = ((round ? Math.PI / 4 : 1) * d.length * d.width * d.thickness) / 1e9
+    totalVolumeM3 += volumeM3
 
     const key = `${b.material}|${length}|${width}|${thickness}|${round ? 'rund' : ''}`
     const row = groups.get(key)
@@ -56,6 +59,7 @@ export function buildCutList(bodies: readonly Body[]): CutList {
       row.count++
       if (!row.names.includes(b.name)) row.names.push(b.name)
       row.bodyIds.push(b.id)
+      row.volumeM3 += volumeM3
     } else {
       groups.set(key, {
         key,
@@ -67,6 +71,7 @@ export function buildCutList(bodies: readonly Body[]): CutList {
         ...(round && { round }),
         material: b.material,
         bodyIds: [b.id],
+        volumeM3,
       })
     }
   }
@@ -80,4 +85,27 @@ export function buildCutList(bodies: readonly Body[]): CutList {
   )
 
   return { rows, totalCount: bodies.filter((b) => !b.tool).length, totalVolumeM3 }
+}
+
+export interface MaterialGroup {
+  material: string
+  rows: CutListRow[]
+  count: number
+  volumeM3: number
+}
+
+/** Raderna per material, i kaplistans ordning (raderna är redan sorterade på material). */
+export function groupByMaterial(rows: readonly CutListRow[]): MaterialGroup[] {
+  const groups: MaterialGroup[] = []
+  for (const row of rows) {
+    let group = groups.at(-1)
+    if (group?.material !== row.material) {
+      group = { material: row.material, rows: [], count: 0, volumeM3: 0 }
+      groups.push(group)
+    }
+    group.rows.push(row)
+    group.count += row.count
+    group.volumeM3 += row.volumeM3
+  }
+  return groups
 }

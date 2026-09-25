@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { buildCutList } from './cutlist'
-import { cutListCsv, cutListFileName, formatMm } from './cutlistExport'
+import { compactNames, cutListCsv, cutListFileName, formatMm } from './cutlistExport'
 import { testBody } from './testFixtures'
 
 const lines = (csv: string) => csv.replace(/^\uFEFF/, '').split('\r\n')
@@ -55,5 +55,20 @@ describe('cutListFileName', () => {
 
   it('faller tillbaka på bara "kaplista" utan namn', () => {
     expect(cutListFileName('  ', 'csv')).toBe('kaplista.csv')
+  })
+})
+
+describe('compactNames', () => {
+  it('skriver det gemensamma första ordet en gång', () => {
+    expect(compactNames(['Sarg fram', 'Sarg bak', 'Sarg vänster'])).toBe('Sarg fram, bak, vänster')
+  })
+
+  it('räknar bara hela ord som gemensamma', () => {
+    expect(compactNames(['Sarg fram', 'Sargen bak'])).toBe('Sarg fram, Sargen bak')
+    expect(compactNames(['Sarg', 'Sarg bak'])).toBe('Sarg, Sarg bak')
+  })
+
+  it('lämnar ett ensamt namn orört', () => {
+    expect(compactNames(['Sarg fram'])).toBe('Sarg fram')
   })
 })

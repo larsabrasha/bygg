@@ -38,6 +38,9 @@ export interface ViewState {
    */
   penMode: boolean
   setPenMode: (on: boolean) => void
+  /** Ritningen (sprängskiss och stycklista) visas över hela appen. Sparas inte. */
+  drawing: boolean
+  setDrawing: (on: boolean) => void
   /** Längd, bredd och tjocklek visas vid den valda delen (knappen Mått). Av från början; sparas inte. */
   showDims: boolean
   toggleDims: () => void
@@ -103,6 +106,8 @@ export const useViewStore = create<ViewState>()((set) => ({
     ),
   isolate: (ids) => set({ isolated: ids }),
   showAll: () => set({ hidden: [], isolated: null }),
+  drawing: false,
+  setDrawing: (drawing) => set({ drawing }),
   showDims: false,
   toggleDims: () => set((s) => ({ showDims: !s.showDims })),
   penMode: false,

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildCutList } from './cutlist'
+import { buildCutList, groupByMaterial } from './cutlist'
 import { testBody } from './testFixtures'
 
 describe('buildCutList', () => {
@@ -62,5 +62,27 @@ describe('buildCutList', () => {
     // 1000 × 100 × 20 mm = 0,002 m³
     const b = testBody({ profile: { x0: 0, y0: 0, x1: 1000, y1: 100 }, z0: 0, z1: 20 })
     expect(buildCutList([b, { ...b, id: 'b2' }]).totalVolumeM3).toBeCloseTo(0.004)
+  })
+
+  it('räknar volym per rad', () => {
+    const b = testBody({ profile: { x0: 0, y0: 0, x1: 1000, y1: 100 }, z0: 0, z1: 20 })
+    expect(buildCutList([b, { ...b, id: 'b2' }]).rows[0]!.volumeM3).toBeCloseTo(0.004)
+  })
+})
+
+describe('groupByMaterial', () => {
+  it('samlar raderna per material med antal och volym', () => {
+    const list = buildCutList([
+      testBody({ id: 'a' }),
+      testBody({ id: 'b' }),
+      testBody({ id: 'c', z1: 18 }),
+      testBody({ id: 'd', material: 'ek' }),
+    ])
+    const groups = groupByMaterial(list.rows)
+    expect(groups.map((g) => [g.material, g.rows.length, g.count])).toEqual([
+      ['ek', 1, 1],
+      ['furu', 2, 3],
+    ])
+    expect(groups.reduce((sum, g) => sum + g.volumeM3, 0)).toBeCloseTo(list.totalVolumeM3)
   })
 })

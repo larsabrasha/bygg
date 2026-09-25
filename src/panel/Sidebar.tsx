@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import { useDocumentStore } from '../store/documentStore'
 import { useViewStore } from '../store/viewStore'
 import { CutList } from './CutList'
 import { Params } from './Params'
@@ -21,8 +20,6 @@ const tabClass =
  * Samma DOM i båda lägena; CSS väljer layout, så fältens state överlever en rotation.
  */
 export function Sidebar() {
-  // Verktyg (urtag, tillägg) är inga egna bitar i kaplistan.
-  const count = useDocumentStore((s) => s.doc.instances.filter((i) => !i.combine).length)
   const [tab, setTab] = useState<Tab>('properties')
   const [open, setOpen] = useState(false)
   const panelOpen = useViewStore((s) => s.panelOpen)
@@ -41,7 +38,7 @@ export function Sidebar() {
   const tabs: [Tab, string][] = [
     ['properties', 'Egenskaper'],
     ['params', 'Parametrar'],
-    ['cutlist', `Kaplista (${count})`],
+    ['cutlist', 'Kaplista'],
   ]
 
   return (
