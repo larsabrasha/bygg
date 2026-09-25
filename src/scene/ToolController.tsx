@@ -9,6 +9,7 @@ import { useViewStore } from '../store/viewStore'
 import {
   cancel,
   commit,
+  doubleTap,
   hoverAt,
   move,
   rulerHoverAt,
@@ -84,6 +85,8 @@ export function ToolController() {
     let gesture = { start: 0, fingers: 0, moved: 0 }
     /** Trycket som startade pågående operation, för dubbeltryck. */
     let startTap: TapPoint | null = null
+    /** Förra trycket utan pågående operation, för dubbeltryck (se doubleTap). */
+    let lastTap: TapPoint | null = null
     /**
      * Operationen som den såg ut när den började. Följer den musen (klicka,
      * flytta, klicka) och musen lämnar vyn, t.ex. för att skriva i måttrutan,
@@ -260,7 +263,9 @@ export function ToolController() {
       const kind = kindOf(e)
       lastKind = kind
       const hit = pick(e.clientX, e.clientY, kind)
-      const owner = pressOwner(tool, op !== null, kind, hit?.target.kind ?? null)
+      const sel = useDocumentStore.getState().selection
+      const onSelected = hit?.target.kind === 'body' && sel?.kind === 'body' && sel.id === hit.target.id
+      const owner = pressOwner(tool, op !== null, kind, hit?.target.kind ?? null, onSelected)
       if (controls) applyCameraButtons(controls, cameraButtons(tool, owner))
       press = { x: e.clientX, y: e.clientY, slop: TAP_SLOP[kind], owner, opBefore: op, startedOp: false }
 
@@ -365,6 +370,13 @@ export function ToolController() {
       if (isTap && p.owner === 'camera') {
         const kind = kindOf(e)
         const hit = pick(e.clientX, e.clientY, kind)
+        const here = { x: e.clientX, y: e.clientY, time: e.timeStamp }
+        // Dubbeltryck på en del: Flytta/vrid. Första trycket har redan valt den.
+        if (isDoubleTap(lastTap, here, p.slop) && doubleTap(hit)) {
+          lastTap = null
+          return
+        }
+        lastTap = here
         tap(hit, hit ? tolFor(hit.point, kind) : 0)
       }
     }

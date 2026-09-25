@@ -10,6 +10,7 @@ import {
   applyMeasure,
   beginPushPull,
   commit,
+  doubleTap,
   extendCopies,
   hoverAt,
   move,
@@ -224,6 +225,49 @@ describe('flytta', () => {
     expect(bodies()[0]!.frame.origin).toEqual([400, 0, 0])
     // Man stannar i Flytta, och delen man tog i är vald (så att pilarna syns på den).
     expect(tools().tool).toBe('move')
+    expect(docs().selection).toMatchObject({ kind: 'body', id: b.id })
+  })
+
+  it('dubbeltryck på en del i Välj går till Flytta/vrid med delen vald', () => {
+    const b = extrude(drawGroundRect(), '22')
+    tools().setTool('select')
+    docs().select(null)
+    expect(doubleTap({ point: [100, 22, -100], target: { kind: 'body', id: b.id, face: 'n+' } })).toBe(true)
+    expect(tools().tool).toBe('move')
+    expect(docs().selection).toMatchObject({ kind: 'body', id: b.id })
+    // Utanför en del, eller i ett annat verktyg, betyder dubbeltrycket inget.
+    tools().setTool('select')
+    expect(doubleTap(null)).toBe(false)
+    expect(doubleTap({ point: [0, 0, 0], target: { kind: 'ground' } })).toBe(false)
+    tools().setTool('rect')
+    expect(doubleTap({ point: [100, 22, -100], target: { kind: 'body', id: b.id, face: 'n+' } })).toBe(false)
+    expect(tools().tool).toBe('rect')
+  })
+
+  it('tryck utanför den valda delen lämnar Flytta/vrid, som ett tryck i Välj', () => {
+    const a = extrude(drawGroundRect(), '22')
+    const b = extrude(drawGroundRect(1000, 0, 1400, -400), '22')
+    docs().select({ kind: 'body', id: a.id })
+    tools().setTool('move')
+    // En annan del: den blir vald, i Välj.
+    tap({ point: [1100, 22, -100], target: { kind: 'body', id: b.id, face: 'n+' } }, 0)
+    expect(tools().tool).toBe('select')
+    expect(tools().op).toBeNull()
+    expect(docs().selection).toMatchObject({ kind: 'body', id: b.id })
+    // Golvet: inget valt.
+    tools().setTool('move')
+    tap({ point: [3000, 0, 0], target: { kind: 'ground' } }, 0)
+    expect(tools().tool).toBe('select')
+    expect(docs().selection).toBeNull()
+  })
+
+  it('utan något valt väljer första trycket delen, och man stannar i Flytta/vrid', () => {
+    const b = extrude(drawGroundRect(), '22')
+    docs().select(null)
+    tools().setTool('move')
+    tap({ point: [100, 22, -100], target: { kind: 'body', id: b.id, face: 'n+' } }, 0)
+    expect(tools().tool).toBe('move')
+    expect(tools().op).toBeNull()
     expect(docs().selection).toMatchObject({ kind: 'body', id: b.id })
   })
 

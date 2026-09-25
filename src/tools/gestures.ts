@@ -38,7 +38,14 @@ export type Owner = 'tool' | 'camera'
  * kameran. Trycker man bredvid modellen vrider man kameran som vanligt.
  * target = vad som ligger under pekaren, null om inget (himlen).
  */
-export function pressOwner(tool: Tool, opActive: boolean, kind: PointerKind, target: PickTarget['kind'] | null): Owner {
+export function pressOwner(
+  tool: Tool,
+  opActive: boolean,
+  kind: PointerKind,
+  target: PickTarget['kind'] | null,
+  /** Trycket träffar den valda delen. */
+  onSelected = false,
+): Owner {
   // Pilarna på det valda (dra ut, flytta) tar trycket i vilket läge de än syns.
   if (opActive || target === 'handle' || target === 'axis' || target === 'rotate') return 'tool'
   switch (tool) {
@@ -50,8 +57,9 @@ export function pressOwner(tool: Tool, opActive: boolean, kind: PointerKind, tar
       return kind !== 'mouse' && target !== null ? 'tool' : 'camera'
     case 'pushpull':
       return target === 'sketch' || target === 'body' ? 'tool' : 'camera'
+    // Bara den valda delen flyttas; ett drag utanför vrider kameran, och ett tryck där går till Välj.
     case 'move':
-      return target === 'body' ? 'tool' : 'camera'
+      return target === 'body' && onSelected ? 'tool' : 'camera'
     // Man mäter med tryck (när man släpper), så kameran vrider som i Välj.
     case 'measure':
       return 'camera'

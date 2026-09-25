@@ -153,6 +153,23 @@ export function tap(hit: Hit | null, tol: number) {
     return
   }
 
+  if (tool === 'move') {
+    const sel = docs().selection
+    const selected = sel?.kind === 'body' ? sel.id : null
+    const t = hit?.target
+    // Inget valt (man kom hit med M): trycket väljer delen man ska flytta.
+    if (selected === null && t?.kind === 'body') {
+      docs().select({ kind: 'body', id: t.id, face: t.face })
+      return
+    }
+    // Tryck utanför det man flyttar: tillbaka till Välj, som om man tryckt där i Välj.
+    if (t?.kind !== 'body' || t.id !== selected) {
+      tools().setTool('select')
+      tap(hit, tol)
+      return
+    }
+  }
+
   if (tool === 'select') {
     const t = hit?.target
     docs().select(
@@ -182,9 +199,6 @@ export function tap(hit: Hit | null, tol: number) {
     if (hit.target.kind !== 'body') return
     const b = findBody(hit.target.id)
     if (!b) return
-    // Delen man tar i blir vald, så att pilarna hamnar på den efteråt.
-    const sel = docs().selection
-    if (sel?.kind !== 'body' || sel.id !== b.id) docs().select({ kind: 'body', id: b.id })
     const f = faceFrame(b, hit.target.face)
     setOp(moveOp(b, { ...f, origin: hit.point }, null))
     return
@@ -204,6 +218,18 @@ export function tap(hit: Hit | null, tol: number) {
       onTarget: false,
     })
   }
+}
+
+/**
+ * Dubbeltryck (eller dubbelklick) utan pågående operation. På en del i Välj:
+ * delen blir vald och man går till Flytta/vrid. Ett tryck utanför går tillbaka (se tap).
+ * False om dubbeltrycket inte betyder något här; då räknas det som ett vanligt tryck.
+ */
+export function doubleTap(hit: Hit | null): boolean {
+  if (tools().tool !== 'select' || hit?.target.kind !== 'body') return false
+  docs().select({ kind: 'body', id: hit.target.id, face: hit.target.face })
+  tools().setTool('move')
+  return true
 }
 
 /** Det man gör push/pull på för ett val: skissen, eller delens valda yta. Null om ingen yta är vald. */

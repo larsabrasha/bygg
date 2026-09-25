@@ -1,4 +1,4 @@
-import { ArrowUpFromLine, Copy, Focus, Move3d, Trash2, X, type LucideIcon } from 'lucide-react'
+import { ArrowUpFromLine, Copy, Focus, Trash2, X, type LucideIcon } from 'lucide-react'
 import { resolveBodies } from '../model/resolve'
 import { useDocumentStore } from '../store/documentStore'
 import { useToolStore } from '../store/toolStore'
@@ -13,21 +13,17 @@ function BarButton({
   Icon,
   onClick,
   danger = false,
-  pressed,
 }: {
   label: string
   Icon: LucideIcon
   onClick: () => void
   danger?: boolean
-  /** Satt för knappar som slår på ett läge; då syns det när läget är på. */
-  pressed?: boolean
 }) {
   return (
     <button
       aria-label={label}
-      aria-pressed={pressed}
       onClick={onClick}
-      className={`flex h-9 cursor-pointer items-center gap-1.5 rounded-lg px-2 hover:bg-hover aria-pressed:bg-accent-soft aria-pressed:text-accent narrow:size-11 narrow:justify-center narrow:px-0 ${danger ? 'text-danger' : ''}`}
+      className={`flex h-9 cursor-pointer items-center gap-1.5 rounded-lg px-2 hover:bg-hover narrow:size-11 narrow:justify-center narrow:px-0 ${danger ? 'text-danger' : ''}`}
     >
       <Icon {...ICON} />
       {/* På smal skärm bara ikonen; namnet finns i aria-label. */}
@@ -48,8 +44,6 @@ export function SelectionBar() {
   const duplicateLinked = useDocumentStore((s) => s.duplicateLinked)
   const requestFit = useViewStore((s) => s.requestFit)
   const opActive = useToolStore((s) => s.op !== null)
-  const setTool = useToolStore((s) => s.setTool)
-  const moving = useToolStore((s) => s.tool === 'move')
 
   if (!selection || opActive) return null
   const body = selection.kind === 'body' ? resolveBodies(doc).find((b) => b.id === selection.id) : undefined
@@ -64,12 +58,6 @@ export function SelectionBar() {
       <span className="truncate px-2 text-[13px] font-semibold narrow:max-w-20">{body ? body.name : 'Skiss'}</span>
       {body ? (
         <>
-          <BarButton
-            label="Flytta/vrid"
-            Icon={Move3d}
-            pressed={moving}
-            onClick={() => setTool(moving ? 'select' : 'move')}
-          />
           <BarButton label="Zooma till" Icon={Focus} onClick={() => requestFit('selection')} />
           <BarButton label="Länkad kopia" Icon={Copy} onClick={() => duplicateLinked(body.id)} />
         </>

@@ -15,7 +15,7 @@ function isEditable(t: EventTarget | null) {
 /**
  * Kortkommandon som i SketchUp: R, P, M, T (Mät), mellanslag, Esc, Delete, ⌘Z / ⇧⌘Z, ⇧Z (visa allt),
  * Alt/Option (Kopia i Flytta-läget), Tab (fokusläge), mellanslag + dra (panorera).
- * P och M har ingen knapp i verktygsraden; där görs push/pull med pilen och flytt från knappraden.
+ * P och M har ingen knapp i verktygsraden; där görs push/pull med pilen och flytt med dubbeltryck på delen.
  * Under en operation går siffror direkt till måttfältet utan att man klickar i det;
  * ; eller Tab byter fält.
  */
