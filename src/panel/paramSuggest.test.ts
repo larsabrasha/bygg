@@ -17,20 +17,22 @@ describe('förslag på parametrar', () => {
     expect(suggestions(names, 'bredd', 5)).toEqual([])
   })
 
-  it('föreslår alla i ett tomt fält och efter en operator, inga efter ett tal', () => {
-    expect(suggestions(names, '', 0)).toEqual(names)
+  it('föreslår alla efter en operator, inga i ett tomt fält eller efter ett tal', () => {
+    expect(suggestions(names, '', 0)).toEqual([])
     expect(suggestions(names, 'bredd - ', 8)).toEqual(names)
     expect(suggestions(names, '(', 1)).toEqual(names)
     expect(suggestions(names, '12', 2)).toEqual([])
     expect(suggestions(names, 'bredd ', 6)).toEqual([])
   })
 
-  it('föreslår inga direkt före ett tal, men ersätter det markerade', () => {
+  it('föreslår inga direkt före ett tal eller i ett markerat fält, men ersätter det markerade', () => {
     // Markören först i "800": samma som sist, annars blir det "bredd800".
     expect(suggestions(names, '800', 0)).toEqual([])
     expect(suggestions(names, '2 * 800', 4)).toEqual([])
-    // Hela talet markerat: som ett tomt fält.
-    expect(suggestions(names, '800', 0, 3)).toEqual(names)
+    // Hela talet markerat (som efter ett klick): som ett tomt fält, ingen lista.
+    expect(suggestions(names, '800', 0, 3)).toEqual([])
+    // Markerat efter en operator: det markerade räknas som borttaget.
+    expect(suggestions(names, '2 * 800', 4, 7)).toEqual(names)
     expect(insertName('800', 0, 'bredd', 3)).toEqual({ text: 'bredd', caret: 5 })
     expect(insertName('2 * 800', 4, 'bredd', 7)).toEqual({ text: '2 * bredd', caret: 9 })
   })

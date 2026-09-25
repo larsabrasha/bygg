@@ -23,8 +23,9 @@ const withoutSelection = (text: string, caret: number, selEnd: number) =>
 
 /**
  * Namn att föreslå. Mitt i ett namn: de som börjar likadant (utan hänsyn till
- * stora och små bokstäver). Mellan två led, eller i ett tomt fält: alla.
- * Direkt före eller efter en siffra eller ett avslutat led: inga, där skriver man ett tal eller en operator.
+ * stora och små bokstäver). Direkt efter en operator: alla. Annars inga: ett tomt
+ * eller markerat fält ska inte fyllas av en lista varje gång man klickar i det,
+ * och före eller efter ett tal skriver man ett tal eller en operator.
  */
 export function suggestions(names: readonly string[], text: string, caret: number, selEnd = caret): string[] {
   const t = withoutSelection(text, caret, selEnd)
@@ -36,7 +37,7 @@ export function suggestions(names: readonly string[], text: string, caret: numbe
   // Ett namn här skulle klistras ihop med talet efter, t.ex. "bredd800".
   if (IDENT_PART.test(t[start] ?? '')) return []
   const last = t.slice(0, start).trimEnd().at(-1)
-  return last === undefined || '+-−*/('.includes(last) ? [...names] : []
+  return last !== undefined && '+-−*/('.includes(last) ? [...names] : []
 }
 
 /** Sätter in ett namn i stället för ordet vid markören, eller det markerade. Ger ny text och ny markörposition. */

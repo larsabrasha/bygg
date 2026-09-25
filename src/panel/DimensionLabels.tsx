@@ -66,6 +66,7 @@ function DimensionLabel({
       ) : editing ? (
         <span className="flex flex-col items-center gap-1">
           <span
+            data-field-box
             className={`flex h-8 items-center gap-1 rounded-lg border bg-field pr-2 pl-2 shadow-md ring-2 narrow:h-10 ${error ? 'border-danger ring-danger-soft' : 'border-accent ring-accent-soft'}`}
           >
             <span className="text-[11px] font-semibold text-muted">{letter}</span>
@@ -80,7 +81,6 @@ function DimensionLabel({
                 setText(t)
                 setError(null)
               }}
-              onFocus={(e) => e.currentTarget.select()}
               onBlur={save}
               onKeyDown={(e) => {
                 if (e.key === 'Enter') save()

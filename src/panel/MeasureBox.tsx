@@ -127,6 +127,7 @@ export function MeasureBox() {
             {fields.map(({ label, axis }, i) => (
               <label
                 key={label}
+                data-field-box
                 className="flex h-10 items-center gap-2 rounded-lg border border-line bg-field pr-2.5 pl-3 focus-within:border-accent focus-within:ring-2 focus-within:ring-accent-soft narrow:h-11"
               >
                 <span className="text-xs whitespace-nowrap text-muted">

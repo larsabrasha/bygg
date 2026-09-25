@@ -671,7 +671,7 @@ export function applyMeasure(): boolean {
   }
   const exprOf = (text: string) => (text.trim() !== '' && !isConstant(text) ? text.trim() : undefined)
   const signed = (text: string, value: number, liveSign: number) =>
-    text.trim().startsWith('-') ? value : (liveSign || 1) * Math.abs(value)
+    /^[-−]/.test(text.trim()) ? value : (liveSign || 1) * Math.abs(value)
 
   if (op.kind === 'rect') {
     const [liveW, liveH] = liveMeasure(op) as [number, number]

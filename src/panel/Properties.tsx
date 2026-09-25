@@ -52,7 +52,9 @@ function CommitField({
   }
   const boxed = !!(prefix || suffix)
   const inputClass = boxed
-    ? 'min-w-0 flex-1 bg-transparent text-ink tabular-nums outline-none'
+    ? // w-full: fältet ligger i ExprInputs omslag, där flex-1 inte når; utan det sticker det ut ur rutan
+      // och panelen kan skjutas åt sidan när det får fokus.
+      'w-full min-w-0 flex-1 bg-transparent text-ink tabular-nums outline-none'
     : `${className} ${error ? 'border-danger' : ''}`
   const common = {
     'aria-label': label,
@@ -72,6 +74,8 @@ function CommitField({
       {...common}
       value={text}
       onChange={setText}
+      // Ett steg med piltangenterna sparas direkt, så att delen ändras medan man stegar.
+      onStep={(t) => setError(onCommit(t))}
       badges
       className={inputClass}
       // Utan ram räknas kanten (1 px) med i fältets utfyllnad.
@@ -85,6 +89,7 @@ function CommitField({
     <>
       {prefix || suffix ? (
         <span
+          data-field-box
           className={`flex h-10 items-center gap-1.5 rounded-lg border bg-field px-2.5 focus-within:border-accent focus-within:ring-2 focus-within:ring-accent-soft narrow:h-11 ${error ? 'border-danger' : 'border-line'}`}
         >
           {prefix}

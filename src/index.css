@@ -69,6 +69,18 @@
   body {
     @apply bg-canvas font-sans text-sm text-ink;
     overscroll-behavior: none;
+    /* En app, inte en webbsida: text markeras inte när man drar eller dubbelklickar,
+       och iOS visar ingen meny vid långt tryck. */
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
+  }
+
+  /* Fälten måste gå att markera i; i iOS Safari går det annars inte att skriva i dem. */
+  input,
+  textarea {
+    user-select: text;
+    -webkit-user-select: text;
   }
 
   /* 16 px hindrar iOS från att zooma in när ett fält får fokus. */

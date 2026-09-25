@@ -54,6 +54,7 @@ function ParamRow({ param, error, used }: { param: Param; error?: string; used: 
           padX="px-[11px]"
           exclude={param.name}
           onChange={setExpr}
+          onStep={(t) => save({ expr: t })}
           onBlur={() => expr !== param.expr && save({ expr })}
           onKeyDown={onKey(() => setExpr(param.expr))}
         />

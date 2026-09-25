@@ -22,6 +22,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@floating-ui/react-dom": "^2.1.9",
     "@radix-ui/react-tooltip": "^1.2.16",
     "@react-three/drei": "^10.7.8",
     "@react-three/fiber": "^9.8.1",
