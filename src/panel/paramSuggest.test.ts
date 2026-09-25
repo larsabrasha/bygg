@@ -25,6 +25,16 @@ describe('förslag på parametrar', () => {
     expect(suggestions(names, 'bredd ', 6)).toEqual([])
   })
 
+  it('föreslår inga direkt före ett tal, men ersätter det markerade', () => {
+    // Markören först i "800": samma som sist, annars blir det "bredd800".
+    expect(suggestions(names, '800', 0)).toEqual([])
+    expect(suggestions(names, '2 * 800', 4)).toEqual([])
+    // Hela talet markerat: som ett tomt fält.
+    expect(suggestions(names, '800', 0, 3)).toEqual(names)
+    expect(insertName('800', 0, 'bredd', 3)).toEqual({ text: 'bredd', caret: 5 })
+    expect(insertName('2 * 800', 4, 'bredd', 7)).toEqual({ text: '2 * bredd', caret: 9 })
+  })
+
   it('sätter in namnet i stället för ordet och flyttar markören efter det', () => {
     expect(insertName('bredd - tj', 10, 'tjocklek')).toEqual({ text: 'bredd - tjocklek', caret: 16 })
     expect(insertName('2 * ', 4, 'bredd')).toEqual({ text: '2 * bredd', caret: 9 })

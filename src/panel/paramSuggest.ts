@@ -17,26 +17,33 @@ export function wordAt(text: string, caret: number): { start: number; end: numbe
   return { start, end, word }
 }
 
+/** Markerad text (caret till selEnd) räknas som borttagen: ett valt namn ersätter den. */
+const withoutSelection = (text: string, caret: number, selEnd: number) =>
+  selEnd > caret ? text.slice(0, caret) + text.slice(selEnd) : text
+
 /**
  * Namn att föreslå. Mitt i ett namn: de som börjar likadant (utan hänsyn till
  * stora och små bokstäver). Mellan två led, eller i ett tomt fält: alla.
- * Direkt efter en siffra eller ett avslutat led: inga, där skriver man ett tal eller en operator.
+ * Direkt före eller efter en siffra eller ett avslutat led: inga, där skriver man ett tal eller en operator.
  */
-export function suggestions(names: readonly string[], text: string, caret: number): string[] {
-  const { word, start } = wordAt(text, caret)
+export function suggestions(names: readonly string[], text: string, caret: number, selEnd = caret): string[] {
+  const t = withoutSelection(text, caret, selEnd)
+  const { word, start } = wordAt(t, caret)
   if (word) {
     const w = word.toLowerCase()
     return names.filter((n) => n.toLowerCase().startsWith(w) && n !== word)
   }
-  const before = text.slice(0, start).trimEnd()
-  const last = before.at(-1)
+  // Ett namn här skulle klistras ihop med talet efter, t.ex. "bredd800".
+  if (IDENT_PART.test(t[start] ?? '')) return []
+  const last = t.slice(0, start).trimEnd().at(-1)
   return last === undefined || '+-−*/('.includes(last) ? [...names] : []
 }
 
-/** Sätter in ett namn i stället för ordet vid markören. Ger ny text och ny markörposition. */
-export function insertName(text: string, caret: number, name: string): { text: string; caret: number } {
-  const { start, end } = wordAt(text, caret)
-  return { text: text.slice(0, start) + name + text.slice(end), caret: start + name.length }
+/** Sätter in ett namn i stället för ordet vid markören, eller det markerade. Ger ny text och ny markörposition. */
+export function insertName(text: string, caret: number, name: string, selEnd = caret): { text: string; caret: number } {
+  const t = withoutSelection(text, caret, selEnd)
+  const { start, end } = wordAt(t, caret)
+  return { text: t.slice(0, start) + name + t.slice(end), caret: start + name.length }
 }
 
 export interface Segment {

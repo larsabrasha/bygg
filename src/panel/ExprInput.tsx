@@ -21,7 +21,7 @@ type Props = Omit<InputHTMLAttributes<HTMLInputElement>, 'value' | 'onChange'> &
 
 /**
  * Textfält för mått och uttryck. Medan man skriver föreslås parametrar
- * (piltangenter och Enter/Tab, eller tryck); valet ersätter ordet vid markören.
+ * (piltangenter och Enter/Tab, eller tryck); valet ersätter ordet vid markören, eller det markerade.
  * Utan fokus visas parameternamnen som badges ovanpå texten.
  */
 export function ExprInput({
@@ -42,6 +42,8 @@ export function ExprInput({
   const ref = useRef<HTMLInputElement>(null)
   const [focused, setFocused] = useState(false)
   const [caret, setCaret] = useState(0)
+  /** Slutet på det markerade; lika med caret när inget är markerat. */
+  const [selEnd, setSelEnd] = useState(0)
   const [active, setActive] = useState(0)
   const [closed, setClosed] = useState(false)
   /** Var markören ska stå när fältet ritats om efter att ett namn satts in. */
@@ -55,16 +57,21 @@ export function ExprInput({
   })
 
   const names = params.map((p) => p.name).filter((n) => n !== exclude)
-  const list = focused && !closed ? suggestions(names, value, caret) : []
+  const list = focused && !closed ? suggestions(names, value, caret, selEnd) : []
   const open = list.length > 0
   const index = Math.min(active, list.length - 1)
 
-  const readCaret = () => setCaret(ref.current?.selectionStart ?? value.length)
+  const readCaret = () => {
+    const at = ref.current?.selectionStart ?? value.length
+    setCaret(at)
+    setSelEnd(ref.current?.selectionEnd ?? at)
+  }
 
   const choose = (name: string) => {
-    const next = insertName(value, caret, name)
+    const next = insertName(value, caret, name, selEnd)
     onChange(next.text)
     setCaret(next.caret)
+    setSelEnd(next.caret)
     setActive(0)
     pendingCaret.current = next.caret
   }
@@ -112,7 +119,9 @@ export function ExprInput({
         title={showBadges ? value : rest.title}
         onChange={(e) => {
           onChange(e.target.value)
-          setCaret(e.target.selectionStart ?? e.target.value.length)
+          const at = e.target.selectionStart ?? e.target.value.length
+          setCaret(at)
+          setSelEnd(e.target.selectionEnd ?? at)
           setClosed(false)
           setActive(0)
         }}
