@@ -1,0 +1,14 @@
+# Starta: docker compose up -d
+# Modellerna hamnar i volymen bygg-data (models/ och trash/ som JSON-filer).
+# Ingen inloggning: nås bara i det egna nätet, med https via en omvänd proxy (t.ex. Caddy).
+services:
+  bygg:
+    build: .
+    ports:
+      - '8787:8787'
+    volumes:
+      - bygg-data:/data
+    restart: unless-stopped
+
+volumes:
+  bygg-data:

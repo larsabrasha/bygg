@@ -18,12 +18,16 @@ export function MeasureBox() {
   if (tool === 'select') return null
 
   const hint = !op
-    ? tool === 'rect'
-      ? 'Tryck där första hörnet ska vara – på golvet eller på en yta.'
-      : 'Tryck på en skiss eller en sida av en del.'
-    : op.kind === 'rect'
-      ? 'Tryck på andra hörnet, eller skriv längd och bredd.'
-      : 'Dra längs pilen, eller skriv avståndet.'
+    ? {
+        rect: 'Tryck där första hörnet ska vara – på golvet eller på en yta.',
+        pushpull: 'Tryck på en skiss eller en sida av en del.',
+        move: 'Tryck på en del. Den flyttas i planet för sidan du trycker på.',
+      }[tool]
+    : {
+        rect: 'Tryck på andra hörnet, eller skriv längd och bredd.',
+        pushpull: 'Dra längs pilen, eller skriv avståndet.',
+        move: 'Dra dit delen ska, eller skriv avståndet.',
+      }[op.kind]
 
   const live = op ? liveMeasure(op) : []
   const labels = op?.kind === 'rect' ? ['Längd', 'Bredd'] : ['Avstånd']

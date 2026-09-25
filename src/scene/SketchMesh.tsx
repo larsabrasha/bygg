@@ -34,7 +34,10 @@ export function SketchMesh({ frame, rect, pickId, emphasis = 'none' }: Props) {
 
   return (
     <group position={frame.origin} quaternion={quaternion}>
-      <mesh position={[(x0 + x1) / 2, (y0 + y1) / 2, LIFT]} userData={pickId ? { pick: { kind: 'sketch', id: pickId } } : {}}>
+      <mesh
+        position={[(x0 + x1) / 2, (y0 + y1) / 2, LIFT]}
+        userData={pickId ? { pick: { kind: 'sketch', id: pickId } } : {}}
+      >
         <planeGeometry args={[x1 - x0, y1 - y0]} />
         <meshBasicMaterial
           color={ACCENT}

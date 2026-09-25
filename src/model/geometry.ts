@@ -1,4 +1,11 @@
-import type { Body, Face, Rect, Sketch, Vec2 } from './types'
+import { type Box } from './box'
+import { defaultAxes } from './partAxes'
+
+export { bodyExtents, type Box } from './box'
+import type { Axis, Face, Instance, PartDef, Rect, Sketch, Vec2 } from './types'
+
+/** Axeln som en sida sitter vinkelrätt mot. */
+export const faceAxis = (face: Face): Axis => face[0] as Axis
 
 /** Minsta mått en skiss eller kropp får ha, i mm. */
 export const MIN_SIZE = 1
@@ -16,25 +23,38 @@ export function isValidRect(r: Rect): boolean {
   return w >= MIN_SIZE && h >= MIN_SIZE
 }
 
-type BodyProps = Pick<Body, 'id' | 'name' | 'material' | 'grain'>
+type PartProps = Pick<PartDef, 'name' | 'material'> & { defId: string; instanceId: string }
 
-/** Drar ut en skiss till en kropp. Negativt avstånd drar in mot −n. */
-export function sketchToBody(sketch: Sketch, distance: number, props: BodyProps): Body | null {
+/**
+ * Drar ut en skiss till en ny del: en form och en kopia i skissens frame.
+ * Negativt avstånd drar in mot −n.
+ */
+export function sketchToPart(
+  sketch: Sketch,
+  distance: number,
+  props: PartProps,
+  depthExpr?: string,
+): { def: PartDef; instance: Instance } | null {
   if (Math.abs(distance) < MIN_SIZE || !isValidRect(sketch.rect)) return null
-  return {
-    ...props,
-    frame: sketch.frame,
-    profile: sketch.rect,
-    z0: Math.min(0, distance),
-    z1: Math.max(0, distance),
+  const dims = { ...sketch.dims }
+  if (depthExpr) dims.n = { expr: depthExpr, anchor: distance >= 0 ? 'min' : 'max' }
+  const box = { profile: sketch.rect, z0: Math.min(0, distance), z1: Math.max(0, distance) }
+  const def: PartDef = {
+    id: props.defId,
+    name: props.name,
+    material: props.material,
+    ...defaultAxes(box),
+    ...box,
+    ...(Object.keys(dims).length ? { dims } : {}),
   }
+  return { def, instance: { id: props.instanceId, defId: def.id, frame: sketch.frame } }
 }
 
 /**
  * Flyttar en av kroppens sidor längs sidans normal. Positivt avstånd = utåt.
  * Null om något mått skulle bli mindre än MIN_SIZE.
  */
-export function pushPullBody(body: Body, face: Face, distance: number): Body | null {
+export function pushPullBody<T extends Box>(body: T, face: Face, distance: number): T | null {
   const p = { ...body.profile }
   let { z0, z1 } = body
   switch (face) {
@@ -61,33 +81,9 @@ export function pushPullBody(body: Body, face: Face, distance: number): Body | n
   return { ...body, profile: p, z0, z1 }
 }
 
-/** Kroppens utsträckning längs frame-axlarna u, v, n. */
-export function bodyExtents(body: Body): [number, number, number] {
-  const [w, h] = rectSize(body.profile)
-  return [w, h, body.z1 - body.z0]
-}
-
-/** Längd ≥ bredd ≥ tjocklek, mätt i kroppens egen riktning. */
-export function bodyDims(body: Body): { length: number; width: number; thickness: number } {
-  const [length, width, thickness] = bodyExtents(body).sort((a, b) => b - a) as [number, number, number]
-  return { length, width, thickness }
-}
-
-/**
- * Snäpper ett värde: först till närmaste mål inom tol, annars till rutnätet step.
- * Mål är t.ex. kanterna på den yta man ritar på.
- */
-export function snap(value: number, step: number, targets: readonly number[], tol: number): number {
-  let best: number | null = null
-  for (const t of targets) {
-    if (Math.abs(t - value) <= tol && (best === null || Math.abs(t - value) < Math.abs(best - value))) best = t
-  }
-  return best ?? Math.round(value / step) * step
-}
-
 /** Första lediga namnet "Del N". */
-export function nextBodyName(bodies: readonly Body[]): string {
-  const used = new Set(bodies.map((b) => b.name))
+export function nextPartName(defs: readonly Pick<PartDef, 'name'>[]): string {
+  const used = new Set(defs.map((b) => b.name))
   let n = 1
   while (used.has(`Del ${n}`)) n++
   return `Del ${n}`

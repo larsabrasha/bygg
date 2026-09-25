@@ -1,13 +1,12 @@
 import { useMemo } from 'react'
 import { Vector3 } from 'three'
+import { toWorld } from '../model/frame'
 import { rectFromCorners } from '../model/geometry'
-import type { ModelDocument } from '../model/types'
 import { add, scale } from '../model/vec'
-import type { Op, PushPullOp } from '../store/toolStore'
-import { pushPullPreview } from '../tools/preview'
-import { BodyMesh } from './BodyMesh'
+import type { HoverPoint, Op, PushPullOp } from '../store/toolStore'
 import { ACCENT } from './colors'
 import { SketchMesh } from './SketchMesh'
+import { SnapMarker } from './SnapMarker'
 
 /** Pil längs normalen, som visar åt vilket håll push/pull drar. */
 function Arrow({ op }: { op: PushPullOp }) {
@@ -17,17 +16,30 @@ function Arrow({ op }: { op: PushPullOp }) {
   return <arrowHelper key={op.normal.join()} args={[dir, new Vector3(), 160, ACCENT, 50, 30]} position={tip} />
 }
 
-export function OpPreview({ op, doc }: { op: Op; doc: ModelDocument }) {
+/** Det som ritas ovanpå förhandsdokumentet: rektangel, pil och snäppmarkör. */
+export function OpOverlay({ op }: { op: Op }) {
   if (op.kind === 'rect') {
     const r = rectFromCorners(op.first, op.current)
-    if (r.x1 - r.x0 <= 0 && r.y1 - r.y0 <= 0) return null
-    return <SketchMesh frame={op.frame} rect={r} emphasis="selected" />
+    const at = toWorld(op.frame, [op.current[0], op.current[1], 0])
+    return (
+      <>
+        {(r.x1 > r.x0 || r.y1 > r.y0) && <SketchMesh frame={op.frame} rect={r} emphasis="selected" />}
+        <SnapMarker position={at} onTarget={op.onTarget[0] || op.onTarget[1]} />
+      </>
+    )
   }
-  const body = pushPullPreview(op, doc)
-  return (
-    <>
-      {body && <BodyMesh body={body} preview />}
-      <Arrow op={op} />
-    </>
-  )
+  if (op.kind === 'pushpull') {
+    return (
+      <>
+        <Arrow op={op} />
+        {op.onTarget && <SnapMarker position={add(op.anchor, scale(op.normal, op.distance))} onTarget />}
+      </>
+    )
+  }
+  const at = add(op.plane.origin, add(scale(op.plane.u, op.delta[0]), scale(op.plane.v, op.delta[1])))
+  return <SnapMarker position={at} onTarget={op.onTarget[0] || op.onTarget[1]} />
+}
+
+export function HoverMarker({ hover }: { hover: HoverPoint }) {
+  return <SnapMarker position={toWorld(hover.frame, [hover.point[0], hover.point[1], 0])} onTarget={hover.onTarget} />
 }

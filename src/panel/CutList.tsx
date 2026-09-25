@@ -1,19 +1,19 @@
 import { useMemo } from 'react'
 import { buildCutList } from '../model/cutlist'
-import { useDocumentStore } from '../store/documentStore'
+import { useBodies, useDocumentStore } from '../store/documentStore'
 import { sectionTitle } from './ui'
 
 const num = new Intl.NumberFormat('sv-SE', { maximumFractionDigits: 1 })
 const volume = new Intl.NumberFormat('sv-SE', { maximumFractionDigits: 4 })
 
 export function CutList() {
-  const bodies = useDocumentStore((s) => s.doc.bodies)
+  const bodies = useBodies()
   const selection = useDocumentStore((s) => s.selection)
   const select = useDocumentStore((s) => s.select)
   const cutList = useMemo(() => buildCutList(bodies), [bodies])
 
   return (
-    <section className="narrow:group-data-[tab=properties]/sheet:hidden">
+    <section className="narrow:group-data-[tab=params]/sheet:hidden narrow:group-data-[tab=properties]/sheet:hidden">
       <h2 className={sectionTitle}>Kaplista</h2>
       {cutList.rows.length === 0 ? (
         <p className="text-faint">Inga delar än. Rita en rektangel och dra ut den med Push/pull.</p>

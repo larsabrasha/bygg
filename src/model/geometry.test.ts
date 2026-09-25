@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { bodyDims, nextBodyName, pushPullBody, rectFromCorners, sketchToBody, snap } from './geometry'
+import { nextPartName, pushPullBody, rectFromCorners, sketchToPart } from './geometry'
 import { testBody, testSketch } from './testFixtures'
 
-const props = { id: 'b9', name: 'Del 9', material: 'ek', grain: 'length' as const }
+const props = { defId: 'd9', instanceId: 'i9', name: 'Del 9', material: 'ek' }
 
 describe('rectFromCorners', () => {
   it('normaliserar hörnen oavsett ordning', () => {
@@ -10,17 +10,30 @@ describe('rectFromCorners', () => {
   })
 })
 
-describe('sketchToBody', () => {
-  it('drar ut uppåt vid positivt avstånd', () => {
-    expect(sketchToBody(testSketch(), 22, props)).toMatchObject({ z0: 0, z1: 22, profile: testSketch().rect })
+describe('sketchToPart', () => {
+  it('drar ut uppåt vid positivt avstånd, och kopian får skissens frame', () => {
+    const r = sketchToPart(testSketch(), 22, props)
+    expect(r?.def).toMatchObject({ id: 'd9', z0: 0, z1: 22, profile: testSketch().rect })
+    // 800 × 120 × 22: fibern längs längsta (u), tjockleken längs kortaste (n).
+    expect(r?.def).toMatchObject({ grainAxis: 'u', thicknessAxis: 'n' })
+    expect(r?.instance).toEqual({ id: 'i9', defId: 'd9', frame: testSketch().frame })
   })
 
   it('drar ut nedåt vid negativt avstånd', () => {
-    expect(sketchToBody(testSketch(), -18, props)).toMatchObject({ z0: -18, z1: 0 })
+    expect(sketchToPart(testSketch(), -18, props)?.def).toMatchObject({ z0: -18, z1: 0 })
   })
 
   it('avvisar för litet avstånd', () => {
-    expect(sketchToBody(testSketch(), 0.5, props)).toBeNull()
+    expect(sketchToPart(testSketch(), 0.5, props)).toBeNull()
+  })
+
+  it('tar med skissens uttryck och djupets uttryck, med anchor mot skissplanet', () => {
+    const sketch = testSketch({ dims: { u: { expr: 'l', anchor: 'min' } } })
+    expect(sketchToPart(sketch, 22, props, 't')?.def.dims).toEqual({
+      u: { expr: 'l', anchor: 'min' },
+      n: { expr: 't', anchor: 'min' },
+    })
+    expect(sketchToPart(sketch, -22, props, 't')?.def.dims?.n).toEqual({ expr: 't', anchor: 'max' })
   })
 })
 
@@ -48,30 +61,8 @@ describe('pushPullBody', () => {
   })
 })
 
-describe('bodyDims', () => {
-  it('sorterar till längd ≥ bredd ≥ tjocklek oavsett axel', () => {
-    // Stående bräda: 22 längs u, 120 längs v, 800 längs n.
-    const standing = testBody({ profile: { x0: 0, y0: 0, x1: 22, y1: 120 }, z0: 0, z1: 800 })
-    expect(bodyDims(standing)).toEqual({ length: 800, width: 120, thickness: 22 })
-  })
-})
-
-describe('snap', () => {
-  it('snäpper till mål inom toleransen', () => {
-    expect(snap(118, 10, [0, 120], 5)).toBe(120)
-  })
-
-  it('väljer närmaste mål', () => {
-    expect(snap(3, 10, [0, 5], 5)).toBe(5)
-  })
-
-  it('faller tillbaka på rutnätet', () => {
-    expect(snap(64, 10, [0, 120], 5)).toBe(60)
-  })
-})
-
-describe('nextBodyName', () => {
+describe('nextPartName', () => {
   it('tar första lediga numret', () => {
-    expect(nextBodyName([testBody({ name: 'Del 1' }), testBody({ name: 'Del 3' })])).toBe('Del 2')
+    expect(nextPartName([testBody({ name: 'Del 1' }), testBody({ name: 'Del 3' })])).toBe('Del 2')
   })
 })

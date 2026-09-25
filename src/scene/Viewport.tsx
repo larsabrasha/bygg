@@ -1,10 +1,11 @@
 import { GizmoHelper, GizmoViewport, Grid, OrbitControls } from '@react-three/drei'
 import { Canvas } from '@react-three/fiber'
+import { resolveBodies } from '../model/resolve'
 import { useDocumentStore } from '../store/documentStore'
 import { useToolStore } from '../store/toolStore'
+import { previewDoc } from '../tools/preview'
 import { BodyMesh } from './BodyMesh'
-import { pushPullPreview } from '../tools/preview'
-import { OpPreview } from './OpPreview'
+import { HoverMarker, OpOverlay } from './OpPreview'
 import { SketchMesh } from './SketchMesh'
 import { ToolController } from './ToolController'
 
@@ -13,42 +14,44 @@ function Scene() {
   const selection = useDocumentStore((s) => s.selection)
   const op = useToolStore((s) => s.op)
   const hover = useToolStore((s) => s.hover)
+  const hoverPoint = useToolStore((s) => s.hoverPoint)
 
-  // Under push/pull ersätts målet av förhandsvisningen.
-  const ppTarget = op?.kind === 'pushpull' ? op.target : null
-  const hideTarget = op?.kind === 'pushpull' && pushPullPreview(op, doc) !== null
-  const active = ppTarget ?? hover
+  // Under en operation ritas dokumentet som det skulle bli; berörda delar halvgenomskinliga.
+  const preview = op ? previewDoc(op, doc) : null
+  const shown = preview?.doc ?? doc
+  const bodies = resolveBodies(shown)
+  const active = op?.kind === 'pushpull' ? op.target : hover
+  const selectedBody = selection?.kind === 'body' ? bodies.find((b) => b.id === selection.id) : undefined
 
   return (
     <>
-      {doc.bodies.map((b) =>
-        hideTarget && ppTarget?.id === b.id ? null : (
-          <BodyMesh
-            key={b.id}
-            body={b}
-            selected={selection?.kind === 'body' && selection.id === b.id}
-            highlightFace={active?.kind === 'body' && active.id === b.id ? active.face : null}
-          />
-        ),
-      )}
-      {doc.sketches.map((s) =>
-        hideTarget && ppTarget?.id === s.id ? null : (
-          <SketchMesh
-            key={s.id}
-            frame={s.frame}
-            rect={s.rect}
-            pickId={s.id}
-            emphasis={
-              selection?.kind === 'sketch' && selection.id === s.id
-                ? 'selected'
-                : active?.kind === 'sketch' && active.id === s.id
-                  ? 'hover'
-                  : 'none'
-            }
-          />
-        ),
-      )}
-      {op && <OpPreview op={op} doc={doc} />}
+      {bodies.map((b) => (
+        <BodyMesh
+          key={b.id}
+          body={b}
+          preview={preview?.affected.has(b.id)}
+          selected={selectedBody?.id === b.id}
+          sibling={!!selectedBody && selectedBody.id !== b.id && selectedBody.defId === b.defId}
+          highlightFace={active?.kind === 'body' && active.id === b.id ? active.face : null}
+        />
+      ))}
+      {shown.sketches.map((s) => (
+        <SketchMesh
+          key={s.id}
+          frame={s.frame}
+          rect={s.rect}
+          pickId={s.id}
+          emphasis={
+            selection?.kind === 'sketch' && selection.id === s.id
+              ? 'selected'
+              : active?.kind === 'sketch' && active.id === s.id
+                ? 'hover'
+                : 'none'
+          }
+        />
+      ))}
+      {op && <OpOverlay op={op} />}
+      {!op && hoverPoint && <HoverMarker hover={hoverPoint} />}
     </>
   )
 }
@@ -65,7 +68,7 @@ export function Viewport() {
       <directionalLight position={[2000, 4000, 3000]} intensity={1.6} />
       <directionalLight position={[-3000, 2000, -1000]} intensity={0.4} />
 
-      {/* Lite under y=0 så att kropparnas undersida inte flimrar mot linjerna. */}
+      {/* Lite under y=0 så att delarnas undersida inte flimrar mot linjerna. */}
       <Grid
         position={[0, -0.5, 0]}
         cellSize={100}

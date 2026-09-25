@@ -3,14 +3,15 @@ import { useDocumentStore } from '../store/documentStore'
 import { useToolStore } from '../store/toolStore'
 import { applyMeasure, cancel } from './actions'
 
-const MEASURE_CHAR = /^[0-9.,-]$/
+/** Tecken som går direkt till måttfältet. Bokstäver (parameternamn) skrivs i fältet, så att R/P/M fungerar som kortkommandon. */
+const MEASURE_CHAR = /^[0-9.,+\-*/() ]$/
 
 function isEditable(t: EventTarget | null) {
   return t instanceof HTMLElement && (t.isContentEditable || ['INPUT', 'SELECT', 'TEXTAREA'].includes(t.tagName))
 }
 
 /**
- * Kortkommandon som i SketchUp: R, P, mellanslag, Esc, Delete, ⌘Z / ⇧⌘Z.
+ * Kortkommandon som i SketchUp: R, P, M, mellanslag, Esc, Delete, ⌘Z / ⇧⌘Z.
  * Under en operation går siffror direkt till måttfältet utan att man klickar i det;
  * ; eller Tab byter fält.
  */
@@ -77,6 +78,10 @@ export function useShortcuts() {
         case 'p':
         case 'P':
           tools.setTool('pushpull')
+          break
+        case 'm':
+        case 'M':
+          tools.setTool('move')
           break
         case 'Delete':
         case 'Backspace':

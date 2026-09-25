@@ -9,10 +9,28 @@ describe('buildCutList', () => {
 
   it('mäter i delens egen riktning, så liggande och stående del blir samma rad', () => {
     const lying = testBody({ id: 'a', name: 'Ben' })
-    const standing = testBody({ id: 'b', name: 'Ben', profile: { x0: 0, y0: 0, x1: 22, y1: 120 }, z0: 0, z1: 800 })
+    const standing = testBody({
+      id: 'b',
+      name: 'Ben',
+      profile: { x0: 0, y0: 0, x1: 22, y1: 120 },
+      z0: 0,
+      z1: 800,
+      grainAxis: 'n',
+      thicknessAxis: 'u',
+    })
     const list = buildCutList([lying, standing])
     expect(list.rows).toHaveLength(1)
     expect(list.rows[0]).toMatchObject({ count: 2, length: 800, width: 120, thickness: 22, bodyIds: ['a', 'b'] })
+  })
+
+  it('L följer fibern, inte storleken', () => {
+    const crossGrain = testBody({
+      profile: { x0: 0, y0: 0, x1: 300, y1: 900 },
+      z1: 18,
+      grainAxis: 'u',
+      thicknessAxis: 'n',
+    })
+    expect(buildCutList([crossGrain]).rows[0]).toMatchObject({ length: 300, width: 900, thickness: 18 })
   })
 
   it('slår inte isär delar på grund av flyttalsbrus', () => {
@@ -22,7 +40,11 @@ describe('buildCutList', () => {
   })
 
   it('håller isär olika material och mått', () => {
-    const list = buildCutList([testBody({ id: 'a' }), testBody({ id: 'b', material: 'ek' }), testBody({ id: 'c', z1: 18 })])
+    const list = buildCutList([
+      testBody({ id: 'a' }),
+      testBody({ id: 'b', material: 'ek' }),
+      testBody({ id: 'c', z1: 18 }),
+    ])
     expect(list.rows).toHaveLength(3)
   })
 

@@ -3,18 +3,21 @@ import { useEffect, useMemo } from 'react'
 import { MeshStandardMaterial } from 'three'
 import { bodyExtents } from '../model/geometry'
 import { FACES, type Body, type Face } from '../model/types'
-import { ACCENT, EDGE, materialColor } from './colors'
+import { ACCENT, ACCENT_LIGHT, EDGE, materialColor } from './colors'
 import { frameQuaternion } from './frameTransform'
+import { GrainArrow } from './GrainArrow'
 
 interface Props {
   body: Body
   selected?: boolean
+  /** Länkad kopia av den valda delen. */
+  sibling?: boolean
   highlightFace?: Face | null
   /** Förhandsvisning: halvgenomskinlig och går inte att träffa med pekaren. */
   preview?: boolean
 }
 
-export function BodyMesh({ body, selected = false, highlightFace = null, preview = false }: Props) {
+export function BodyMesh({ body, selected = false, sibling = false, highlightFace = null, preview = false }: Props) {
   const quaternion = useMemo(() => frameQuaternion(body.frame), [body.frame])
   const [w, h, d] = bodyExtents(body)
   const { x0, x1, y0, y1 } = body.profile
@@ -39,16 +42,15 @@ export function BodyMesh({ body, selected = false, highlightFace = null, preview
   )
   useEffect(() => () => materials.forEach((m) => m.dispose()), [materials])
 
+  const edge = selected || preview ? ACCENT : sibling ? ACCENT_LIGHT : EDGE
+
   return (
     <group position={body.frame.origin} quaternion={quaternion}>
-      <mesh
-        position={center}
-        material={materials}
-        userData={preview ? {} : { pick: { kind: 'body', id: body.id } }}
-      >
+      <mesh position={center} material={materials} userData={preview ? {} : { pick: { kind: 'body', id: body.id } }}>
         <boxGeometry args={[w, h, d]} />
-        <Edges color={selected || preview ? ACCENT : EDGE} lineWidth={selected ? 2.5 : 1} />
+        <Edges color={edge} lineWidth={selected ? 2.5 : sibling ? 1.8 : 1} />
       </mesh>
+      {selected && !preview && <GrainArrow body={body} />}
     </group>
   )
 }

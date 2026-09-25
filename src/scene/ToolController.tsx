@@ -2,13 +2,23 @@ import { useThree } from '@react-three/fiber'
 import { useEffect, useMemo } from 'react'
 import { Raycaster, Vector2, type Intersection, type Object3D } from 'three'
 import { FACES, type Vec3 } from '../model/types'
-import { cancel, commit, move, tap, type Hit, type PickTarget, type Ray } from '../tools/actions'
+import { cancel, commit, hoverAt, move, tap, type Hit, type PickTarget, type Ray } from '../tools/actions'
 import { useToolStore } from '../store/toolStore'
 
+type PointerKind = 'mouse' | 'pen' | 'touch'
+
 /** Hur långt pekaren får röra sig och ändå räknas som ett tryck, i px. */
-const TAP_SLOP = { mouse: 4, pen: 6, touch: 10 } as const
+const TAP_SLOP: Record<PointerKind, number> = { mouse: 4, pen: 6, touch: 10 }
+/**
+ * Hur nära en del pekaren måste vara för att träffa den, i px. Gör tunna
+ * delar (en 22 mm bräda är några px hög på avstånd) möjliga att träffa.
+ */
+const PICK_RADIUS: Record<PointerKind, number> = { mouse: 6, pen: 8, touch: 16 }
 /** Snäpptolerans som andel av avståndet från kameran till träffpunkten (~15 px). */
 const SNAP_FRACTION = 0.015
+
+const kindOf = (e: PointerEvent): PointerKind =>
+  e.pointerType === 'touch' || e.pointerType === 'pen' ? e.pointerType : 'mouse'
 
 /**
  * Översätter pekarhändelser till verktygsanrop. Egen raycasting mot objekt med
@@ -25,14 +35,15 @@ export function ToolController() {
     let multiTouch = false
     const activePointers = new Set<number>()
 
-    const castRay = (e: PointerEvent): Ray => {
+    const castRay = (x: number, y: number): Ray => {
       const r = el.getBoundingClientRect()
-      ndc.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1)
+      ndc.set(((x - r.left) / r.width) * 2 - 1, -((y - r.top) / r.height) * 2 + 1)
       raycaster.setFromCamera(ndc, camera)
       return { origin: raycaster.ray.origin.toArray() as Vec3, dir: raycaster.ray.direction.toArray() as Vec3 }
     }
+    const rayOf = (e: PointerEvent) => castRay(e.clientX, e.clientY)
 
-    const pick = (ray: Ray): Hit | null => {
+    const pickTargets = (): Object3D[] => {
       // Nya objekt har ingen giltig matrixWorld förrän nästa bildruta ritats,
       // och med frameloop="demand" kan det dröja. Räkna om före raycast.
       scene.updateMatrixWorld()
@@ -40,50 +51,91 @@ export function ToolController() {
       scene.traverse((o) => {
         if (o.userData.pick) targets.push(o)
       })
+      return targets
+    }
+
+    /** Närmaste objekt längs den senast kastade strålen. Skisser får företräde framför ytan de ligger på. */
+    const closestObject = (targets: Object3D[]): Intersection | null => {
       let best: { hit: Intersection; score: number } | null = null
       for (const hit of raycaster.intersectObjects(targets, false)) {
-        // Skisser ligger i samma plan som ytan under; ge dem företräde.
         const score = hit.distance - (hit.object.userData.pick.kind === 'sketch' ? 1 : 0)
         if (!best || score < best.score) best = { hit, score }
       }
-
-      // Golvplanet y = 0, om det ligger närmare än närmaste objekt.
-      const groundT = ray.dir[1] !== 0 ? -ray.origin[1] / ray.dir[1] : -1
-      if (groundT > 0 && (!best || groundT < best.hit.distance)) {
-        return { point: [ray.origin[0] + ray.dir[0] * groundT, 0, ray.origin[2] + ray.dir[2] * groundT], target: { kind: 'ground' } }
-      }
-      if (!best) return null
-
-      const p = best.hit.object.userData.pick as { kind: 'body' | 'sketch'; id: string }
-      const target: PickTarget =
-        p.kind === 'body' ? { kind: 'body', id: p.id, face: FACES[best.hit.face?.materialIndex ?? 0]! } : { kind: 'sketch', id: p.id }
-      return { point: best.hit.point.toArray() as Vec3, target }
+      return best?.hit ?? null
     }
 
-    const tolFor = (point: Vec3) => camera.position.distanceTo({ x: point[0], y: point[1], z: point[2] }) * SNAP_FRACTION
+    const toHit = (hit: Intersection): Hit => {
+      const p = hit.object.userData.pick as { kind: 'body' | 'sketch'; id: string }
+      const target: PickTarget =
+        p.kind === 'body'
+          ? { kind: 'body', id: p.id, face: FACES[hit.face?.materialIndex ?? 0]! }
+          : { kind: 'sketch', id: p.id }
+      return { point: hit.point.toArray() as Vec3, target }
+    }
+
+    /**
+     * Träff under pekaren. Missar strålen alla objekt provas en ring runt
+     * pekaren (PICK_RADIUS); först därefter räknas golvet.
+     */
+    const pick = (x: number, y: number, kind: PointerKind): Hit | null => {
+      const targets = pickTargets()
+      const center = castRay(x, y)
+      const direct = closestObject(targets)
+
+      const groundT = center.dir[1] !== 0 ? -center.origin[1] / center.dir[1] : -1
+      const ground: Hit | null =
+        groundT > 0
+          ? {
+              point: [center.origin[0] + center.dir[0] * groundT, 0, center.origin[2] + center.dir[2] * groundT],
+              target: { kind: 'ground' },
+            }
+          : null
+
+      if (direct) return ground && groundT < direct.distance ? ground : toHit(direct)
+
+      const r = PICK_RADIUS[kind]
+      for (const radius of [r / 2, r]) {
+        let best: Intersection | null = null
+        for (let i = 0; i < 8; i++) {
+          const a = (i / 8) * Math.PI * 2
+          castRay(x + Math.cos(a) * radius, y + Math.sin(a) * radius)
+          const h = closestObject(targets)
+          if (h && (!best || h.distance < best.distance)) best = h
+        }
+        if (best) return toHit(best)
+      }
+      return ground
+    }
+
+    const tolFor = (point: Vec3) =>
+      camera.position.distanceTo({ x: point[0], y: point[1], z: point[2] }) * SNAP_FRACTION
     const tolForRay = () => camera.position.length() * SNAP_FRACTION
 
     const onDown = (e: PointerEvent) => {
       activePointers.add(e.pointerId)
       if (activePointers.size > 1) multiTouch = true
       if (!e.isPrimary) return
-      down = { x: e.clientX, y: e.clientY, slop: TAP_SLOP[e.pointerType as keyof typeof TAP_SLOP] ?? 6 }
-      if (useToolStore.getState().op) move(castRay(e), tolForRay())
+      down = { x: e.clientX, y: e.clientY, slop: TAP_SLOP[kindOf(e)] }
+      if (useToolStore.getState().op) move(rayOf(e), tolForRay())
     }
 
     const onMove = (e: PointerEvent) => {
       if (!e.isPrimary || multiTouch) return
       const { op, tool, hover, setHover } = useToolStore.getState()
       if (op) {
-        move(castRay(e), tolForRay())
+        move(rayOf(e), tolForRay())
         return
       }
       // Hover bara med mus; touch har ingen hover.
-      if (e.pointerType === 'mouse' && e.buttons === 0 && tool === 'pushpull') {
-        const t = pick(castRay(e))?.target
-        const next = t && t.kind !== 'ground' ? t : null
-        if (JSON.stringify(next) !== JSON.stringify(hover)) setHover(next)
+      if (e.pointerType !== 'mouse' || e.buttons !== 0 || tool === 'select') return
+      const hit = pick(e.clientX, e.clientY, 'mouse')
+      if (tool === 'rect') {
+        hoverAt(hit, hit ? tolFor(hit.point) : 0)
+        return
       }
+      const t = hit?.target
+      const next = t && t.kind !== 'ground' && (tool === 'pushpull' || t.kind === 'body') ? t : null
+      if (JSON.stringify(next) !== JSON.stringify(hover)) setHover(next)
     }
 
     const onUp = (e: PointerEvent) => {
@@ -97,13 +149,12 @@ export function ToolController() {
 
       if (useToolStore.getState().op) {
         if (wasMulti) return
-        move(castRay(e), tolForRay())
+        move(rayOf(e), tolForRay())
         commit()
         return
       }
       if (isTap) {
-        const ray = castRay(e)
-        const hit = pick(ray)
+        const hit = pick(e.clientX, e.clientY, kindOf(e))
         tap(hit, hit ? tolFor(hit.point) : 0)
       }
     }
@@ -113,7 +164,11 @@ export function ToolController() {
       down = null
     }
 
-    const onLeave = () => useToolStore.getState().setHover(null)
+    const onLeave = () => {
+      const t = useToolStore.getState()
+      t.setHover(null)
+      t.setHoverPoint(null)
+    }
 
     el.addEventListener('pointerdown', onDown)
     el.addEventListener('pointermove', onMove)

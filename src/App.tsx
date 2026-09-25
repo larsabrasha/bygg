@@ -1,4 +1,5 @@
 import { MeasureBox } from './panel/MeasureBox'
+import { Notices } from './panel/Notices'
 import { Sidebar } from './panel/Sidebar'
 import { Toolbar } from './panel/Toolbar'
 import { Viewport } from './scene/Viewport'
@@ -15,6 +16,7 @@ export function App() {
       <Toolbar />
       <main className="relative min-h-0 min-w-0 [grid-area:viewport]">
         <Viewport />
+        <Notices />
         <MeasureBox />
       </main>
       <Sidebar />

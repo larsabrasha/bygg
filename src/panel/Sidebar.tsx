@@ -1,21 +1,22 @@
 import { useState } from 'react'
 import { useDocumentStore } from '../store/documentStore'
 import { CutList } from './CutList'
+import { Params } from './Params'
 import { Properties } from './Properties'
 
-type Tab = 'properties' | 'cutlist'
+type Tab = 'properties' | 'params' | 'cutlist'
 
 // Aktiv flik markeras bara när bladet är öppet.
 const tabClass =
   'min-h-12 flex-1 cursor-pointer border-b-2 border-transparent font-semibold text-muted group-data-[open=true]/sheet:aria-selected:border-accent group-data-[open=true]/sheet:aria-selected:text-accent'
 
 /**
- * Desktop: fast sidopanel med båda sektionerna.
+ * Desktop: fast sidopanel med alla sektioner.
  * Smal skärm: blad längst ner med flikar. Tryck på aktiv flik fäller ihop bladet.
  * Samma DOM i båda lägena; CSS väljer layout, så fältens state överlever en rotation.
  */
 export function Sidebar() {
-  const count = useDocumentStore((s) => s.doc.bodies.length)
+  const count = useDocumentStore((s) => s.doc.instances.length)
   const [tab, setTab] = useState<Tab>('properties')
   const [open, setOpen] = useState(false)
 
@@ -27,6 +28,12 @@ export function Sidebar() {
     }
   }
 
+  const tabs: [Tab, string][] = [
+    ['properties', 'Egenskaper'],
+    ['params', 'Parametrar'],
+    ['cutlist', `Kaplista (${count})`],
+  ]
+
   return (
     <aside
       data-tab={tab}
@@ -37,15 +44,15 @@ export function Sidebar() {
     >
       {/* Flikarna används bara på smal skärm. */}
       <div className="hidden flex-none narrow:flex" role="tablist">
-        <button role="tab" className={tabClass} aria-selected={tab === 'properties'} onClick={() => onTab('properties')}>
-          Egenskaper
-        </button>
-        <button role="tab" className={tabClass} aria-selected={tab === 'cutlist'} onClick={() => onTab('cutlist')}>
-          Kaplista ({count})
-        </button>
+        {tabs.map(([t, label]) => (
+          <button key={t} role="tab" className={tabClass} aria-selected={tab === t} onClick={() => onTab(t)}>
+            {label}
+          </button>
+        ))}
       </div>
       <div className="flex flex-col gap-6 p-4 narrow:overflow-y-auto narrow:overscroll-contain narrow:group-data-[open=false]/sheet:hidden">
         <Properties />
+        <Params />
         <CutList />
       </div>
     </aside>

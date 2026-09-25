@@ -1,4 +1,4 @@
-import { bodyDims } from './geometry'
+import { partDims } from './partAxes'
 import type { Body } from './types'
 
 export interface CutListRow {
@@ -23,7 +23,7 @@ export interface CutList {
 const round = (n: number) => Math.round(n * 10) / 10
 
 /**
- * Kaplista i stil med Fusion 360: L×B×T mäts i varje dels egen riktning,
+ * Kaplista: L×B×T mäts i varje dels egen riktning (L längs fibern, T tjockleken),
  * så en roterad eller stående del får samma mått som en liggande.
  * Identiska delar (material + mått) blir en rad med antal.
  */
@@ -32,7 +32,7 @@ export function buildCutList(bodies: readonly Body[]): CutList {
   let totalVolumeM3 = 0
 
   for (const b of bodies) {
-    const d = bodyDims(b)
+    const d = partDims(b)
     const length = round(d.length)
     const width = round(d.width)
     const thickness = round(d.thickness)
@@ -45,7 +45,16 @@ export function buildCutList(bodies: readonly Body[]): CutList {
       if (!row.names.includes(b.name)) row.names.push(b.name)
       row.bodyIds.push(b.id)
     } else {
-      groups.set(key, { key, count: 1, names: [b.name], length, width, thickness, material: b.material, bodyIds: [b.id] })
+      groups.set(key, {
+        key,
+        count: 1,
+        names: [b.name],
+        length,
+        width,
+        thickness,
+        material: b.material,
+        bodyIds: [b.id],
+      })
     }
   }
 

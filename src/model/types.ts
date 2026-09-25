@@ -21,34 +21,84 @@ export interface Rect {
   y1: number
 }
 
+/** Axel i en frame: u, v eller n. */
+export type Axis = 'u' | 'v' | 'n'
+
+/**
+ * Ett mått som styrs av ett uttryck, t.ex. "tjocklek" eller "bredd - 2 * tjocklek".
+ * anchor säger vilken sida som ligger still när värdet ändras.
+ */
+export interface DimExpr {
+  expr: string
+  anchor: 'min' | 'max'
+}
+
+export type DimExprs = Partial<Record<Axis, DimExpr>>
+
 /** Platt rektangel som ännu inte dragits ut till en kropp. */
 export interface Sketch {
   id: string
   frame: Frame
   rect: Rect
+  /** Uttryck för bredd (u) och höjd (v), om de skrevs in som uttryck. */
+  dims?: DimExprs
 }
 
-/** Fiberriktning: längs delens längsta eller näst längsta mått. */
-export type Grain = 'length' | 'width'
-
 /**
- * En kropp är en profil (rektangel) i sin frame, utdragen längs n från z0 till z1.
- * Profil och djup sparas som siffror, så måtten går att ändra i efterhand.
+ * Delens form, delad av alla kopior (som en komponent i SketchUp).
+ * Profilen (rektangel) i u/v, utdragen längs n från z0 till z1, i lokala koordinater.
  */
-export interface Body {
+export interface PartDef {
   id: string
   name: string
   material: string
-  grain: Grain
-  frame: Frame
+  /** Axeln längs fibern. Måttet längs den är delens längd (L). */
+  grainAxis: Axis
+  /** Axeln för tjockleken (T). Alltid en annan axel än grainAxis; den tredje är bredden (B). */
+  thicknessAxis: Axis
   profile: Rect
   z0: number
   z1: number
+  dims?: DimExprs
+}
+
+/** En placerad kopia av en PartDef. */
+export interface Instance {
+  id: string
+  defId: string
+  frame: Frame
+}
+
+/** Namngivet värde som mått kan referera till. value är senast beräknade värde. */
+export interface Param {
+  id: string
+  name: string
+  expr: string
+  value: number
 }
 
 export interface ModelDocument {
   sketches: Sketch[]
-  bodies: Body[]
+  defs: PartDef[]
+  instances: Instance[]
+  params: Param[]
+}
+
+/**
+ * En kopia ihopslagen med sin form: det som ritas, mäts och hamnar i kaplistan.
+ * id är kopians id. Härleds ur dokumentet, sparas aldrig.
+ */
+export interface Body {
+  id: string
+  defId: string
+  name: string
+  material: string
+  grainAxis: Axis
+  thicknessAxis: Axis
+  frame: Frame
+  profile: Rect
+  z0: number
+  z1: number
 }
 
 /** Kroppens sex sidor, i samma ordning som three.js BoxGeometry numrerar dem. */
