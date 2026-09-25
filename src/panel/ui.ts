@@ -38,3 +38,11 @@ export const ICON = { size: 20, strokeWidth: 1.75, 'aria-hidden': true } as cons
 
 /** Fyrkantig ikonknapp i en ruta (måttrutan): kryss och bock. */
 export const iconAction = 'grid size-10 shrink-0 cursor-pointer place-items-center rounded-lg narrow:size-11'
+
+/**
+ * Rutan längst ner i 3D-vyn (måttrutan, Foga). På smal skärm står den vid
+ * vänsterkanten och slutar före verktygslisten vid högerkanten, så att de inte
+ * täcker varandra när vyn är låg (bladet med flikarna öppet).
+ */
+export const bottomBox =
+  'absolute bottom-3 left-1/2 w-max max-w-[calc(100%-24px)] -translate-x-1/2 rounded-xl border border-line bg-panel/90 p-2 shadow-lg backdrop-blur-md narrow:left-3 narrow:max-w-[calc(100%-5rem)] narrow:translate-x-0'

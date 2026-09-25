@@ -60,6 +60,17 @@ describe('documentStore', () => {
     expect(s().doc.sketches).toHaveLength(1)
   })
 
+  it('ångra väljer det som var valt före steget, och gör om det som var valt efter', () => {
+    const sketch = s().addSketch(GROUND_FRAME, rect)!
+    const part = s().pushPullSketch(sketch, 22)!
+    const after = s().selection
+    expect(after).toMatchObject({ kind: 'body', id: part })
+    s().undo()
+    expect(s().selection).toEqual({ kind: 'sketch', id: sketch })
+    s().redo()
+    expect(s().selection).toEqual(after)
+  })
+
   it('ny ändring efter ångra rensar gör om', () => {
     s().addSketch(GROUND_FRAME, rect)
     s().undo()
@@ -108,7 +119,11 @@ describe('kopior (komponenter)', () => {
     s().makeUnique(b)
     s().pushPullBody(b, 'n+', 10)
     expect(bodies().map((x) => x.z1)).toEqual([22, 32])
-    expect(bodies()[1]!.name).toBe('Del 2')
+    // Namnet visar var den kommer ifrån; nästa unika kopia får nästa nummer.
+    expect(bodies()[1]!.name).toBe('Del 1 (2)')
+    const c = s().duplicateLinked(b)!
+    s().makeUnique(c)
+    expect(bodies()[2]!.name).toBe('Del 1 (3)')
   })
 
   it('formen finns kvar tills sista kopian tas bort', () => {

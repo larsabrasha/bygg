@@ -14,7 +14,7 @@ import {
 } from '../tools/actions'
 import { ExprInput } from './ExprInput'
 import { rulerResult, type RulerPoint } from '../model/ruler'
-import { ghostButton, iconAction, toggleButton } from './ui'
+import { bottomBox, ghostButton, iconAction, toggleButton } from './ui'
 import { Tip } from './Tip'
 import { numberFormat } from '../model/numberFormat'
 
@@ -148,7 +148,7 @@ export function MeasureBox() {
   if (tool === 'measure') return <RulerBox ruler={ruler} hover={rulerHover} onDone={() => setTool('select')} />
 
   return (
-    <div className="absolute bottom-3 left-1/2 w-max max-w-[calc(100%-24px)] -translate-x-1/2 rounded-xl border border-line bg-panel/90 p-2 shadow-lg backdrop-blur-md">
+    <div className={bottomBox}>
       {shown || extending ? (
         <>
           <p className="px-1 pb-1.5 text-xs text-muted">{hint}</p>
@@ -185,7 +185,7 @@ export function MeasureBox() {
                   onKeyDown={(e) => {
                     if (e.key === 'Escape') cancel()
                   }}
-                  className="w-20 min-w-0 bg-transparent text-right text-base font-semibold text-ink tabular-nums outline-none placeholder:text-ink"
+                  className="w-20 min-w-0 bg-transparent text-right narrow:w-16 text-base font-semibold text-ink tabular-nums outline-none placeholder:text-ink"
                 />
                 <span className="text-[13px] text-unit">{unit}</span>
               </label>
@@ -201,7 +201,8 @@ export function MeasureBox() {
             )}
             {copyToggle}
             {modeToggle}
-            <span aria-hidden className="mx-0.5 h-6 w-px bg-line" />
+            {/* På smal skärm är rutan smalare (den slutar före verktygslisten); där får fält, kryss och bock plats på en rad utan strecket. */}
+            <span aria-hidden className="mx-0.5 h-6 w-px bg-line narrow:hidden" />
             {(op || amend) && (
               <Tip label={op ? 'Avbryt' : 'Ångra'} keys={op ? 'Esc' : '⌘Z'} side="top">
                 <button
@@ -248,7 +249,7 @@ function RulerBox({ ruler, hover, onDone }: { ruler: RulerPoint[]; hover: RulerP
         ? 'Tryck på nästa punkt eller yta.'
         : 'Tryck igen för att mäta något nytt.'
   return (
-    <div className="absolute bottom-3 left-1/2 w-max max-w-[calc(100%-24px)] -translate-x-1/2 rounded-xl border border-line bg-panel/90 p-2 shadow-lg backdrop-blur-md">
+    <div className={bottomBox}>
       <p className="max-w-96 px-1 pb-1.5 text-xs text-muted">{hint}</p>
       <div className="flex flex-wrap items-center gap-1.5">
         <output

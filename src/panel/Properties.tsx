@@ -13,6 +13,7 @@ import { ExprInput } from './ExprInput'
 import { Group } from './Group'
 import { dangerButton, field, fieldLabel, primaryButton, secondaryButton, sectionTitle } from './ui'
 import { useDraft } from './useDraft'
+import { useSelectAll } from './useSelectAll'
 import { Tip } from './Tip'
 import { numberFormat } from '../model/numberFormat'
 
@@ -45,6 +46,7 @@ function CommitField({
 }) {
   const [text, setText] = useDraft(value)
   const [error, setError] = useState<string | null>(null)
+  const selectAll = useSelectAll()
   const save = () => {
     if (text === value) return setError(null)
     const e = onCommit(text)
@@ -83,7 +85,17 @@ function CommitField({
       wrapperClass={boxed ? 'block min-w-0 flex-1' : 'block w-full'}
     />
   ) : (
-    <input {...common} className={inputClass} value={text} onChange={(e) => setText(e.target.value)} />
+    <input
+      {...common}
+      {...selectAll}
+      onBlur={() => {
+        selectAll.onBlur()
+        save()
+      }}
+      className={inputClass}
+      value={text}
+      onChange={(e) => setText(e.target.value)}
+    />
   )
   return (
     <>
@@ -431,7 +443,11 @@ export function Properties() {
         </div>
       ) : (
         <div className="flex flex-col items-start gap-3">
-          <p className="text-faint">Inget valt. Tryck på en del eller skiss med verktyget Välj.</p>
+          <p className="text-faint">
+            {isEmpty
+              ? 'Modellen är tom. Rita en rektangel (R) eller en cirkel (C) på golvet, och dra ut den till en del med pilen.'
+              : 'Inget valt. Tryck på en del eller skiss med verktyget Välj.'}
+          </p>
           {!isEmpty && (
             <button className={dangerButton} onClick={clearDocument}>
               <Trash2 {...ICON_SM} />

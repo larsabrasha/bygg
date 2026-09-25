@@ -5,6 +5,7 @@ import { useDocumentStore } from '../store/documentStore'
 import { insertName, segments, suggestions, wordAt } from './paramSuggest'
 import { arrowStep, stepText } from './numberStep'
 import { numberFormat } from '../model/numberFormat'
+import { useSelectAll } from './useSelectAll'
 
 const fmt = numberFormat(2)
 
@@ -62,8 +63,7 @@ export function ExprInput({
   const [closed, setClosed] = useState(false)
   /** Vad som ska vara markerat när fältet ritats om (efter ett insatt namn eller ett steg). */
   const pendingSel = useRef<[number, number] | null>(null)
-  /** Ett klick håller på att ge fältet fokus; se onMouseUp. */
-  const clickFocus = useRef(false)
+  const selectAll = useSelectAll()
 
   useLayoutEffect(() => {
     const sel = pendingSel.current
@@ -193,30 +193,19 @@ export function ExprInput({
         }}
         onSelect={readCaret}
         onKeyDown={keyDown}
-        onMouseDown={(e) => {
-          clickFocus.current = document.activeElement !== e.currentTarget
-        }}
-        // Klicket sätter markören efter fokus; markera allt igen om den tog bort markeringen.
-        onMouseUp={(e) => {
-          if (!clickFocus.current) return
-          clickFocus.current = false
-          const el = e.currentTarget
-          if (el.selectionStart === el.selectionEnd) {
-            e.preventDefault()
-            el.select()
-          }
-        }}
+        onMouseDown={selectAll.onMouseDown}
+        onMouseUp={selectAll.onMouseUp}
         onFocus={(e) => {
           setFocused(true)
           setClosed(false)
-          e.currentTarget.select()
+          selectAll.onFocus(e)
           readCaret()
           onFocus?.(e)
         }}
         onBlur={(e) => {
           setFocused(false)
           setActive(null)
-          clickFocus.current = false
+          selectAll.onBlur()
           onBlur?.(e)
         }}
       />

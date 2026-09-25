@@ -157,3 +157,15 @@ export function nextPartName(defs: readonly Pick<PartDef, 'name'>[], word = 'Del
   while (used.has(`${word} ${n}`)) n++
   return `${word} ${n}`
 }
+
+/**
+ * Namn på en form som gjorts unik ur name: samma namn med ett nummer, "Ben (2)",
+ * så att man ser var den kommer ifrån. Ett nummer som redan finns tas bort först.
+ */
+export function uniqueCopyName(defs: readonly Pick<PartDef, 'name'>[], name: string): string {
+  const base = name.replace(/ \(\d+\)$/, '')
+  const used = new Set(defs.map((b) => b.name))
+  let n = 2
+  while (used.has(`${base} (${n})`)) n++
+  return `${base} (${n})`
+}

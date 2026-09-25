@@ -9,6 +9,7 @@ import {
   nextPartName,
   pushPullBody,
   sketchToPart,
+  uniqueCopyName,
 } from '../model/geometry'
 import { rotateFrame } from '../model/frame'
 import { carryTools, combineError, detachOrphans, jointError, sketchCombine, type SketchMode } from '../model/combine'
@@ -38,11 +39,17 @@ import { add, scale } from '../model/vec'
 /** Det valda. För en del också ytan man tryckte på; den får pilen för push/pull. */
 export type Selection = { kind: 'sketch'; id: string } | { kind: 'body'; id: string; face?: Face }
 
+/** Ett steg i ångra-historiken: dokumentet och det som var valt då. */
+interface HistoryEntry {
+  doc: ModelDocument
+  selection: Selection | null
+}
+
 interface Snapshot {
   doc: ModelDocument
   selection: Selection | null
-  past: ModelDocument[]
-  future: ModelDocument[]
+  past: HistoryEntry[]
+  future: HistoryEntry[]
 }
 
 export type PartPatch = Partial<Pick<PartDef, 'name' | 'material' | 'grainAxis' | 'thicknessAxis'>>
@@ -154,21 +161,22 @@ const initial: Snapshot =
     ? {
         doc: previousState.doc,
         selection: previousState.selection,
-        past: previousState.past,
-        future: previousState.future,
+        // Historik från före valet sparades i den (bara dokument) tas inte över.
+        past: previousState.past.every((e) => 'doc' in e) ? previousState.past : [],
+        future: previousState.future.every((e) => 'doc' in e) ? previousState.future : [],
       }
     : emptySnapshot()
 
 export const useDocumentStore = create<DocumentState>()((set, get) => {
   /** Sparar nuvarande dokument i historiken och byter till next (med parametrar omräknade). */
   const commit = (next: ModelDocument, selection: Selection | null = get().selection) => {
-    const { doc, past } = get()
+    const { doc, past, selection: before } = get()
     // Verktyg följer sin värd när den flyttas; verktyg utan värd blir vanliga delar.
     const applied = pruneDefs(detachOrphans(carryTools(doc, applyParams(next))))
     set({
       doc: applied,
       selection: selectionExists(applied, selection),
-      past: [...past, doc].slice(-HISTORY_LIMIT),
+      past: [...past, { doc, selection: before }].slice(-HISTORY_LIMIT),
       future: [],
     })
   }
@@ -340,7 +348,7 @@ export const useDocumentStore = create<DocumentState>()((set, get) => {
       const found = findInstance(instanceId)
       if (!found) return
       const { doc } = get()
-      const def: PartDef = { ...found.def, id: newId(), name: nextPartName(doc.defs) }
+      const def: PartDef = { ...found.def, id: newId(), name: uniqueCopyName(doc.defs, found.def.name) }
       commit({
         ...doc,
         defs: [...doc.defs, def],
@@ -529,18 +537,30 @@ export const useDocumentStore = create<DocumentState>()((set, get) => {
 
     load: (doc) => set({ doc: applyParams(doc), selection: null, past: [], future: [] }),
 
+    // Valet blir det som var valt i det läget, så att man kan fortsätta där man var
+    // (ångrar man en utdragning är skissen vald igen). Finns det inte längre, det nuvarande.
     undo: () => {
       const { doc, past, future, selection } = get()
       const prev = past.at(-1)
       if (!prev) return
-      set({ doc: prev, past: past.slice(0, -1), future: [doc, ...future], selection: selectionExists(prev, selection) })
+      set({
+        doc: prev.doc,
+        past: past.slice(0, -1),
+        future: [{ doc, selection }, ...future],
+        selection: selectionExists(prev.doc, prev.selection) ?? selectionExists(prev.doc, selection),
+      })
     },
 
     redo: () => {
       const { doc, past, future, selection } = get()
       const next = future[0]
       if (!next) return
-      set({ doc: next, past: [...past, doc], future: future.slice(1), selection: selectionExists(next, selection) })
+      set({
+        doc: next.doc,
+        past: [...past, { doc, selection }],
+        future: future.slice(1),
+        selection: selectionExists(next.doc, next.selection) ?? selectionExists(next.doc, selection),
+      })
     },
   }
 })

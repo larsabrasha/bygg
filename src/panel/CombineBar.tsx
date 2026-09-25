@@ -3,7 +3,7 @@ import { resolveBodies } from '../model/resolve'
 import { useDocumentStore } from '../store/documentStore'
 import { useToolStore } from '../store/toolStore'
 import { Tip } from './Tip'
-import { iconAction } from './ui'
+import { bottomBox, iconAction } from './ui'
 
 /**
  * Efter Skär ut eller Lägg till i knappraden: tala om att nästa tryck väljer
@@ -22,10 +22,7 @@ export function CombineBar() {
     joint: `Tryck på delen som tappen på ${host.name} ska in i. Änden på ${host.name} ska ligga an mot den.`,
   }[combining.op]
   return (
-    <div
-      role="status"
-      className="absolute bottom-3 left-1/2 flex w-max max-w-[calc(100%-24px)] -translate-x-1/2 items-center gap-2 rounded-xl border border-line bg-panel/90 p-2 pl-3 shadow-lg backdrop-blur-md"
-    >
+    <div role="status" className={`${bottomBox} flex items-center gap-2 pl-3`}>
       <div className="flex flex-col">
         <p className="text-[13px]">{text}</p>
         {combining.error && <p className="text-xs text-danger">{combining.error}</p>}

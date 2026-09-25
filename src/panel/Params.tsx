@@ -6,17 +6,30 @@ import { useDocumentStore } from '../store/documentStore'
 import { field, secondaryButton, sectionTitle } from './ui'
 import { ExprInput } from './ExprInput'
 import { useDraft } from './useDraft'
+import { useSelectAll } from './useSelectAll'
 import { Tip } from './Tip'
 import { numberFormat } from '../model/numberFormat'
 
 const fmt = numberFormat(2)
 
-function ParamRow({ param, error, used }: { param: Param; error?: string; used: boolean }) {
+function ParamRow({
+  param,
+  error,
+  used,
+  autoFocus,
+}: {
+  param: Param
+  error?: string
+  used: boolean
+  /** En ny parameter: namnet får fokus och är markerat, så att man kan skriva sitt eget direkt. */
+  autoFocus: boolean
+}) {
   const updateParam = useDocumentStore((s) => s.updateParam)
   const deleteParam = useDocumentStore((s) => s.deleteParam)
   const [name, setName] = useDraft(param.name)
   const [expr, setExpr] = useDraft(param.expr)
   const [message, setMessage] = useState<string | null>(null)
+  const selectAll = useSelectAll()
 
   const save = (patch: { name?: string; expr?: string }) => {
     const e = updateParam(param.id, patch)
@@ -40,8 +53,13 @@ function ParamRow({ param, error, used }: { param: Param; error?: string; used: 
         className={`${field} font-medium`}
         aria-label="Namn"
         value={name}
+        autoFocus={autoFocus}
+        {...selectAll}
         onChange={(e) => setName(e.target.value)}
-        onBlur={() => name !== param.name && save({ name })}
+        onBlur={() => {
+          selectAll.onBlur()
+          if (name !== param.name) save({ name })
+        }}
         onKeyDown={onKey(() => setName(param.name))}
       />
       <div className="flex min-w-0 flex-col gap-1">
@@ -85,6 +103,8 @@ export function Params() {
   const doc = useDocumentStore((s) => s.doc)
   const addParam = useDocumentStore((s) => s.addParam)
   const results = evaluateParams(doc.params)
+  // Den som just lades till med knappen; inte de som fanns när panelen ritades första gången.
+  const [added, setAdded] = useState<string | null>(null)
 
   return (
     <section className="group-data-[tab=cutlist]/sheet:hidden group-data-[tab=properties]/sheet:hidden">
@@ -111,13 +131,14 @@ export function Params() {
                       param={p}
                       error={r && !r.ok ? r.error : undefined}
                       used={isNameUsed(others, p.name)}
+                      autoFocus={p.id === added}
                     />
                   )
                 })}
               </ul>
             </>
           )}
-          <button className={`${secondaryButton} self-start`} onClick={addParam}>
+          <button className={`${secondaryButton} self-start`} onClick={() => setAdded(addParam())}>
             <Plus size={16} strokeWidth={1.75} aria-hidden />
             Ny parameter
           </button>
