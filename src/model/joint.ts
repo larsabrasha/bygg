@@ -1,6 +1,7 @@
 import { faceBounds, faceFrame, toLocal, toWorld } from './frame'
 import { bodyCenter } from './geometry'
-import { FACES, type Body, type Face, type Frame, type Rect, type Shape, type Vec3 } from './types'
+import { resolveBodies } from './resolve'
+import { FACES, type Body, type Face, type Frame, type ModelDocument, type Rect, type Shape, type Vec3 } from './types'
 import { dot, sub } from './vec'
 
 /**
@@ -92,5 +93,58 @@ export function tenonFor(host: Body, into: Body): Tenon | string {
     profile: { x0: cx - tw / 2, y0: cy - th / 2, x1: cx + tw / 2, y1: cy + th / 2 },
     ...(round && { shape: 'circle' as const }),
     depth,
+  }
+}
+
+/** Det i en kopia som påverkar var en tapp sitter: läget och formens mått. */
+function fitKey(doc: ModelDocument, id: string): string | null {
+  const inst = doc.instances.find((i) => i.id === id)
+  const def = inst && doc.defs.find((d) => d.id === inst.defId)
+  if (!inst || !def) return null
+  return JSON.stringify([inst.frame, def.profile, def.shape, def.z0, def.z1])
+}
+
+/**
+ * Tapparna följer sina delar: har sargen eller benet ändrats (läge eller mått)
+ * räknas tappen om med tumreglerna, så att den sitter mitt på änden och har
+ * rätt storlek. Ändrar man bara tappen själv ligger ändringen kvar, tills
+ * sargen eller benet ändras nästa gång. Ligger delarna inte längre an mot
+ * varandra behålls tappen som den var (den har då följt med sargen, se
+ * carryTools). before är dokumentet före ändringen.
+ */
+export function refitJoints(before: ModelDocument, after: ModelDocument): ModelDocument {
+  const changed = (id: string) => fitKey(before, id) !== fitKey(after, id)
+  const joints = after.instances.filter(
+    (t) => t.combine?.op === 'joint' && t.combine.into && (changed(t.combine.host) || changed(t.combine.into)),
+  )
+  if (joints.length === 0) return after
+  const bodies = resolveBodies(after)
+  const instances = new Map(after.instances.map((i) => [i.id, i]))
+  const defs = new Map(after.defs.map((d) => [d.id, d]))
+  for (const t of joints) {
+    const host = bodies.find((b) => b.id === t.combine!.host)
+    const into = bodies.find((b) => b.id === t.combine!.into)
+    const def = defs.get(t.defId)
+    // En tapp vars form delas med en annan kopia räknas inte om (den andra skulle ändras med),
+    // och inte heller en vars mått eller läge man styr med uttryck: där bestämmer man själv.
+    const shared = after.instances.some((i) => i.defId === t.defId && i.id !== t.id)
+    if (!host || !into || !def || shared || def.dims || t.pos) continue
+    const tenon = tenonFor(host, into)
+    if (typeof tenon === 'string') continue
+    const { shape: _old, ...rest } = def
+    void _old
+    defs.set(def.id, {
+      ...rest,
+      profile: tenon.profile,
+      ...(tenon.shape && { shape: tenon.shape }),
+      z0: 0,
+      z1: tenon.depth,
+    })
+    instances.set(t.id, { ...t, frame: tenon.frame })
+  }
+  return {
+    ...after,
+    defs: after.defs.map((d) => defs.get(d.id)!),
+    instances: after.instances.map((i) => instances.get(i.id)!),
   }
 }

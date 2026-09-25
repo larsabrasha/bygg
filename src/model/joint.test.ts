@@ -101,4 +101,45 @@ describe('tapp och tapphål', () => {
     expect(a!.tools).toEqual([expect.objectContaining({ op: 'add' })])
     expect(b!.tools).toBe(a!.tools)
   })
+
+  describe('tappen följer sargen och benet', () => {
+    const tenonSize = () => {
+      const t = bodies().find((b) => b.name === 'Tapp 1')!
+      const w = t.profile.x1 - t.profile.x0
+      const h = t.profile.y1 - t.profile.y0
+      return [Math.min(w, h), Math.max(w, h), t.z1 - t.z0]
+    }
+
+    it('blir sargen tjockare räknas tappen om med tumreglerna', () => {
+      docs().joint('sarg', 'ben')
+      expect(tenonSize()).toEqual([7, 80, 27])
+      expect(docs().setExtent('sarg', 'v', '30')).toBeNull()
+      // En tredjedel av 30 = 10; ansatsen och djupet som förut.
+      expect(tenonSize()).toEqual([10, 80, 27])
+      // Tapphålet i benet följer tappen.
+      expect(bodies().find((b) => b.id === 'ben')!.tools![0]!.profile).toEqual(
+        bodies().find((b) => b.name === 'Tapp 1')!.profile,
+      )
+    })
+
+    it('en egen ändring av tappen ligger kvar tills sargen eller benet ändras', () => {
+      docs().joint('sarg', 'ben')
+      const tapp = docs().doc.instances.find((i) => i.combine)!.id
+      expect(docs().setExtent(tapp, 'n', '20')).toBeNull()
+      expect(tenonSize()[2]).toBe(20)
+      // Namnet påverkar inte var tappen sitter.
+      docs().updatePart('sarg', { name: 'Framsarg' })
+      expect(tenonSize()[2]).toBe(20)
+      docs().setExtent('sarg', 'v', '30')
+      expect(tenonSize()).toEqual([10, 80, 27])
+    })
+
+    it('ligger delarna inte längre an behålls tappen och följer sargen', () => {
+      docs().joint('sarg', 'ben')
+      docs().moveInstance('sarg', [100, 0, 0])
+      expect(tenonSize()).toEqual([7, 80, 27])
+      const t = bodies().find((b) => b.name === 'Tapp 1')!
+      expect(t.frame.origin[0]).toBeCloseTo(140)
+    })
+  })
 })

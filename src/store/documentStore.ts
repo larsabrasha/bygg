@@ -13,7 +13,7 @@ import {
 } from '../model/geometry'
 import { rotateFrame } from '../model/frame'
 import { carryTools, combineError, detachOrphans, jointError, sketchCombine, type SketchMode } from '../model/combine'
-import { tenonFor } from '../model/joint'
+import { refitJoints, tenonFor } from '../model/joint'
 import { newId } from '../model/id'
 import { applyParams, evaluateParams, isNameUsed, paramScope, setBoxExtent } from '../model/params'
 import { defaultAxes, withAxes } from '../model/partAxes'
@@ -171,8 +171,9 @@ export const useDocumentStore = create<DocumentState>()((set, get) => {
   /** Sparar nuvarande dokument i historiken och byter till next (med parametrar omräknade). */
   const commit = (next: ModelDocument, selection: Selection | null = get().selection) => {
     const { doc, past, selection: before } = get()
-    // Verktyg följer sin värd när den flyttas; verktyg utan värd blir vanliga delar.
-    const applied = pruneDefs(detachOrphans(carryTools(doc, applyParams(next))))
+    // Verktyg följer sin värd när den flyttas, och tappar räknas om när sargen eller benet ändras;
+    // verktyg utan värd blir vanliga delar.
+    const applied = pruneDefs(detachOrphans(refitJoints(doc, carryTools(doc, applyParams(next)))))
     set({
       doc: applied,
       selection: selectionExists(applied, selection),

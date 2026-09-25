@@ -4,6 +4,7 @@ import type { Axis, Body, ModelDocument, PartDef } from '../model/types'
 import type { Selection } from '../store/documentStore'
 import type { Op, Tool } from '../store/toolStore'
 import { PREVIEW_ID, previewDoc } from '../tools/preview'
+import type { Segment } from './labelPlacement'
 
 /**
  * Måtten på den valda delen visas som vanliga HTML-element ovanpå 3D-vyn
@@ -18,6 +19,26 @@ export const labelElements = new Map<Axis, HTMLElement>()
 export const labelSizes = new Map<Axis, [number, number]>()
 
 let wake: (() => void) | null = null
+
+/**
+ * Pilen för push/pull på skärmen (PushPullHandle skriver den varje bildruta),
+ * så att etiketterna kan ställa sig bredvid den i stället för under den.
+ */
+let arrow: Segment | null = null
+
+export const arrowOnScreen = () => arrow
+
+/** Ändras pilen behövs en bildruta till, så att etiketterna flyttas efter den. */
+export function setArrowOnScreen(next: Segment | null) {
+  const same =
+    arrow === next ||
+    (!!arrow &&
+      !!next &&
+      Math.abs(arrow.a[0] - next.a[0]) + Math.abs(arrow.a[1] - next.a[1]) < 0.5 &&
+      Math.abs(arrow.b[0] - next.b[0]) + Math.abs(arrow.b[1] - next.b[1]) < 0.5)
+  arrow = next
+  if (!same) wake?.()
+}
 
 export function setDimensionWake(fn: (() => void) | null) {
   wake = fn

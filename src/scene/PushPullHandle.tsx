@@ -1,16 +1,22 @@
 import { useFrame } from '@react-three/fiber'
-import { useRef } from 'react'
+import { useEffect, useRef } from 'react'
 import { Vector3, type Group, type Mesh, type PerspectiveCamera } from 'three'
 import { arrowDir } from '../model/arrowDir'
 import type { Vec3 } from '../model/types'
 import type { PickTarget } from '../tools/actions'
 import { ACCENT } from './colors'
+import { setArrowOnScreen } from './dimensionLabels'
 
 const UP = new Vector3(0, 1, 0)
 // Återanvänds varje bildruta.
 const TO_CAMERA = new Vector3()
 const SCREEN_UP = new Vector3()
 const DIR = new Vector3()
+const BASE = new Vector3()
+const TIP = new Vector3()
+/** Spetsen och konens radie, i px (se meshen nedan). */
+const TIP_PX = 66
+const CONE_RADIUS = 10
 
 /** Ritas ovanpå allt, som flyttpilarna: annars skymmer en del framför (t.ex. en hylla) pilen. */
 const onTop = { color: ACCENT, depthTest: false, depthWrite: false, transparent: true } as const
@@ -26,6 +32,7 @@ const onTop = { color: ACCENT, depthTest: false, depthWrite: false, transparent:
 export function PushPullHandle({ anchor, normal }: { anchor: Vec3; normal: Vec3 }) {
   const ref = useRef<Group>(null)
   const hitRef = useRef<Mesh>(null)
+  useEffect(() => () => setArrowOnScreen(null), [])
 
   useFrame(({ camera, size }) => {
     const g = ref.current
@@ -38,6 +45,13 @@ export function PushPullHandle({ anchor, normal }: { anchor: Vec3; normal: Vec3 
     const up = SCREEN_UP.setFromMatrixColumn(camera.matrixWorld, 1)
     const dir = arrowDir(normal, toCamera.toArray() as Vec3, up.toArray() as Vec3)
     g.quaternion.setFromUnitVectors(UP, DIR.fromArray(dir))
+    // Var pilen syns på skärmen, från foten till spetsen, för måttetiketterna.
+    const toPx = (p: Vector3): [number, number] => {
+      p.project(camera)
+      return [((p.x + 1) * size.width) / 2, ((1 - p.y) * size.height) / 2]
+    }
+    const tip = TIP.copy(g.position).addScaledVector(DIR, TIP_PX * g.scale.x)
+    setArrowOnScreen({ a: toPx(BASE.copy(g.position)), b: toPx(tip), r: CONE_RADIUS })
     // Träffen bär med sig riktningen, så att draget börjar där man tog tag längs den lutade pilen.
     if (hitRef.current) hitRef.current.userData.pick = { kind: 'handle', dir } satisfies PickTarget
   })

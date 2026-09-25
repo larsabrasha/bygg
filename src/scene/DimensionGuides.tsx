@@ -5,7 +5,8 @@ import { dimensionEdges, type DimensionEdge } from '../model/dimensions'
 import { bodyCenter } from '../model/geometry'
 import type { Body, Vec3 } from '../model/types'
 import { add, scale } from '../model/vec'
-import { labelElements, labelSizes, setDimensionWake } from './dimensionLabels'
+import { arrowOnScreen, labelElements, labelSizes, setDimensionWake } from './dimensionLabels'
+import { placeLabel, type Placement } from './labelPlacement'
 
 /** Ungefärlig halv bredd och höjd på en etikett och luften mot kanten, i px. */
 const HALF_W = 30
@@ -13,13 +14,6 @@ const HALF_H = 14
 const GAP = 6
 
 const v = new Vector3()
-
-/** Var en etikett sitter: kantens mitt på skärmen m, riktningen ut n och avståndet d, i px. */
-interface Placement {
-  m: [number, number]
-  n: [number, number]
-  d: number
-}
 
 /**
  * Etikettens läge på skärmen: kantens mitt, flyttad ut från delen vinkelrätt
@@ -46,20 +40,10 @@ function labelPlacement(
   return { m, n: [nx, ny], d: HALF_W * Math.abs(nx) + HALF_H * Math.abs(ny) + GAP }
 }
 
-const at = ({ m, n, d }: Placement): [number, number] => [m[0] + n[0] * d, m[1] + n[1] * d]
-
-/** Hur långt en etikett flyttas ut i taget när den krockar med en annan, och som mest hur många gånger. */
-const NUDGE = 8
 /** Minsta avstånd från vyns kant, i px. */
 const EDGE_MARGIN = 8
 
 const clamp = (x: number, lo: number, hi: number) => Math.min(Math.max(x, lo), Math.max(lo, hi))
-const MAX_NUDGES = 12
-
-/** Om två etiketter (mitt och storlek i px) överlappar, med lite luft. */
-function overlaps(a: [number, number], sa: [number, number], b: [number, number], sb: [number, number]) {
-  return Math.abs(a[0] - b[0]) * 2 < sa[0] + sb[0] + 4 && Math.abs(a[1] - b[1]) * 2 < sa[1] + sb[1] + 4
-}
 
 /**
  * Placerar måttetiketterna (panel/DimensionLabels) på skärmen, vid de kanter
@@ -84,7 +68,7 @@ export function DimensionGuides({ body }: { body: Body }) {
       return v.z > 1 ? null : [((v.x + 1) * view.width) / 2, ((1 - v.y) * view.height) / 2]
     }
     const center = bodyCenter(body)
-    // Etiketterna placeras en i taget; krockar en med en som redan står flyttas den längre ut.
+    // Etiketterna placeras en i taget; krockar en med en som redan står, eller med pilen, flyttas den (placeLabel).
     const placed: { pos: [number, number]; size: [number, number] }[] = []
     for (const edge of current) {
       const el = labelElements.get(edge.axis)
@@ -93,11 +77,7 @@ export function DimensionGuides({ body }: { body: Body }) {
       el.style.visibility = p ? 'visible' : 'hidden'
       if (!p) continue
       const size = labelSizes.get(edge.axis) ?? [2 * HALF_W, 2 * HALF_H]
-      let pos = at(p)
-      for (let i = 0; i < MAX_NUDGES && placed.some((q) => overlaps(pos, size, q.pos, q.size)); i++) {
-        p.d += NUDGE
-        pos = at(p)
-      }
+      let pos = placeLabel(p, size, placed, arrowOnScreen())
       // Inom vyn, så att en etikett vid kanten av skärmen går att trycka på.
       pos = [
         clamp(pos[0], size[0] / 2 + EDGE_MARGIN, view.width - size[0] / 2 - EDGE_MARGIN),
