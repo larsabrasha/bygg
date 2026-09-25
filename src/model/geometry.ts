@@ -1,4 +1,4 @@
-import { type Box } from './box'
+import { type Box, bodyExtents } from './box'
 import { defaultAxes } from './partAxes'
 
 export { bodyExtents, type Box } from './box'
@@ -86,6 +86,15 @@ export function pushPullBody<T extends Box>(body: T, face: Face, distance: numbe
   }
   if (!isValidRect(p) || z1 - z0 < MIN_SIZE) return null
   return { ...body, profile: p, z0, z1 }
+}
+
+/**
+ * Minsta avstånd för push/pull på en yta (negativt: inåt). Längre in än så
+ * går ytan förbi motsatta sidan, eller delen blir tunnare än MIN_SIZE.
+ */
+export function pushPullMin(body: Box, face: Face): number {
+  const [u, v, n] = bodyExtents(body)
+  return MIN_SIZE - { u, v, n }[faceAxis(face)]
 }
 
 /** Första lediga namnet "Del N". */

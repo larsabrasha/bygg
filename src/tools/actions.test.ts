@@ -135,6 +135,26 @@ describe('push/pull', () => {
     expect(bodies()[0]!.profile.x1).toBe(700)
   })
 
+  it('ytan stannar innan den går förbi motsatta sidan', () => {
+    const b = extrude(drawGroundRect(), '22')
+    tap({ point: [600, 11, -200], target: { kind: 'body', id: b.id, face: 'u+' } }, 0)
+    move({ origin: [-400, 11, 3000], dir: [0, 0, -1] }, 0)
+    expect(tools().op).toMatchObject({ distance: 1 - 600 })
+    commit()
+    expect(bodies()[0]!.profile).toMatchObject({ x0: 0, x1: 1 })
+  })
+
+  it('avvisar ett inskrivet mått som går förbi motsatta sidan', () => {
+    const b = extrude(drawGroundRect(), '22')
+    tap({ point: [600, 11, -200], target: { kind: 'body', id: b.id, face: 'u+' } }, 0)
+    tools().setMeasure(0, '-700')
+    expect(applyMeasure()).toBe(false)
+    expect(tools().op).not.toBeNull()
+    expect(bodies()[0]!.profile.x1).toBe(600)
+    tools().setLastPushPull({ distance: -700 })
+    expect(repeatLastPushPull()).toBe(false)
+  })
+
   it('minustecken vänder riktningen', () => {
     expect(extrude(drawGroundRect(), '-18')).toMatchObject({ z0: -18, z1: 0 })
   })

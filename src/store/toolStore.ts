@@ -37,6 +37,8 @@ export interface PushPullOp {
   /** Avstånd där ytan hamnar i jämnhöjd med en annan dels kant. */
   targets: number[]
   distance: number
+  /** Minsta distance för en dels yta (se pushPullMin). Saknas eller −∞ för en skiss, som kan dras åt båda hållen. */
+  min?: number
   onTarget: boolean
 }
 

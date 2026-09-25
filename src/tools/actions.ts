@@ -1,6 +1,6 @@
 import { faceBounds, faceFrame, GROUND_FRAME, rotateFrame, toLocal2D, toWorld } from '../model/frame'
 import { isConstant } from '../model/expr'
-import { bodyCenter, bodyExtents, rectFromCorners } from '../model/geometry'
+import { bodyCenter, bodyExtents, pushPullMin, rectFromCorners } from '../model/geometry'
 import { evaluateIn } from '../model/params'
 import { rulerPointOn, type RulerPoint } from '../model/ruler'
 import { resolveBodies } from '../model/resolve'
@@ -200,6 +200,7 @@ export function tap(hit: Hit | null, tol: number) {
       grab: 0,
       targets: offsetTargets(others, hit.point, pp.normal),
       distance: 0,
+      min: pushPullMinOf(pp.target),
       onTarget: false,
     })
   }
@@ -243,8 +244,16 @@ export function beginPushPull(target: PushPullTarget, grabPoint?: Vec3, grabDir?
     grab: grabPoint ? dot(sub(grabPoint, at.anchor), grabDir ?? at.normal) : 0,
     targets: offsetTargets(others, at.anchor, at.normal),
     distance: 0,
+    min: pushPullMinOf(target),
     onTarget: false,
   })
+}
+
+/** Hur långt in ytan går att trycka (se pushPullMin). En skiss har ingen gräns. */
+function pushPullMinOf(target: PushPullTarget): number {
+  if (target.kind === 'sketch') return -Infinity
+  const b = bodies().find((x) => x.id === target.id)
+  return b ? pushPullMin(b, target.face) : -Infinity
 }
 
 function moveOp(b: Body, plane: Frame, axis: Axis | null): MoveOp {
@@ -430,7 +439,9 @@ export function move(ray: Ray, tol: number) {
   const t = closestParamOnLine(op.anchor, dragLine(op.anchor, op.normal, ray), ray.origin, ray.dir)
   if (t === null) return
   const s = snapValue(t - op.grab, 1, op.targets, tol)
-  setOp({ ...op, distance: s.value, onTarget: s.onTarget })
+  // Ytan stannar innan den når motsatta sidan.
+  const distance = Math.max(s.value, op.min ?? -Infinity)
+  setOp({ ...op, distance, onTarget: s.onTarget && distance === s.value })
 }
 
 /**
@@ -498,7 +509,8 @@ export function commit(op: Op | null = tools().op, exprs: { dims?: DimExprs; dep
   } else {
     if (op.target.kind === 'sketch') d.pushPullSketch(op.target.id, op.distance, exprs.depth)
     else d.pushPullBody(op.target.id, op.target.face, op.distance)
-    if (op.distance !== 0) tools().setLastPushPull({ distance: op.distance, ...(exprs.depth && { expr: exprs.depth }) })
+    if (op.distance !== 0 && docs().doc !== before)
+      tools().setLastPushPull({ distance: op.distance, ...(exprs.depth && { expr: exprs.depth }) })
   }
   tools().setOp(null)
   // Måttrutan ligger kvar, så att man kan skriva ett annat värde (se amendLast).
@@ -617,6 +629,7 @@ export function setCopy(on: boolean) {
 export function repeatLastPushPull(): boolean {
   const { op, lastPushPull } = tools()
   if (op?.kind !== 'pushpull' || !lastPushPull) return false
+  if (lastPushPull.distance < (op.min ?? -Infinity)) return false
   commit({ ...op, distance: lastPushPull.distance }, { depth: lastPushPull.expr })
   return true
 }
@@ -697,6 +710,8 @@ export function applyMeasure(): boolean {
     return true
   }
 
-  commit({ ...op, distance: signed(measure[0], value, Math.sign(op.distance)) }, { depth: exprOf(measure[0]) })
+  const distance = signed(measure[0], value, Math.sign(op.distance))
+  if (distance < (op.min ?? -Infinity)) return false
+  commit({ ...op, distance }, { depth: exprOf(measure[0]) })
   return true
 }
