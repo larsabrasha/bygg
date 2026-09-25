@@ -12,6 +12,7 @@ import { SCENE } from './colors'
 import { HoverMarker, OpOverlay } from './OpPreview'
 import { PushPullHandle } from './PushPullHandle'
 import { SketchMesh } from './SketchMesh'
+import { ThumbnailCapturer } from './ThumbnailCapturer'
 import { ToolController } from './ToolController'
 import { useColorScheme } from './useColorScheme'
 
@@ -86,22 +87,25 @@ export function Viewport() {
       <directionalLight position={[2000, 4000, 3000]} intensity={1.6} />
       <directionalLight position={[-3000, 2000, -1000]} intensity={0.4} />
 
-      {/* Lite under y=0 så att delarnas undersida inte flimrar mot linjerna. */}
-      <Grid
-        position={[0, -0.5, 0]}
-        cellSize={100}
-        cellThickness={0.6}
-        cellColor={colors.gridCell}
-        sectionSize={1000}
-        sectionThickness={1.2}
-        sectionColor={colors.gridSection}
-        fadeDistance={15000}
-        fadeStrength={1.5}
-        infiniteGrid
-      />
+      {/* Lite under y=0 så att delarnas undersida inte flimrar mot linjerna. Inte med på modellbilderna. */}
+      <group userData={{ noThumb: true }}>
+        <Grid
+          position={[0, -0.5, 0]}
+          cellSize={100}
+          cellThickness={0.6}
+          cellColor={colors.gridCell}
+          sectionSize={1000}
+          sectionThickness={1.2}
+          sectionColor={colors.gridSection}
+          fadeDistance={15000}
+          fadeStrength={1.5}
+          infiniteGrid
+        />
+      </group>
 
       <Scene />
       <ToolController />
+      <ThumbnailCapturer />
 
       <CameraRig />
       <GizmoHelper alignment="bottom-left" margin={[70, 70]}>

@@ -1,30 +1,12 @@
 import { useMemo } from 'react'
 import { buildCutList } from '../model/cutlist'
-import { cutListCsv, cutListFileName } from '../model/cutlistExport'
 import { useBodies, useDocumentStore } from '../store/documentStore'
 import { useLibraryStore } from '../store/libraryStore'
+import { downloadCutListCsv, printCutList } from './cutlistActions'
 import { secondaryButton, sectionTitle } from './ui'
 
 const num = new Intl.NumberFormat('sv-SE', { maximumFractionDigits: 1 })
 const volume = new Intl.NumberFormat('sv-SE', { maximumFractionDigits: 4 })
-
-function downloadCsv(csv: string, fileName: string) {
-  const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }))
-  const a = document.createElement('a')
-  a.href = url
-  a.download = fileName
-  a.click()
-  // Safari behöver adressen en stund efter klicket.
-  setTimeout(() => URL.revokeObjectURL(url), 1000)
-}
-
-/** Utskriften (src/panel/PrintCutList.tsx) tar sitt PDF-filnamn från dokumentets titel. */
-function printCutList(modelName: string) {
-  const previous = document.title
-  document.title = cutListFileName(modelName, 'pdf').replace(/\.pdf$/, '')
-  window.addEventListener('afterprint', () => (document.title = previous), { once: true })
-  window.print()
-}
 
 export function CutList() {
   const bodies = useBodies()
@@ -82,10 +64,7 @@ export function CutList() {
             <button className={secondaryButton} onClick={() => printCutList(modelName)}>
               Skriv ut / PDF
             </button>
-            <button
-              className={secondaryButton}
-              onClick={() => downloadCsv(cutListCsv(cutList), cutListFileName(modelName, 'csv'))}
-            >
+            <button className={secondaryButton} onClick={() => downloadCutListCsv(cutList, modelName)}>
               Ladda ner CSV
             </button>
           </div>

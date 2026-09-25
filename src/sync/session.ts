@@ -5,9 +5,11 @@ import { migrate, serialize } from '../persist/format'
 import { emptyDocument, useDocumentStore } from '../store/documentStore'
 import { useLibraryStore, type SyncStatus } from '../store/libraryStore'
 import { useToolStore } from '../store/toolStore'
+import { useViewStore } from '../store/viewStore'
 import { ApiError, httpApi } from './api'
 import { syncOnce, type SyncEvent } from './engine'
 import { idbRepo, importLegacy, LEGACY_KEY, type LocalModel } from './localRepo'
+import { captureThumbnail, deleteThumbnail, getThumbnail, putThumbnail } from './thumbnails'
 
 /**
  * Kopplar ihop den öppna modellen (documentStore) med det lokala förrådet och servern:
@@ -18,6 +20,10 @@ import { idbRepo, importLegacy, LEGACY_KEY, type LocalModel } from './localRepo'
 const SAVE_DELAY_MS = 400
 const SYNC_DELAY_MS = 2000
 const SYNC_INTERVAL_MS = 60_000
+/** Kortaste tid mellan två bilder av samma modell vid autospar. */
+const THUMB_INTERVAL_MS = 3000
+/** Så länge en borttagning går att ångra. */
+const UNDO_DELETE_MS = 6000
 const repo = idbRepo()
 const api = httpApi()
 
@@ -31,13 +37,42 @@ let syncTimer: ReturnType<typeof setTimeout> | null = null
 let syncing: Promise<void> | null = null
 let rerun = false
 let askedPersist = false
+let lastThumb = { id: '', at: 0 }
+const deleteTimers = new Map<string, { timer: ReturnType<typeof setTimeout>; notice: string }>()
 
 async function refreshList() {
   const models = (await repo.list())
     .filter((m) => !m.deleted)
     .map(({ id, name, updatedAt, dirty }) => ({ id, name, updatedAt, dirty }))
     .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
-  lib().set({ models })
+  const thumbs: Record<string, string> = {}
+  await Promise.all(
+    models.map(async (m) => {
+      const t = await getThumbnail(m.id).catch(() => undefined)
+      if (t) thumbs[m.id] = t
+    }),
+  )
+  lib().set({ models, thumbs })
+}
+
+/** Tar en ny bild av den öppna modellen, högst var THUMB_INTERVAL_MS om inte force. */
+async function updateThumbnail(id: string, force = false) {
+  const now = Date.now()
+  if (!force && lastThumb.id === id && now - lastThumb.at < THUMB_INTERVAL_MS) return
+  lastThumb = { id, at: now }
+  const url = captureThumbnail()
+  // Tom modell: ingen bild, startvyn visar en platshållare.
+  if (!url) {
+    if (lib().thumbs[id]) {
+      await deleteThumbnail(id)
+      const { [id]: _gone, ...rest } = lib().thumbs
+      void _gone
+      lib().set({ thumbs: rest })
+    }
+    return
+  }
+  await putThumbnail(id, url)
+  lib().set({ thumbs: { ...lib().thumbs, [id]: url } })
 }
 
 /** Laddar en lokal modell i storen utan att det räknas som en ändring. */
@@ -77,6 +112,7 @@ async function persistNow(force = false) {
     baseRevision: currentBase,
     dirty: true,
   })
+  await updateThumbnail(currentId)
   await refreshList()
   scheduleSync(SYNC_DELAY_MS)
 }
@@ -110,7 +146,10 @@ const STATUS_FOR: Record<ApiError['kind'], SyncStatus> = {
 }
 
 async function openFallback() {
-  const next = (await repo.list()).filter((m) => !m.deleted).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0]
+  const pending = lib().pendingDelete
+  const next = (await repo.list())
+    .filter((m) => !m.deleted && !pending.includes(m.id))
+    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0]
   if (next) showModel(next)
   else await createModel()
 }
@@ -211,6 +250,8 @@ export async function openInitial() {
 
   const currentId = await repo.getCurrentId().catch(() => null)
   const current = currentId ? await repo.get(currentId) : undefined
+  // Visa hela modellen när 3D-vyn kommit igång.
+  useViewStore.getState().requestFit('all')
   if (current && !current.deleted && showModel(current)) return
   // Ny enhet: hämta från servern först, så att vi inte laddar upp en tom modell i onödan.
   if ((await repo.list()).length === 0) await syncNow()
@@ -265,9 +306,81 @@ export async function deleteModel(id: string) {
   if (!m) return
   if (m.baseRevision === null) await repo.remove(id)
   else await repo.put({ ...m, deleted: true })
+  await deleteThumbnail(id).catch(() => {})
   if (id === lib().currentId) await openFallback()
   await refreshList()
   scheduleSync(0)
+}
+
+/**
+ * Tar bort med ångra: modellen döljs direkt och tas bort på riktigt efter
+ * UNDO_DELETE_MS. Stängs appen innan dess finns modellen kvar.
+ */
+export function deleteWithUndo(id: string) {
+  const m = lib().models.find((x) => x.id === id)
+  if (!m || deleteTimers.has(id)) return
+  lib().set({ pendingDelete: [...lib().pendingDelete, id] })
+  const notice = lib().notify(`”${m.name}” togs bort.`, { label: 'Ångra', run: () => undoDelete(id) })
+  const timer = setTimeout(() => {
+    deleteTimers.delete(id)
+    lib().dismiss(notice)
+    void deleteModel(id).finally(() => lib().set({ pendingDelete: lib().pendingDelete.filter((x) => x !== id) }))
+  }, UNDO_DELETE_MS)
+  deleteTimers.set(id, { timer, notice })
+}
+
+export function undoDelete(id: string) {
+  const t = deleteTimers.get(id)
+  if (!t) return
+  clearTimeout(t.timer)
+  deleteTimers.delete(id)
+  lib().dismiss(t.notice)
+  lib().set({ pendingDelete: lib().pendingDelete.filter((x) => x !== id) })
+}
+
+/** Kopia av en modell, med ny id och namnet "… kopia". Öppnas inte. */
+export async function duplicateModel(id: string) {
+  if (id === lib().currentId) await flushSave()
+  const m = await repo.get(id)
+  if (!m) return
+  const names = new Set(lib().models.map((x) => x.name))
+  let name = `${m.name} kopia`
+  for (let n = 2; names.has(name); n++) name = `${m.name} kopia ${n}`
+  const copy: LocalModel = {
+    ...m,
+    id: newId(),
+    name,
+    updatedAt: new Date().toISOString(),
+    baseRevision: null,
+    dirty: true,
+    deleted: undefined,
+  }
+  await repo.put(copy)
+  const thumb = await getThumbnail(id).catch(() => undefined)
+  if (thumb) await putThumbnail(copy.id, thumb)
+  await refreshList()
+  scheduleSync(SYNC_DELAY_MS)
+}
+
+/** Går till startvyn. Tar först en bild utan markering, så att bilden blir ren. */
+export async function showGallery() {
+  useToolStore.getState().setTool('select')
+  docs().select(null)
+  // Vänta tills 3D-vyn ritats om utan markering.
+  await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)))
+  await persistNow()
+  const { currentId } = lib()
+  if (currentId) await updateThumbnail(currentId, true)
+  lib().set({ screen: 'gallery' })
+}
+
+/** Öppnar en modell från startvyn (eller en ny) och går till den. */
+export async function openFromGallery(id: string | 'new') {
+  if (id === 'new') await createModel()
+  else await openModel(id)
+  lib().set({ screen: 'model' })
+  // Kameran från förra modellen passar sällan; visa hela den här.
+  useViewStore.getState().requestFit('all')
 }
 
 /** Startar autospar och bakgrundssynk. Returnerar en funktion som stänger av dem. */

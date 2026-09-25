@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
 import { useDocumentStore } from '../store/documentStore'
+import { useLibraryStore } from '../store/libraryStore'
 import { useToolStore } from '../store/toolStore'
 import { useViewStore } from '../store/viewStore'
 import { applyMeasure, cancel } from './actions'
@@ -20,7 +21,8 @@ function isEditable(t: EventTarget | null) {
 export function useShortcuts() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (isEditable(e.target)) return
+      // I startvyn finns ingen modell att arbeta i.
+      if (isEditable(e.target) || useLibraryStore.getState().screen === 'gallery') return
       const tools = useToolStore.getState()
       const docs = useDocumentStore.getState()
       const mod = e.metaKey || e.ctrlKey

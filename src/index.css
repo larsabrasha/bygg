@@ -25,6 +25,9 @@
   --color-disabled: #b5afa5;
   /* Enhetstext ("mm") inne i ett fält. */
   --color-unit: #9a9489;
+  /* Varning: offline, konfliktkopia. */
+  --color-warn: #a15c07;
+  --color-warn-soft: #fbeed3;
 }
 
 /* Mörkt tema följer systemets inställning. Samma namn, andra värden, så att
@@ -48,6 +51,8 @@
     --color-button: #36332e;
     --color-disabled: #5d5850;
     --color-unit: #857e74;
+    --color-warn: #f0b453;
+    --color-warn-soft: #3b2e14;
   }
 }
 

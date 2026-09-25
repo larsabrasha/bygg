@@ -18,6 +18,12 @@ export interface Notice {
 
 interface LibrarySnapshot {
   models: ModelListItem[]
+  /** Bild av varje modell (data-URL), per id. Saknas för modeller som inte öppnats på enheten. */
+  thumbs: Record<string, string>
+  /** Startvyn med alla modeller, eller den öppna modellen. */
+  screen: 'gallery' | 'model'
+  /** Modeller som tagits bort men går att ångra några sekunder; visas inte. */
+  pendingDelete: string[]
   currentId: string | null
   currentName: string
   /** Serverns revision som den öppna modellen bygger på (null = aldrig uppladdad). */
@@ -29,14 +35,18 @@ interface LibrarySnapshot {
 
 interface LibraryState extends LibrarySnapshot {
   set: (patch: Partial<LibrarySnapshot>) => void
-  notify: (text: string, action?: Notice['action']) => void
+  /** Visar ett meddelande och returnerar dess id. */
+  notify: (text: string, action?: Notice['action']) => string
   dismiss: (id: string) => void
 }
 
 const previous = import.meta.hot?.data.libraryStore as StoreApi<LibraryState> | undefined
 const initial: LibrarySnapshot = previous
-  ? (({ models, currentId, currentName, currentBase, status, error, notices }) => ({
+  ? (({ models, thumbs, screen, pendingDelete, currentId, currentName, currentBase, status, error, notices }) => ({
       models,
+      thumbs: thumbs ?? {},
+      screen: screen ?? 'model',
+      pendingDelete: pendingDelete ?? [],
       currentId,
       currentName,
       currentBase,
@@ -44,14 +54,29 @@ const initial: LibrarySnapshot = previous
       error,
       notices,
     }))(previous.getState())
-  : { models: [], currentId: null, currentName: '', currentBase: null, status: 'starting', error: null, notices: [] }
+  : {
+      models: [],
+      thumbs: {},
+      screen: 'model',
+      pendingDelete: [],
+      currentId: null,
+      currentName: '',
+      currentBase: null,
+      status: 'starting',
+      error: null,
+      notices: [],
+    }
 
 let noticeSeq = 0
 
 export const useLibraryStore = create<LibraryState>()((set) => ({
   ...initial,
   set: (patch) => set(patch),
-  notify: (text, action) => set((s) => ({ notices: [...s.notices, { id: `n${++noticeSeq}`, text, action }] })),
+  notify: (text, action) => {
+    const id = `n${++noticeSeq}`
+    set((s) => ({ notices: [...s.notices, { id, text, action }] }))
+    return id
+  },
   dismiss: (id) => set((s) => ({ notices: s.notices.filter((n) => n.id !== id) })),
 }))
 

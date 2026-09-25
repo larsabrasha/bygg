@@ -1,7 +1,8 @@
 import { MousePointer2, Redo2, Square, Undo2, type LucideIcon } from 'lucide-react'
 import { useDocumentStore } from '../store/documentStore'
 import { useToolStore, type Tool } from '../store/toolStore'
-import { ModelMenu } from './ModelMenu'
+import { ModelTitle } from './ModelTitle'
+import { ShareMenu } from './ShareMenu'
 
 const TOOLS: { tool: Tool; label: string; key: string; Icon: LucideIcon }[] = [
   { tool: 'select', label: 'Välj', key: 'Mellanslag', Icon: MousePointer2 },
@@ -25,8 +26,8 @@ export function Toolbar() {
   return (
     // Knapparna visar bara ikoner; namnet finns i aria-label (skärmläsare) och title (tooltip med kortkommando).
     <header className="flex items-center gap-2 border-b border-line bg-panel px-2 py-1.5 pt-[max(6px,env(safe-area-inset-top))] [grid-area:toolbar] narrow:gap-1">
-      <div className="max-w-64 min-w-0 narrow:flex-1">
-        <ModelMenu />
+      <div className="max-w-72 min-w-0 narrow:flex-1">
+        <ModelTitle />
       </div>
       <div className="flex gap-1" role="toolbar" aria-label="Verktyg">
         {TOOLS.map(({ tool: t, label, key, Icon }) => (
@@ -43,6 +44,7 @@ export function Toolbar() {
         ))}
       </div>
       <div className="ml-auto flex gap-1">
+        <ShareMenu buttonClass={button} />
         <button
           className={button}
           disabled={!canUndo}

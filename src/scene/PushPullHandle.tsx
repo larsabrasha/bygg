@@ -25,7 +25,7 @@ export function PushPullHandle({ anchor, normal }: { anchor: Vec3; normal: Vec3 
 
   const pick = { pick: { kind: 'handle' } }
   return (
-    <group ref={ref} position={anchor} quaternion={quaternion}>
+    <group ref={ref} position={anchor} quaternion={quaternion} userData={{ noThumb: true }}>
       <mesh position={[0, 26, 0]}>
         <cylinderGeometry args={[2.5, 2.5, 44]} />
         <meshBasicMaterial color={ACCENT} />
