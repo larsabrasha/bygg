@@ -14,8 +14,6 @@ export function materialColor(material: string): string {
 export const ACCENT = '#1e6fd9'
 export const ACCENT_LIGHT = '#7aa9e8'
 export const EDGE = '#5a4632'
-/** Fiberpilen på vald del. */
-export const GRAIN = '#a0522d'
 /** Snäppmarkör på ett mål (annan dels kant, ytans kant). */
 export const SNAP_ON_TARGET = '#d6336c'
 /** Snäppmarkör på rutnätet. */

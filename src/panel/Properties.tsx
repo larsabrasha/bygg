@@ -170,8 +170,8 @@ export function Properties() {
           <span />
           <GrainControls body={body} def={def} />
           <p className="col-span-2 text-xs text-faint">
-            Mått i mm. L går längs fibern (pilen på delen). Skriv ett parameternamn, t.ex. <code>tjocklek</code>, så
-            följer måttet parametern.
+            Mått i mm. L går längs fibern. Skriv ett parameternamn, t.ex. <code>tjocklek</code>, så följer måttet
+            parametern.
           </p>
           {copies > 1 && <p className="col-span-2 text-accent">{copies} länkade kopior – ändringar gäller alla.</p>}
           <button className={secondaryButton} onClick={() => duplicateLinked(body.id)}>

@@ -5,7 +5,6 @@ import { bodyExtents } from '../model/geometry'
 import { FACES, type Body, type Face } from '../model/types'
 import { ACCENT, ACCENT_LIGHT, EDGE, materialColor } from './colors'
 import { frameQuaternion } from './frameTransform'
-import { GrainArrow } from './GrainArrow'
 
 interface Props {
   body: Body
@@ -54,7 +53,6 @@ export function BodyMesh({ body, selected = false, sibling = false, highlightFac
         <boxGeometry args={[w, h, d]} />
         <Edges color={edge} lineWidth={selected ? 2.5 : sibling ? 1.8 : 1} />
       </mesh>
-      {selected && !preview && <GrainArrow body={body} />}
     </group>
   )
 }
