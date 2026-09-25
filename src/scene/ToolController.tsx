@@ -6,6 +6,7 @@ import { circleFace, faceOnBox, type Box } from '../model/geometry'
 import { FACES, type Face, type Vec3 } from '../model/types'
 import { useDocumentStore } from '../store/documentStore'
 import { useLibraryStore } from '../store/libraryStore'
+import { pickScore } from '../tools/pickPriority'
 import { useToolStore, type Op } from '../store/toolStore'
 import { useViewStore } from '../store/viewStore'
 import {
@@ -50,11 +51,7 @@ const PICK_RADIUS: Record<PointerKind, number> = { mouse: 6, pen: 8, touch: 16 }
 /** Golvet blir vridpunkt bara om det ligger högst så här många gånger längre bort än nuvarande vridpunkt. */
 const MAX_GROUND_PIVOT = 1.5
 
-/**
- * Push/pull-pilen, flyttpilarna och bågarna ritas ovanpå allt (de sitter på
- * eller mitt i delen och kan skymmas av andra delar), så de vinner alltid
- * över det som ligger närmare kameran.
- */
+/** Pilen på det valda, flyttpilarna och bågarna: ritas ovanpå allt och vinner över delar (se pickScore). */
 const ON_TOP = new Set<string>(['handle', 'axis', 'rotate'])
 
 const kindOf = (e: PointerEvent): PointerKind =>
@@ -144,15 +141,11 @@ export function ToolController() {
       return targets
     }
 
-    /**
-     * Närmaste objekt längs den senast kastade strålen. Skisser och verktyg (spöken)
-     * får företräde framför ytan de ligger på, som ett tapphål i sin värds yta.
-     */
+    /** Den träff längs den senast kastade strålen som vinner (pickScore). */
     const closestObject = (targets: Object3D[]): Intersection | null => {
       let best: { hit: Intersection; score: number } | null = null
       for (const hit of raycaster.intersectObjects(targets, false)) {
-        const { kind, tool } = hit.object.userData.pick
-        const score = ON_TOP.has(kind) ? -Infinity : hit.distance - (kind === 'sketch' || tool ? 1 : 0)
+        const score = pickScore(hit.object.userData.pick, hit.distance)
         if (!best || score < best.score) best = { hit, score }
       }
       return best?.hit ?? null

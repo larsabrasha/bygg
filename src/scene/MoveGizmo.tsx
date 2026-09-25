@@ -53,8 +53,12 @@ const TO_CAMERA = new Vector3()
 const DIR = new Vector3()
 /** Bågens radie i px: mellan pilarnas skaft och spetsar. */
 const ARC_RADIUS = 58
-/** Bågen lämnar 15° fritt vid varje pil, så att de inte krockar. */
-const ARC_GAP = Math.PI / 12
+/**
+ * Bågen lämnar 22° fritt vid varje pil. Pilens träffyta är 16 px bred åt var
+ * sida, 16° vid bågens radie; med mindre luft låg bågens ändar inne i den och
+ * togs för pilen, eller tvärtom.
+ */
+const ARC_GAP = (22 * Math.PI) / 180
 
 /**
  * Båge i planet vinkelrätt mot axeln, mellan de två andra pilarna. Drar man i
