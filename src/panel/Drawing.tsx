@@ -1,6 +1,6 @@
 import { Printer, RotateCcw, RotateCw, X } from 'lucide-react'
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { buildCutList, type CutListRow } from '../model/cutlist'
+import { useEffect, useEffectEvent, useMemo, useRef, useState, type ReactNode } from 'react'
+import { buildCutList, groupByMaterial, type CutList, type CutListRow } from '../model/cutlist'
 import { compactNames } from '../model/cutlistExport'
 import { overallSize } from '../model/drawing'
 import { layoutMainViews, MAIN_VIEW_CAMERA, type MainView } from '../model/mainViews'
@@ -20,6 +20,7 @@ import { Tip } from './Tip'
 import { iconButton, ICON, primaryButton } from './ui'
 
 const num = numberFormat(1, true)
+const volume = numberFormat(4, true)
 
 const capitalize = (s: string) => s.charAt(0).toLocaleUpperCase('sv') + s.slice(1)
 
@@ -68,6 +69,7 @@ function DrawingView() {
 
   // Samma arrayer tills dokumentet eller avståndet ändras; annars räknar bilden om ballongerna i en slinga.
   const parts = useMemo(() => bodies.filter((b) => !b.tool), [bodies])
+  const empty = parts.length === 0
   const offsets = useMemo(() => explodeOffsets(bodies, amount), [bodies, amount])
   const cutList = useMemo(() => buildCutList(bodies), [bodies])
   // En position per likadan del: samma ämne men olika hål eller tappar blir olika positioner.
@@ -91,16 +93,9 @@ function DrawingView() {
       margin: layout.margin * layout.scale,
     }))
   }, [size])
-  const sheets = (size ? 2 : 1) + details.length
+  // Sammanställningen, huvudvyerna, ett detaljblad per position och sist kaplistan.
+  const sheets = (size ? 2 : 1) + details.length + 1
   const date = new Date().toLocaleDateString('sv-SE')
-
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') useViewStore.getState().setDrawing(false)
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [])
 
   /** Bilderna kopieras till <img>: en WebGL-canvas kommer inte med på papperet i alla webbläsare. */
   const print = async () => {
@@ -115,7 +110,7 @@ function DrawingView() {
       'afterprint',
       () => {
         document.title = previous
-        usePrintStore.getState().setPrint('cutlist')
+        usePrintStore.getState().setPrint('none')
       },
       { once: true },
     )
@@ -123,7 +118,19 @@ function DrawingView() {
     window.print()
   }
 
-  const empty = parts.length === 0
+  // Esc stänger; ⌘P skriver ut som knappen, så att bilderna hinner kopieras (webbläsarens egen utskrift gör inte det).
+  const onKey = useEffectEvent((e: KeyboardEvent) => {
+    if (e.key === 'Escape') useViewStore.getState().setDrawing(false)
+    if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'p') {
+      e.preventDefault()
+      if (!empty) void print()
+    }
+  })
+  useEffect(() => {
+    const listener = (e: KeyboardEvent) => onKey(e)
+    window.addEventListener('keydown', listener)
+    return () => window.removeEventListener('keydown', listener)
+  }, [])
 
   return (
     <div
@@ -175,7 +182,7 @@ function DrawingView() {
       <div className="min-h-0 flex-1 overflow-auto overscroll-contain p-4 narrow:p-3 print:overflow-visible print:p-0">
         {shots.length > 0 && <OrthoRenderer parts={parts} shots={shots} onImages={setMainImages} />}
         <div className="flex flex-col items-center gap-4 print:block">
-          <Sheet responsive last={sheets === 1}>
+          <Sheet responsive last={false}>
             <div className="h-full p-[1.4cqw] text-[0.95cqw] leading-tight narrow:p-2 narrow:text-[13px]">
               <div className="grid h-full min-h-0 grid-cols-[minmax(0,1fr)_35%] border-[0.18em] border-black narrow:grid-cols-1">
                 <div className="relative min-h-0 border-r-[0.12em] border-black narrow:aspect-[4/3] narrow:border-r-0 narrow:border-b-[0.12em]">
@@ -221,19 +228,25 @@ function DrawingView() {
                   <PartsList rows={positions} />
                   <TitleBlock
                     name={name}
+                    content="Sammanställning, sprängskiss"
                     date={date}
                     sheet={`1 (${sheets})`}
-                    size={
-                      size ? `${num.format(size.width)} × ${num.format(size.depth)} × ${num.format(size.height)}` : '–'
-                    }
-                    count={cutList.totalCount}
+                    fields={[
+                      [
+                        'Yttermått B × D × H',
+                        size
+                          ? `${num.format(size.width)} × ${num.format(size.depth)} × ${num.format(size.height)}`
+                          : '–',
+                      ],
+                      ['Antal delar', cutList.totalCount],
+                    ]}
                   />
                 </div>
               </div>
             </div>
           </Sheet>
           {size && (
-            <Sheet last={details.length === 0}>
+            <Sheet last={false}>
               <MainViewsSheet
                 size={size}
                 images={mainImages}
@@ -246,18 +259,27 @@ function DrawingView() {
             </Sheet>
           )}
           {details.map(({ row, geometry }, i) => (
-            <Sheet key={row.key} last={i === details.length - 1}>
+            <Sheet key={row.key} last={false}>
               <PartSheet
                 pos={i + 1}
                 row={row}
                 geometry={geometry}
                 modelName={name}
                 date={date}
-                sheet={sheets - details.length + i + 1}
+                sheet={sheets - details.length + i}
                 sheets={sheets}
               />
             </Sheet>
           ))}
+          <Sheet responsive last>
+            <CutListSheet
+              cutList={cutList}
+              positions={positions}
+              name={name}
+              date={date}
+              sheet={`${sheets} (${sheets})`}
+            />
+          </Sheet>
         </div>
       </div>
     </div>
@@ -265,19 +287,30 @@ function DrawingView() {
 }
 
 /**
- * Ett liggande A4-blad: på skärmen så stort att det ryms i höjden, i utskriften
- * 267 × 185 mm (A4 minus marginalerna) med sidbrytning efter. På smal skärm blir
- * ett responsive blad en vanlig kolumn; de andra behåller sin form och är bredare
- * än skärmen, så att man skrollar i sidled i stället för att måtten blir oläsliga.
+ * Ett liggande A4-blad. På skärmen så stort att det ryms i höjden. På smal skärm
+ * blir ett responsive blad en vanlig kolumn; de andra behåller sin form och är
+ * bredare än skärmen, så att man skrollar i sidled i stället för att måtten blir oläsliga.
+ *
+ * Utskrift: på liggande papper 267 mm brett (A4 minus marginalerna), eller
+ * smalare om skrivarens marginaler är större, hellre än att det klipps. Safari
+ * på iPad skriver ut stående fast @page ber om liggande; då vrids bladet ett
+ * kvarts varv och står i full storlek, så att skalan på detaljbladen stämmer.
+ * Sidan bryts efter varje blad utom det sista.
  */
 function Sheet({ responsive = false, last, children }: { responsive?: boolean; last: boolean; children: ReactNode }) {
   return (
     <div
-      className={`@container aspect-[267/185] w-[min(100%,calc((100dvh-6rem)*267/185))] flex-none rounded-sm bg-white text-black shadow-lg print:h-[185mm] print:w-[267mm] print:rounded-none print:shadow-none ${
-        responsive ? 'narrow:aspect-auto narrow:w-full' : 'narrow:w-[900px] narrow:max-w-none narrow:self-start'
-      } ${last ? '' : 'print:break-after-page'}`}
+      className={`flex-none print-landscape:w-full print-portrait:relative print-portrait:h-[267mm] print-portrait:w-[185mm] ${
+        last ? '' : 'print:break-after-page'
+      } ${responsive ? 'narrow:w-full' : 'narrow:self-start'} w-[min(100%,calc((100dvh-6rem)*267/185))]`}
     >
-      {children}
+      <div
+        className={`@container aspect-[267/185] w-full rounded-sm bg-white text-black shadow-lg print:rounded-none print:shadow-none print-landscape:max-w-[267mm] print-portrait:absolute print-portrait:top-0 print-portrait:left-0 print-portrait:h-[185mm] print-portrait:w-[267mm] print-portrait:origin-top-left print-portrait:translate-x-[185mm] print-portrait:rotate-90 ${
+          responsive ? 'narrow:aspect-auto' : 'narrow:w-[900px] narrow:max-w-none'
+        }`}
+      >
+        {children}
+      </div>
     </div>
   )
 }
@@ -422,18 +455,112 @@ function Field({
   )
 }
 
-function TitleBlock({
+/**
+ * Kaplistan som sista blad: ämnen att kapa per material, med en ruta att bocka
+ * av vid sågen. En rad är ett ämne, oavsett hål och tappar; Pos säger vilka
+ * positioner i stycklistan raden gäller, eftersom de två räknar olika.
+ */
+function CutListSheet({
+  cutList,
+  positions,
   name,
-  size,
-  count,
   date,
   sheet,
 }: {
+  cutList: CutList
+  positions: readonly CutListRow[]
   name: string
-  size: string
-  count: number
   date: string
   sheet: string
+}) {
+  const posOf = new Map(positions.flatMap((row, i) => row.bodyIds.map((id) => [id, i + 1] as const)))
+  const posList = (row: CutListRow) =>
+    [...new Set(row.bodyIds.flatMap((id) => posOf.get(id) ?? []))].sort((a, b) => a - b).join(', ')
+  return (
+    <div className="h-full p-[1.4cqw] text-[0.95cqw] leading-tight narrow:p-2 narrow:text-[13px]">
+      <div className="flex h-full min-h-0 flex-col border-[0.18em] border-black">
+        <div className="min-h-0 flex-1 overflow-hidden px-[1em] pt-[0.8em] pb-[1em]">
+          <p className="text-[0.8em] tracking-wider text-neutral-500 uppercase">Kaplista</p>
+          <p className="mt-[0.3em] mb-[0.8em] text-[0.85em] text-neutral-600">
+            Ämnen att kapa, i mm. L längs fibern, T tjocklek. Delar med samma ämne står på en rad även om hålen skiljer;
+            Pos är positionerna i stycklistan.
+          </p>
+          <table className="w-full border-collapse tabular-nums">
+            <thead className="text-[0.78em] tracking-wide text-neutral-600 uppercase">
+              <tr className="border-b border-black/40 [&_th]:px-[0.5em] [&_th]:py-[0.4em] [&_th]:font-semibold">
+                <th className="w-[2.5em]" aria-label="Kapad" />
+                <th className="w-[4em] text-right">Antal</th>
+                <th className="text-left">Benämning</th>
+                <th className="w-[5em] text-right">L</th>
+                <th className="w-[5em] text-right">B</th>
+                <th className="w-[4em] text-right">T</th>
+                <th className="w-[7em] text-left">Pos</th>
+              </tr>
+            </thead>
+            {groupByMaterial(cutList.rows).map((g) => (
+              <tbody key={g.material}>
+                <tr className="border-b border-black/40">
+                  <td colSpan={7} className="px-[0.5em] pt-[0.9em] pb-[0.4em]">
+                    <span className="font-semibold">{capitalize(g.material)}</span>
+                    <span className="float-right text-neutral-600">
+                      {g.count} st · {volume.format(g.volumeM3)} m³
+                    </span>
+                  </td>
+                </tr>
+                {g.rows.map((row) => (
+                  <tr
+                    key={row.key}
+                    className="border-b border-black/15 align-baseline [&_td]:px-[0.5em] [&_td]:py-[0.4em]"
+                  >
+                    <td>
+                      {/* Tom ruta att bocka av i verkstaden. */}
+                      <span className="block size-[1.1em] border border-black" />
+                    </td>
+                    <td className="text-right font-semibold">{row.count}</td>
+                    <td>
+                      {compactNames(row.names)}
+                      {row.round && <span className="text-neutral-600"> (Ø {num.format(row.round.diameter)})</span>}
+                    </td>
+                    <td className="text-right">{num.format(row.length)}</td>
+                    <td className="text-right">{num.format(row.width)}</td>
+                    <td className="text-right">{num.format(row.thickness)}</td>
+                    <td>{posList(row)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            ))}
+          </table>
+        </div>
+        <div className="ml-auto w-[35%] border-l-[0.12em] border-black narrow:w-full narrow:border-l-0">
+          <TitleBlock
+            name={name}
+            content="Kaplista"
+            date={date}
+            sheet={sheet}
+            fields={[
+              ['Antal delar', cutList.totalCount],
+              ['Volym', `${volume.format(cutList.totalVolumeM3)} m³`],
+            ]}
+          />
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/** Titelrutan på ett HTML-blad: benämning, innehåll, datum, två fält för bladet och bladnumret. */
+function TitleBlock({
+  name,
+  content,
+  date,
+  sheet,
+  fields,
+}: {
+  name: string
+  content: string
+  date: string
+  sheet: string
+  fields: [[string, ReactNode], [string, ReactNode]]
 }) {
   return (
     <div className="grid grid-cols-3 border-t-[0.12em] border-black">
@@ -441,13 +568,13 @@ function TitleBlock({
         <span className="text-[1.45em] font-semibold">{name}</span>
       </Field>
       <Field label="Innehåll" span="col-span-2" first>
-        Sammanställning, sprängskiss
+        {content}
       </Field>
       <Field label="Datum">{date}</Field>
-      <Field label="Yttermått B × D × H" first>
-        {size}
+      <Field label={fields[0][0]} first>
+        {fields[0][1]}
       </Field>
-      <Field label="Antal delar">{count}</Field>
+      <Field label={fields[1][0]}>{fields[1][1]}</Field>
       <Field label="Blad">{sheet}</Field>
     </div>
   )

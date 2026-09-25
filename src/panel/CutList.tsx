@@ -1,4 +1,4 @@
-import { DraftingCompass, Download, Printer } from 'lucide-react'
+import { DraftingCompass, Download } from 'lucide-react'
 import { useMemo } from 'react'
 import { buildCutList, groupByMaterial, type CutListRow } from '../model/cutlist'
 import { compactNames } from '../model/cutlistExport'
@@ -7,7 +7,7 @@ import { materialColor } from '../scene/colors'
 import { useBodies, useDocumentStore } from '../store/documentStore'
 import { useLibraryStore } from '../store/libraryStore'
 import { useViewStore } from '../store/viewStore'
-import { downloadCutListCsv, printCutList } from './cutlistActions'
+import { downloadCutListCsv } from './cutlistActions'
 import { EmptyState } from './EmptyState'
 import { CutListPicture } from './pictures'
 import { groupTitle, primaryButton, secondaryButton, sectionTitle } from './ui'
@@ -80,10 +80,6 @@ export function CutList() {
               <button className={primaryButton} onClick={() => useViewStore.getState().setDrawing(true)}>
                 <DraftingCompass size={16} strokeWidth={1.75} aria-hidden />
                 Ritning
-              </button>
-              <button className={secondaryButton} onClick={() => printCutList(modelName)}>
-                <Printer size={16} strokeWidth={1.75} aria-hidden />
-                Skriv ut / PDF
               </button>
               <button className={secondaryButton} onClick={() => downloadCutListCsv(cutList, modelName)}>
                 <Download size={16} strokeWidth={1.75} aria-hidden />

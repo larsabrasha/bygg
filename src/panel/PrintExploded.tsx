@@ -4,7 +4,7 @@ import { usePrintStore } from '../store/printStore'
 /**
  * Sprängskissen som den skrivs ut: bilden av vyn och delarnas namn ovanpå,
  * där delarna står. Syns bara i utskrift, och bara när den skrivs ut (explodeActions).
- * Fasta färger, som i PrintCutList.
+ * Fasta färger, så att utskriften blir svart på vitt även i mörkt läge.
  */
 export function PrintExploded() {
   const what = usePrintStore((s) => s.what)

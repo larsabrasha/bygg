@@ -1,16 +1,16 @@
-import { DraftingCompass, FileDown, Printer, Share } from 'lucide-react'
+import { DraftingCompass, FileDown, Share } from 'lucide-react'
 import { useCallback, useMemo, useRef, useState } from 'react'
 import { buildCutList } from '../model/cutlist'
 import { useBodies } from '../store/documentStore'
 import { useLibraryStore } from '../store/libraryStore'
 import { useViewStore } from '../store/viewStore'
 import { ArButton } from './ArButton'
-import { downloadCutListCsv, printCutList } from './cutlistActions'
+import { downloadCutListCsv } from './cutlistActions'
 import { MenuItem } from './MenuItem'
 import { useDismiss } from './useDismiss'
 import { Tip } from './Tip'
 
-/** Sätt att visa eller ta ut modellen: AR, ritningen, kaplistan som PDF och som CSV. */
+/** Sätt att visa eller ta ut modellen: AR, ritningen (där kaplistan skrivs ut) och kaplistan som CSV. */
 export function ShareMenu({ buttonClass }: { buttonClass: string }) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
@@ -39,17 +39,7 @@ export function ShareMenu({ buttonClass }: { buttonClass: string }) {
               useViewStore.getState().setDrawing(true)
             }}
           >
-            Ritning med sprängskiss
-          </MenuItem>
-          <MenuItem
-            Icon={Printer}
-            disabled={empty}
-            onClick={() => {
-              close()
-              printCutList(modelName)
-            }}
-          >
-            Skriv ut kaplista / PDF
+            Ritning och kaplista (skriv ut / PDF)
           </MenuItem>
           <MenuItem
             Icon={FileDown}

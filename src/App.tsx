@@ -3,7 +3,6 @@ import { Gallery } from './panel/Gallery'
 import { DimensionLabels } from './panel/DimensionLabels'
 import { MeasureBox } from './panel/MeasureBox'
 import { Notices } from './panel/Notices'
-import { PrintCutList } from './panel/PrintCutList'
 import { PrintExploded } from './panel/PrintExploded'
 import { ExplodeBar } from './panel/ExplodeBar'
 import { Drawing } from './panel/Drawing'
@@ -35,14 +34,15 @@ export function App() {
   return (
     <TipProvider>
       {/* minmax(0, …): annars får raden inte bli lägre än canvasens nuvarande höjd.
-          Vid utskrift döljs appen och bara kaplistan skrivs ut. */}
-      {/* inert: under startvyn går 3D-vyns knappar inte att nå med Tab eller skärmläsare. */}
+          Vid utskrift döljs appen; det som skrivs ut är ritningen eller sprängskissen. */}
+      {/* inert: under startvyn går 3D-vyns knappar inte att nå med Tab eller skärmläsare.
+          Under ritningen är appen också osynlig, så att en öppen meny (z-50) inte syns ovanpå. */}
       {/* Dold detaljpanel (bara bred skärm): 3D-vyn tar hela bredden. Fokusläge: bara 3D-vyn. */}
       {/* --keyboard: tangentbordet på iPhone och iPad (useKeyboardInset); appen blir lägre, så att det
           som ligger längst ner (måttrutan, bladet) hamnar ovanför det. */}
       <div
         inert={screen === 'gallery' || drawing}
-        className={`grid h-[calc(100dvh-var(--keyboard,0px))] print:hidden ${
+        className={`grid h-[calc(100dvh-var(--keyboard,0px))] print:hidden ${drawing ? 'invisible' : ''} ${
           focusMode
             ? "grid-cols-[minmax(0,1fr)] grid-rows-[minmax(0,1fr)] [grid-template-areas:'viewport']"
             : `grid-rows-[auto_minmax(0,1fr)] narrow:grid-cols-[minmax(0,1fr)] narrow:grid-rows-[auto_minmax(0,1fr)_auto] narrow:[grid-template-areas:'toolbar''viewport''sidebar'] ${
@@ -78,7 +78,6 @@ export function App() {
       {screen === 'gallery' && <Gallery />}
       {/* Ritningen ligger ovanpå allt, som startvyn. */}
       <Drawing />
-      <PrintCutList />
       <PrintExploded />
     </TipProvider>
   )

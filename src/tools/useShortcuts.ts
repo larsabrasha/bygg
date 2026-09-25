@@ -41,6 +41,12 @@ export function useShortcuts() {
       // I startvyn finns ingen modell att arbeta i, och i ritningen ändrar man inget (Esc stänger den själv).
       if (isEditable(e.target) || useLibraryStore.getState().screen === 'gallery' || useViewStore.getState().drawing)
         return
+      // ⌘P: det som skrivs ut är ritningen, så den öppnas. Där skriver ⌘P ut (panel/Drawing).
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'p') {
+        e.preventDefault()
+        useViewStore.getState().setDrawing(true)
+        return
+      }
       const tools = useToolStore.getState()
       const docs = useDocumentStore.getState()
       const mod = e.metaKey || e.ctrlKey

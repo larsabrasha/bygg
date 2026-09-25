@@ -1,7 +1,12 @@
 @import 'tailwindcss';
 
-/* Smal skärm (mobil i stående läge). Liggande mobil får desktop-layouten. */
-@custom-variant narrow (@media (max-width: 720px));
+/* Smal skärm (mobil i stående läge). Liggande mobil får desktop-layouten. Bara på skärmen:
+   en stående A4 är också under 720 px bred, och ritningen ska skrivas ut som på bred skärm. */
+@custom-variant narrow (@media screen and (max-width: 720px));
+
+/* Utskrift på liggande och stående papper (ritningen, panel/Drawing.tsx). */
+@custom-variant print-landscape (@media print and (orientation: landscape));
+@custom-variant print-portrait (@media print and (orientation: portrait));
 
 @theme {
   --font-sans: system-ui, -apple-system, 'Segoe UI', sans-serif;

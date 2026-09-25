@@ -32,7 +32,7 @@ export async function printExploded(modelName: string) {
     'afterprint',
     () => {
       document.title = previous
-      usePrintStore.getState().setPrint('cutlist')
+      usePrintStore.getState().setPrint('none')
     },
     { once: true },
   )
