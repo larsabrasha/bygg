@@ -42,6 +42,9 @@ export function buildArScene(bodies: readonly Body[]): Scene {
     const center = box.getCenter(new Vector3())
     model.position.set(-center.x, -box.min.y, -center.z)
   }
+  // USDZExporter läser object.matrix utan att räkna om den. Box3 ovan räknade den
+  // före flytten; utan detta kom modellen med där den står i appen, inte i mitten.
+  model.updateMatrix()
 
   const scene = new Scene()
   scene.add(model)

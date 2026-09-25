@@ -1,5 +1,5 @@
 import { strFromU8, unzipSync } from 'three/examples/jsm/libs/fflate.module.js'
-import { Box3, Mesh } from 'three'
+import { Box3, Mesh, Vector3 } from 'three'
 import { describe, expect, it } from 'vitest'
 import { GROUND_FRAME } from '../model/frame'
 import { testBody } from '../model/testFixtures'
@@ -16,6 +16,16 @@ describe('buildArScene', () => {
     expect(box.max.x).toBeCloseTo(0.4)
     expect(box.min.z).toBeCloseTo(-0.06)
     expect(box.max.z).toBeCloseTo(0.06)
+  })
+
+  it('har centreringen i modellens matris, som exporten läser utan att räkna om den', () => {
+    // USDZExporter tar object.matrix som den är. Samma del som ovan: golvytans mitt i (1,4; 0,05; −0,36) m.
+    const b = testBody({ frame: { ...GROUND_FRAME, origin: [1000, 50, -300] } })
+    const model = buildArScene([b]).children[0]!
+    const t = new Vector3().setFromMatrixPosition(model.matrix)
+    expect(t.x).toBeCloseTo(-1.4)
+    expect(t.y).toBeCloseTo(-0.05)
+    expect(t.z).toBeCloseTo(0.36)
   })
 
   it('en mesh per del, och delar med samma material delar material', () => {
@@ -38,5 +48,12 @@ describe('exportUsdz', () => {
     expect(Object.keys(files)[0]).toBe('model.usda')
     expect(strFromU8(files['model.usda']!)).toContain('metersPerUnit = 1')
     expect(Object.keys(files).filter((f) => f.startsWith('geometries/'))).toHaveLength(2)
+  })
+
+  it('skriver centreringen i filen', async () => {
+    const b = testBody({ frame: { ...GROUND_FRAME, origin: [1000, 50, -300] } })
+    const usda = strFromU8(unzipSync(await exportUsdz([b]))['model.usda']!)
+    // Modellens Xform: skalan till meter och flytten till mitten (sista raden i matrisen).
+    expect(usda).toMatch(/\(-1\.4\d*, -0\.05\d*, 0\.36\d*, 1\)/)
   })
 })
