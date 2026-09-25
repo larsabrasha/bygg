@@ -4,12 +4,13 @@ import { useEffect } from 'react'
 import { resolveBodies } from '../model/resolve'
 import { useDocumentStore } from '../store/documentStore'
 import { useToolStore } from '../store/toolStore'
-import { pushPullAnchor, pushPullTargetOf } from '../tools/actions'
+import { bodyCenter, pushPullAnchor, pushPullTargetOf } from '../tools/actions'
 import { previewDoc } from '../tools/preview'
 import { BodyMesh } from './BodyMesh'
 import { HOME } from './camera'
 import { CameraRig } from './CameraRig'
-import { SCENE } from './colors'
+import { AXIS_COLORS, SCENE } from './colors'
+import { MoveGizmo } from './MoveGizmo'
 import { HoverMarker, OpOverlay } from './OpPreview'
 import { PushPullHandle } from './PushPullHandle'
 import { SketchMesh } from './SketchMesh'
@@ -41,6 +42,8 @@ function Scene() {
   const handleTarget = !op && (tool === 'select' || tool === 'rect') && selection ? pushPullTargetOf(selection) : null
   const handle = handleTarget && pushPullAnchor(handleTarget, doc)
   const selectedFace = handleTarget?.kind === 'body' ? handleTarget : null
+  // I Flytta-läget får den valda delen tre färgade pilar i stället.
+  const gizmoAt = !op && tool === 'move' && selectedBody ? bodyCenter(selectedBody) : null
 
   return (
     <>
@@ -76,6 +79,7 @@ function Scene() {
         />
       ))}
       {handle && <PushPullHandle anchor={handle.anchor} normal={handle.normal} />}
+      {gizmoAt && <MoveGizmo center={gizmoAt} />}
       {op && <OpOverlay op={op} />}
       {!op && hoverPoint && <HoverMarker hover={hoverPoint} />}
     </>
@@ -116,7 +120,7 @@ export function Viewport() {
 
       <CameraRig />
       <GizmoHelper alignment="bottom-left" margin={[70, 70]}>
-        <GizmoViewport labelColor="white" />
+        <GizmoViewport axisColors={AXIS_COLORS} labelColor="white" />
       </GizmoHelper>
     </Canvas>
   )

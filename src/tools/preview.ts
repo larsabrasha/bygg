@@ -1,3 +1,4 @@
+import { rotateFrame } from '../model/frame'
 import { pushPullBody, sketchToPart } from '../model/geometry'
 import type { ModelDocument } from '../model/types'
 import { add } from '../model/vec'
@@ -16,6 +17,19 @@ export interface Preview {
  */
 export function previewDoc(op: Op, doc: ModelDocument): Preview | null {
   if (op.kind === 'rect') return null
+
+  if (op.kind === 'rotate') {
+    const { origin, n } = op.plane
+    return {
+      doc: {
+        ...doc,
+        instances: doc.instances.map((i) =>
+          i.id === op.instanceId ? { ...i, frame: rotateFrame(i.frame, origin, n, op.angle) } : i,
+        ),
+      },
+      affected: new Set([op.instanceId]),
+    }
+  }
 
   if (op.kind === 'move') {
     const delta = moveDeltaWorld(op)

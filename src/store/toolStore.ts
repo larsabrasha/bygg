@@ -37,12 +37,24 @@ export interface PushPullOp {
   onTarget: boolean
 }
 
-/** Pågående flytt av en kopia i planet för sidan man tryckte på. */
+/** Världsaxel: 0 = X, 1 = Y (uppåt), 2 = Z. */
+export type Axis = 0 | 1 | 2
+
+/**
+ * Pågående flytt av en kopia: fritt i planet för sidan man tryckte på, eller
+ * längs en världsaxel när man drar i en av de färgade pilarna.
+ */
 export interface MoveOp {
   kind: 'move'
   instanceId: string
-  /** Planet man flyttar i. Origo = där man tryckte. */
+  /**
+   * Planet man flyttar i. Origo = där man tryckte (fri flytt) eller delens
+   * mitt (pil). Längs en pil är u = axeln och delta[1] alltid 0.
+   */
   plane: Frame
+  axis: Axis | null
+  /** Var längs axeln man tog tag i pilen, räknat från origo (som PushPullOp.grab). 0 vid fri flytt. */
+  grab: number
   /** Den flyttade delens nyckelpunkter i planets koordinater (före flytt). */
   moving: Vec2[]
   targets: PlaneTargets
@@ -50,7 +62,22 @@ export interface MoveOp {
   onTarget: [boolean, boolean]
 }
 
-export type Op = RectOp | PushPullOp | MoveOp
+/** Pågående vridning av en kopia runt en världsaxel genom dess mitt (bågarna i Flytta-läget). */
+export interface RotateOp {
+  kind: 'rotate'
+  instanceId: string
+  axis: Axis
+  /** Planet man vrider i: origo = delens mitt, n = axeln. Vinklar räknas från u mot v. */
+  plane: Frame
+  /** Radien på cirkeln som visas under vridningen, i mm. */
+  radius: number
+  /** Vinkeln där man tog tag, i grader. */
+  grab: number
+  /** Vridningen hittills i grader, positiv moturs sett från axelns spets. */
+  angle: number
+}
+
+export type Op = RectOp | PushPullOp | MoveOp | RotateOp
 
 /** Var första hörnet skulle hamna (rektangelverktyget, bara mus). */
 export interface HoverPoint {

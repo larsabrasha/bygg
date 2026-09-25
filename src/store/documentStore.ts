@@ -1,11 +1,11 @@
 import { create, type StoreApi } from 'zustand'
 import { evaluate, isConstant, NAME_PATTERN, renameIdentifier } from '../model/expr'
 import { bodyExtents, faceAxis, isValidRect, nextPartName, pushPullBody, sketchToPart } from '../model/geometry'
-import { faceFrame } from '../model/frame'
+import { faceFrame, rotateFrame } from '../model/frame'
 import { newId } from '../model/id'
 import { applyParams, evaluateParams, isNameUsed, paramScope, setBoxExtent } from '../model/params'
 import { withAxes } from '../model/partAxes'
-import { placeAlong, WORLD_AXES, withoutPos } from '../model/placement'
+import { minCorner, placeAlong, WORLD_AXES, withoutPos } from '../model/placement'
 import { resolveBodies } from '../model/resolve'
 import type { Axis, DimExprs, Face, Frame, ModelDocument, PartDef, Rect, Vec3, WorldAxis } from '../model/types'
 import { add, scale } from '../model/vec'
@@ -30,6 +30,8 @@ interface DocumentState extends Snapshot {
   /** Flyttar en sida på en del (och alla dess kopior). False om resultatet blir ogiltigt. */
   pushPullBody: (instanceId: string, face: Face, distance: number) => boolean
   moveInstance: (instanceId: string, delta: Vec3) => void
+  /** Vrider en kopia degrees grader runt en axel (enhetsvektor) genom center. */
+  rotateInstance: (instanceId: string, center: Vec3, axis: Vec3, degrees: number) => void
   /** Ny kopia som delar form med originalet. Returnerar den nya kopians id. */
   duplicateLinked: (instanceId: string) => string | null
   /** Ger kopian en egen form, så att den inte längre ändras med de andra. */
@@ -198,6 +200,19 @@ export const useDocumentStore = create<DocumentState>()((set, get) => {
             : i,
         ),
       })
+    },
+
+    rotateInstance: (instanceId, center, axis, degrees) => {
+      const found = findInstance(instanceId)
+      if (!found || degrees % 360 === 0) return
+      const { inst, def } = found
+      const next = { ...inst, frame: rotateFrame(inst.frame, center, axis, degrees) }
+      // Som vid flytt: flyttas hörnet närmast origo längs en axel, slutar den axeln styras av sitt uttryck.
+      const before = minCorner(inst, def)
+      const after = minCorner(next, def)
+      const moved = WORLD_AXES.filter((_, k) => Math.abs(after[k]! - before[k]!) > 1e-6)
+      const { doc } = get()
+      commit({ ...doc, instances: doc.instances.map((i) => (i.id === instanceId ? withoutPos(next, moved) : i)) })
     },
 
     duplicateLinked: (instanceId) => {

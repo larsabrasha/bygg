@@ -12,18 +12,22 @@ function BarButton({
   Icon,
   onClick,
   danger = false,
+  pressed,
 }: {
   label: string
   Icon: LucideIcon
   onClick: () => void
   danger?: boolean
+  /** Satt för knappar som slår på ett läge; då syns det när läget är på. */
+  pressed?: boolean
 }) {
   return (
     <button
       aria-label={label}
       title={label}
+      aria-pressed={pressed}
       onClick={onClick}
-      className={`flex h-9 cursor-pointer items-center gap-1.5 rounded-md px-2 hover:bg-hover narrow:size-11 narrow:justify-center narrow:px-0 ${danger ? 'text-danger' : ''}`}
+      className={`flex h-9 cursor-pointer items-center gap-1.5 rounded-md border border-transparent px-2 hover:bg-hover aria-pressed:border-accent-line aria-pressed:bg-accent-soft aria-pressed:text-accent narrow:size-11 narrow:justify-center narrow:px-0 ${danger ? 'text-danger' : ''}`}
     >
       <Icon {...ICON} />
       {/* På smal skärm bara ikonen; namnet finns i aria-label. */}
@@ -45,6 +49,7 @@ export function SelectionBar() {
   const requestFit = useViewStore((s) => s.requestFit)
   const opActive = useToolStore((s) => s.op !== null)
   const setTool = useToolStore((s) => s.setTool)
+  const moving = useToolStore((s) => s.tool === 'move')
 
   if (!selection || opActive) return null
   const body = selection.kind === 'body' ? resolveBodies(doc).find((b) => b.id === selection.id) : undefined
@@ -59,7 +64,7 @@ export function SelectionBar() {
       <span className="truncate px-2 text-[13px] font-semibold narrow:max-w-20">{body ? body.name : 'Skiss'}</span>
       {body ? (
         <>
-          <BarButton label="Flytta" Icon={Move} onClick={() => setTool('move')} />
+          <BarButton label="Flytta" Icon={Move} pressed={moving} onClick={() => setTool(moving ? 'select' : 'move')} />
           <BarButton label="Zooma till" Icon={Focus} onClick={() => requestFit('selection')} />
           <BarButton label="Länkad kopia" Icon={Copy} onClick={() => duplicateLinked(body.id)} />
         </>

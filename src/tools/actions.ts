@@ -1,13 +1,13 @@
 import { faceBounds, faceFrame, GROUND_FRAME, toLocal2D, toWorld } from '../model/frame'
 import { isConstant } from '../model/expr'
-import { rectFromCorners } from '../model/geometry'
+import { bodyExtents, rectFromCorners } from '../model/geometry'
 import { evaluateIn } from '../model/params'
 import { resolveBodies } from '../model/resolve'
 import { bodyKeyPoints, offsetTargets, planeTargets, snapDelta, snapValue, type PlaneTargets } from '../model/snapping'
 import type { Body, DimExprs, Face, Frame, Rect, Vec2, Vec3 } from '../model/types'
 import { add, closestParamOnLine, dot, length, scale, sub } from '../model/vec'
 import { useDocumentStore, type Selection } from '../store/documentStore'
-import { useToolStore, type Op, type PushPullTarget } from '../store/toolStore'
+import { useToolStore, type Axis, type MoveOp, type Op, type PushPullTarget, type RotateOp } from '../store/toolStore'
 
 /**
  * Verktygslogik utan three.js: scenen räknar ut träffar och strålar och
@@ -20,6 +20,10 @@ export type PickTarget =
   | { kind: 'sketch'; id: string }
   /** Pilen på det valda; att dra i den gör push/pull. */
   | { kind: 'handle' }
+  /** En av flyttpilarna (X, Y, Z) i Flytta-läget. */
+  | { kind: 'axis'; axis: Axis }
+  /** En av bågarna i Flytta-läget; att dra i den vrider delen runt axeln. */
+  | { kind: 'rotate'; axis: Axis }
 
 export interface Hit {
   point: Vec3
@@ -56,6 +60,8 @@ function planeForHit(hit: Hit): { frame: Frame; bounds: Rect | null } | null {
       return b ? { frame: faceFrame(b, hit.target.face), bounds: faceBounds(b, hit.target.face) } : null
     }
     case 'handle':
+    case 'axis':
+    case 'rotate':
       return null
   }
 }
@@ -107,6 +113,14 @@ export function tap(hit: Hit | null, tol: number) {
     if (target) beginPushPull(target, hit.point)
     return
   }
+  if (hit?.target.kind === 'axis') {
+    beginAxisMove(hit.target.axis)
+    return
+  }
+  if (hit?.target.kind === 'rotate') {
+    beginRotate(hit.target.axis)
+    return
+  }
 
   if (tool === 'select') {
     const t = hit?.target
@@ -137,17 +151,11 @@ export function tap(hit: Hit | null, tol: number) {
     if (hit.target.kind !== 'body') return
     const b = findBody(hit.target.id)
     if (!b) return
+    // Delen man tar i blir vald, så att pilarna hamnar på den efteråt.
+    const sel = docs().selection
+    if (sel?.kind !== 'body' || sel.id !== b.id) docs().select({ kind: 'body', id: b.id })
     const f = faceFrame(b, hit.target.face)
-    const plane: Frame = { ...f, origin: hit.point }
-    setOp({
-      kind: 'move',
-      instanceId: b.id,
-      plane,
-      moving: bodyKeyPoints(b).map((p) => toLocal2D(plane, p)),
-      targets: planeTargets(bodies(), plane, b.id),
-      delta: [0, 0],
-      onTarget: [false, false],
-    })
+    setOp(moveOp(b, { ...f, origin: hit.point }, null))
     return
   }
 
@@ -207,6 +215,73 @@ export function beginPushPull(target: PushPullTarget, grabPoint?: Vec3) {
   })
 }
 
+function moveOp(b: Body, plane: Frame, axis: Axis | null): MoveOp {
+  return {
+    kind: 'move',
+    instanceId: b.id,
+    plane,
+    axis,
+    grab: 0,
+    moving: bodyKeyPoints(b).map((p) => toLocal2D(plane, p)),
+    targets: planeTargets(bodies(), plane, b.id),
+    delta: [0, 0],
+    onTarget: [false, false],
+  }
+}
+
+/** Plan per världsaxel med u = axeln och u × v = n. */
+const AXIS_PLANES: Record<Axis, Omit<Frame, 'origin'>> = {
+  0: { u: [1, 0, 0], v: [0, 1, 0], n: [0, 0, 1] },
+  1: { u: [0, 1, 0], v: [0, 0, 1], n: [1, 0, 0] },
+  2: { u: [0, 0, 1], v: [1, 0, 0], n: [0, 1, 0] },
+}
+
+/** Mitten av en del i världskoordinater; där flyttpilarna sitter. */
+export function bodyCenter(b: Body): Vec3 {
+  const { x0, x1, y0, y1 } = b.profile
+  return toWorld(b.frame, [(x0 + x1) / 2, (y0 + y1) / 2, (b.z0 + b.z1) / 2])
+}
+
+/** Startar en flytt av den valda delen längs en världsaxel (pilarna i Flytta-läget). */
+export function beginAxisMove(axis: Axis) {
+  const sel = docs().selection
+  const b = sel?.kind === 'body' ? findBody(sel.id) : undefined
+  if (!b) return
+  tools().setOp(moveOp(b, { origin: bodyCenter(b), ...AXIS_PLANES[axis] }, axis))
+}
+
+/** Vridning när man drar: steg om 15°, så att 90° och 45° är lätta att träffa. */
+export const ANGLE_STEP = 15
+
+/** Plan för vridning runt en världsaxel: n = axeln, u och v de två andra (u × v = n). */
+function rotatePlane(axis: Axis, center: Vec3): Frame {
+  const { u, v, n } = AXIS_PLANES[axis]
+  return { origin: center, u: v, v: n, n: u }
+}
+
+/** Startar en vridning av den valda delen runt en världsaxel genom dess mitt. */
+export function beginRotate(axis: Axis) {
+  const sel = docs().selection
+  const b = sel?.kind === 'body' ? findBody(sel.id) : undefined
+  if (!b) return
+  tools().setOp({
+    kind: 'rotate',
+    instanceId: b.id,
+    axis,
+    plane: rotatePlane(axis, bodyCenter(b)),
+    radius: Math.max(...bodyExtents(b)) * 0.6,
+    grab: 0,
+    angle: 0,
+  })
+}
+
+/** Vinkeln i grader för där strålen skär vridplanet, räknad från u mot v. Null om den inte skär. */
+function angleOf(op: RotateOp, ray: Ray): number | null {
+  const p = intersectPlane(ray, op.plane)
+  if (!p || Math.hypot(p[0], p[1]) < 1e-6) return null
+  return (Math.atan2(p[1], p[0]) * 180) / Math.PI
+}
+
 /** Muspekaren rör sig utan pågående operation: visa var första hörnet skulle hamna. */
 export function hoverAt(hit: Hit | null, tol: number) {
   const { tool, setHoverPoint } = tools()
@@ -230,6 +305,24 @@ export function move(ray: Ray, tol: number) {
     if (!p) return
     const { point, onTarget } = snapPoint(p, op.targets, tol)
     setOp({ ...op, current: point, onTarget })
+    return
+  }
+
+  if (op.kind === 'rotate') {
+    const a = angleOf(op, ray)
+    if (a === null) return
+    // Välj det varv som ligger närmast förra vinkeln, så att man kan dra förbi 180°.
+    let raw = a - op.grab
+    raw -= 360 * Math.round((raw - op.angle) / 360)
+    setOp({ ...op, angle: Math.round(raw / ANGLE_STEP) * ANGLE_STEP })
+    return
+  }
+
+  if (op.kind === 'move' && op.axis !== null) {
+    const t = closestParamOnLine(op.plane.origin, op.plane.u, ray.origin, ray.dir)
+    if (t === null) return
+    const snapped = snapDelta([t - op.grab, 0], op.moving, op.targets, GRID_STEP, tol)
+    setOp({ ...op, delta: [snapped.delta[0], 0], onTarget: [snapped.onTarget[0], false] })
     return
   }
 
@@ -260,18 +353,33 @@ export function move(ray: Ray, tol: number) {
 export function opFocus(op: Op): Vec3 {
   if (op.kind === 'pushpull') return add(op.anchor, scale(op.normal, op.distance))
   if (op.kind === 'move') return add(op.plane.origin, moveDeltaWorld(op))
+  if (op.kind === 'rotate') return op.plane.origin
   return toWorld(op.frame, [op.current[0], op.current[1], 0])
 }
 
 /**
- * Nytt tag under en pågående push/pull (man släppte och trycker igen, var som
- * helst): ytan ligger kvar där den är och följer fingret därifrån.
+ * Nytt tag under en pågående push/pull eller flytt längs en pil (man släppte
+ * och trycker igen, var som helst): det man drar i ligger kvar där det är och
+ * följer fingret därifrån. False om operationen inte går längs en linje.
  */
-export function regrab(ray: Ray) {
+export function regrab(ray: Ray): boolean {
   const { op, setOp } = tools()
-  if (op?.kind !== 'pushpull') return
-  const t = closestParamOnLine(op.anchor, op.normal, ray.origin, ray.dir)
-  if (t !== null) setOp({ ...op, grab: t - op.distance })
+  if (op?.kind === 'pushpull') {
+    const t = closestParamOnLine(op.anchor, op.normal, ray.origin, ray.dir)
+    if (t !== null) setOp({ ...op, grab: t - op.distance })
+    return true
+  }
+  if (op?.kind === 'move' && op.axis !== null) {
+    const t = closestParamOnLine(op.plane.origin, op.plane.u, ray.origin, ray.dir)
+    if (t !== null) setOp({ ...op, grab: t - op.delta[0] })
+    return true
+  }
+  if (op?.kind === 'rotate') {
+    const a = angleOf(op, ray)
+    if (a !== null) setOp({ ...op, grab: a - op.angle })
+    return true
+  }
+  return false
 }
 
 /** Förflyttningen i världskoordinater för en flytt-operation. */
@@ -284,11 +392,10 @@ export function commit(op: Op | null = tools().op, exprs: { dims?: DimExprs; dep
   if (!op) return
   const d = docs()
   if (op.kind === 'rect') d.addSketch(op.frame, rectFromCorners(op.first, op.current), exprs.dims)
+  else if (op.kind === 'rotate') d.rotateInstance(op.instanceId, op.plane.origin, op.plane.n, op.angle)
   else if (op.kind === 'move') {
+    // Man stannar i Flytta, så att man kan flytta längs en axel till. Klar eller Esc går till Välj.
     if (op.delta[0] !== 0 || op.delta[1] !== 0) d.moveInstance(op.instanceId, moveDeltaWorld(op))
-    // Flytta nås från knappraden och gäller en flytt; sedan är man tillbaka i Välj.
-    tools().setTool('select')
-    return
   } else {
     if (op.target.kind === 'sketch') d.pushPullSketch(op.target.id, op.distance, exprs.depth)
     else d.pushPullBody(op.target.id, op.target.face, op.distance)
@@ -316,7 +423,8 @@ export function cancel() {
 /** Aktuella mått för förhandsvisningen: [längd, bredd] för rektangel, annars [avstånd]. */
 export function liveMeasure(op: Op): number[] {
   if (op.kind === 'rect') return [Math.abs(op.current[0] - op.first[0]), Math.abs(op.current[1] - op.first[1])]
-  if (op.kind === 'move') return [Math.hypot(op.delta[0], op.delta[1])]
+  if (op.kind === 'rotate') return [op.angle]
+  if (op.kind === 'move') return [op.axis !== null ? op.delta[0] : Math.hypot(op.delta[0], op.delta[1])]
   return [op.distance]
 }
 
@@ -359,6 +467,16 @@ export function applyMeasure(): boolean {
 
   const value = read(measure[0], liveMeasure(op)[0]!)
   if (value === null) return false
+
+  if (op.kind === 'rotate') {
+    commit({ ...op, angle: signed(measure[0], value, Math.sign(op.angle)) })
+    return true
+  }
+
+  if (op.kind === 'move' && op.axis !== null) {
+    commit({ ...op, delta: [signed(measure[0], value, Math.sign(op.delta[0])), 0] })
+    return true
+  }
 
   if (op.kind === 'move') {
     const len = length([op.delta[0], op.delta[1], 0])

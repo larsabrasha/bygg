@@ -3,7 +3,18 @@ import { resolveBodies } from '../model/resolve'
 import type { Vec3 } from '../model/types'
 import { resetDocumentStore, useDocumentStore } from '../store/documentStore'
 import { useToolStore } from '../store/toolStore'
-import { applyMeasure, beginPushPull, commit, hoverAt, move, opFocus, regrab, repeatLastPushPull, tap } from './actions'
+import {
+  applyMeasure,
+  beginPushPull,
+  bodyCenter,
+  commit,
+  hoverAt,
+  move,
+  opFocus,
+  regrab,
+  repeatLastPushPull,
+  tap,
+} from './actions'
 
 const docs = () => useDocumentStore.getState()
 const doc = () => docs().doc
@@ -185,8 +196,9 @@ describe('flytta', () => {
     expect(tools().op).toMatchObject({ delta: [400, 0] })
     commit()
     expect(bodies()[0]!.frame.origin).toEqual([400, 0, 0])
-    // En flytt i taget: sedan tillbaka i Välj.
-    expect(tools().tool).toBe('select')
+    // Man stannar i Flytta, och delen man tog i är vald (så att pilarna syns på den).
+    expect(tools().tool).toBe('move')
+    expect(docs().selection).toMatchObject({ kind: 'body', id: b.id })
   })
 
   it('skriver exakt avstånd längs dragriktningen', () => {
@@ -207,6 +219,115 @@ describe('flytta', () => {
     // Dra −393: vänsterkant 1000 − 393 = 607, nära den andras högerkant 600.
     move(down(1100 - 393, -200), 10)
     expect(tools().op).toMatchObject({ delta: [-400, 0], onTarget: [true, false] })
+  })
+})
+
+describe('flyttpilarna', () => {
+  /** Stråle rakt in i skärmen (−z), mot en punkt på höjd y. */
+  const front = (x: number, y: number) => ({ origin: [x, y, 3000] as Vec3, dir: [0, 0, -1] as Vec3 })
+
+  it('flyttar bara längs pilens axel, hur snett man än drar', () => {
+    const b = extrude(drawGroundRect(), '22')
+    docs().select({ kind: 'body', id: b.id })
+    tools().setTool('move')
+    // Mitten: (300, 11, −200). Ta i X-pilen en bit ut, dra 250 åt höger och 80 uppåt.
+    tap({ point: [360, 11, -200], target: { kind: 'axis', axis: 0 } }, 0)
+    regrab(front(360, 11))
+    expect(tools().op).toMatchObject({ axis: 0, grab: 60 })
+    move(front(610, 91), 0)
+    expect(tools().op).toMatchObject({ delta: [250, 0] })
+    commit()
+    expect(bodies()[0]!.frame.origin).toEqual([250, 0, 0])
+    expect(tools().tool).toBe('move')
+  })
+
+  it('Y-pilen lyfter delen, och ett skrivet mått följer dragriktningen', () => {
+    const b = extrude(drawGroundRect(), '22')
+    docs().select({ kind: 'body', id: b.id })
+    tools().setTool('move')
+    tap({ point: [300, 11, -200], target: { kind: 'axis', axis: 1 } }, 0)
+    regrab(front(300, 11))
+    move(front(300, -89), 0) // nedåt
+    tools().setMeasure(0, '300')
+    applyMeasure()
+    expect(bodies()[0]!.frame.origin).toEqual([0, -300, 0])
+  })
+
+  it('skrivet mått utan att dra går åt pilens håll', () => {
+    const b = extrude(drawGroundRect(), '22')
+    docs().select({ kind: 'body', id: b.id })
+    tools().setTool('move')
+    tap({ point: [300, 11, -200], target: { kind: 'axis', axis: 2 } }, 0)
+    tools().setMeasure(0, '150')
+    applyMeasure()
+    expect(bodies()[0]!.frame.origin).toEqual([0, 0, 150])
+  })
+
+  it('snäpper så att delen hamnar kant i kant längs axeln', () => {
+    extrude(drawGroundRect(0, 0, 600, -400), '22')
+    const b = extrude(drawGroundRect(1000, 0, 1200, -400), '22')
+    docs().select({ kind: 'body', id: b.id })
+    tools().setTool('move')
+    tap({ point: [1100, 11, -200], target: { kind: 'axis', axis: 0 } }, 0)
+    regrab(front(1100, 11))
+    move(front(1100 - 393, 11), 10)
+    expect(tools().op).toMatchObject({ delta: [-400, 0], onTarget: [true, false] })
+  })
+
+  it('bågen vrider delen runt Y i steg om 15°, och Flytta-läget står kvar', () => {
+    const b = extrude(drawGroundRect(), '22')
+    docs().select({ kind: 'body', id: b.id })
+    tools().setTool('move')
+    // Mitten (300, 11, −200). Vridplanet runt Y har u = Z och v = X.
+    tap({ point: [300, 11, -200], target: { kind: 'rotate', axis: 1 } }, 0)
+    const above = (x: number, z: number) => down(300 + x, -200 + z)
+    regrab(above(0, 100)) // tar tag vid +Z (0°)
+    move(above(100, 106), 0) // ~43°: blir 45°
+    expect(tools().op).toMatchObject({ angle: 45 })
+    move(above(100, 3), 0) // ~88°: blir 90°
+    commit()
+    const f = bodies()[0]!.frame
+    // Golvframens u = +X vrids 90° runt Y till −Z; mitten står still.
+    expect(f.u).toEqual([0, 0, -1])
+    expect(bodyCenter(bodies()[0]!)).toEqual([300, 11, -200])
+    expect(tools().tool).toBe('move')
+  })
+
+  it('räknar vinkeln förbi 180° utan att hoppa', () => {
+    const b = extrude(drawGroundRect(), '22')
+    docs().select({ kind: 'body', id: b.id })
+    tools().setTool('move')
+    tap({ point: [300, 11, -200], target: { kind: 'rotate', axis: 1 } }, 0)
+    const at = (deg: number) => {
+      const a = (deg * Math.PI) / 180
+      // u = Z, v = X i vridplanet.
+      return down(300 + 100 * Math.sin(a), -200 + 100 * Math.cos(a))
+    }
+    regrab(at(0))
+    for (const deg of [60, 120, 170, 200, 250]) move(at(deg), 0)
+    expect(tools().op).toMatchObject({ angle: 255 })
+  })
+
+  it('skriven vinkel följer dragriktningen', () => {
+    const b = extrude(drawGroundRect(), '22')
+    docs().select({ kind: 'body', id: b.id })
+    tools().setTool('move')
+    tap({ point: [300, 11, -200], target: { kind: 'rotate', axis: 1 } }, 0)
+    regrab(down(300, -100)) // 0°
+    move(down(200, -100 - 0.001), 0) // åt −X: negativ vinkel
+    expect((tools().op as { angle: number }).angle).toBeLessThan(0)
+    tools().setMeasure(0, '90')
+    applyMeasure()
+    // −90° runt Y: +X blir +Z.
+    expect(bodies()[0]!.frame.u).toEqual([0, 0, 1])
+  })
+
+  it('startar inte utan vald del', () => {
+    extrude(drawGroundRect(), '22')
+    docs().select(null)
+    tools().setTool('move')
+    tap({ point: [0, 0, 0], target: { kind: 'axis', axis: 0 } }, 0)
+    expect(tools().op).toBeNull()
   })
 })
 

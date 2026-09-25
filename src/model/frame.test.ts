@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { faceBounds, faceFrame, GROUND_FRAME, toLocal, toWorld } from './frame'
+import { faceBounds, faceFrame, GROUND_FRAME, rotateFrame, toLocal, toWorld } from './frame'
 import { testBody } from './testFixtures'
 import { FACES, type Frame, type Vec3 } from './types'
 import { cross, dot, length } from './vec'
@@ -59,5 +59,19 @@ describe('frames', () => {
     const b = faceBounds(body, 'u+')
     expect(b.x1 - b.x0).toBeCloseTo(120)
     expect(b.y1 - b.y0).toBeCloseTo(22)
+  })
+})
+
+describe('rotateFrame', () => {
+  it('vrider 90° runt Y genom en punkt, med exakta tal', () => {
+    const f = rotateFrame(GROUND_FRAME, [100, 0, 0], [0, 1, 0], 90)
+    // x → −z, och origo (0,0,0) går runt (100,0,0) till (100,0,100).
+    expect(f).toEqual({ origin: [100, 0, 100], u: [0, 0, -1], v: [-1, 0, 0], n: [0, 1, 0] })
+  })
+
+  it('håller framen ortonormal vid sneda vinklar', () => {
+    const f = rotateFrame(GROUND_FRAME, [0, 0, 0], [1, 0, 0], 30)
+    expectOrthonormalRightHanded(f)
+    expectVecClose(f.n, [0, Math.cos(Math.PI / 6), Math.sin(Math.PI / 6)])
   })
 })

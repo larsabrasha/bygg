@@ -12,6 +12,8 @@ export function materialColor(material: string): string {
 }
 
 export const ACCENT = '#1e6fd9'
+/** X, Y, Z: samma färger i flyttpilarna som i axelkorset nere till vänster. */
+export const AXIS_COLORS: [string, string, string] = ['#ff2060', '#20df80', '#2080ff']
 export const ACCENT_LIGHT = '#7aa9e8'
 export const EDGE = '#5a4632'
 /** Snäppmarkör på ett mål (annan dels kant, ytans kant). */

@@ -24,8 +24,8 @@ export type Owner = 'tool' | 'camera'
  * target = vad som ligger under pekaren, null om inget (himlen).
  */
 export function pressOwner(tool: Tool, opActive: boolean, kind: PointerKind, target: PickTarget['kind'] | null): Owner {
-  // Pilen på det valda drar ut, i vilket läge den än syns.
-  if (opActive || target === 'handle') return 'tool'
+  // Pilarna på det valda (dra ut, flytta) tar trycket i vilket läge de än syns.
+  if (opActive || target === 'handle' || target === 'axis' || target === 'rotate') return 'tool'
   switch (tool) {
     case 'select':
       return 'camera'

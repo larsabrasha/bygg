@@ -25,16 +25,28 @@ export function MeasureBox() {
         select: '',
         rect: 'Tryck där första hörnet ska vara – på golvet eller på en yta.',
         pushpull: 'Dra i en skiss eller en sida av en del, eller tryck på den.',
-        move: 'Dra delen dit den ska. Den flyttas i planet för sidan du tar i.',
+        move: 'Dra i en pil för att flytta längs X, Y eller Z, eller i en båge för att vrida. Du kan också dra i själva delen.',
       }[tool]
     : {
         rect: 'Tryck på andra hörnet, eller skriv längd och bredd.',
         pushpull: 'Dra längs pilen, eller skriv avståndet.',
-        move: 'Dra dit delen ska, eller skriv avståndet.',
+        move:
+          op.kind === 'move' && op.axis !== null
+            ? 'Dra längs pilen, eller skriv avståndet.'
+            : 'Dra dit delen ska, eller skriv avståndet.',
+        rotate: 'Dra runt bågen (steg om 15°), eller skriv vinkeln.',
       }[op.kind]
 
   const live = op ? liveMeasure(op) : []
-  const labels = op?.kind === 'rect' ? ['Längd', 'Bredd'] : ['Avstånd']
+  const labels =
+    op?.kind === 'rect'
+      ? ['Längd', 'Bredd']
+      : op?.kind === 'rotate'
+        ? [`Vinkel runt ${'XYZ'[op.axis]}`]
+        : op?.kind === 'move' && op.axis !== null
+          ? [`Avstånd ${'XYZ'[op.axis]}`]
+          : ['Avstånd']
+  const unit = op?.kind === 'rotate' ? '°' : 'mm'
 
   return (
     <div className="absolute bottom-3 left-1/2 w-max max-w-[calc(100%-24px)] -translate-x-1/2 rounded-lg border border-line bg-panel/95 px-2.5 py-2 shadow-md">
@@ -69,7 +81,7 @@ export function MeasureBox() {
                 }}
                 className="w-24 rounded border border-line bg-field py-1 pr-7 pl-1.5 text-ink tabular-nums narrow:min-h-11 narrow:w-22"
               />
-              <span className="absolute right-1.5 bottom-1.5 text-unit narrow:bottom-3">mm</span>
+              <span className="absolute right-1.5 bottom-1.5 text-unit narrow:bottom-3">{unit}</span>
             </label>
           ))}
           <button type="submit" className={primaryButton}>

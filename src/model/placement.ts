@@ -8,8 +8,8 @@ const INDEX: Record<WorldAxis, 0 | 1 | 2> = { x: 0, y: 1, z: 2 }
 
 /**
  * Delens hörn närmast origo i världskoordinater: minsta x, y och z.
- * Alla delar ligger längs världens axlar (skisser görs på golvet eller på
- * andra delars sidor), så lådan runt delen är delen själv.
+ * För en del som ligger längs världens axlar är det ett av delens hörn;
+ * för en snett vriden del är det hörnet på lådan runt den.
  */
 export function minCorner(inst: Instance, def: PartDef): Vec3 {
   const { profile: r, z0, z1 } = def

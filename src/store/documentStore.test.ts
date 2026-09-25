@@ -125,6 +125,22 @@ describe('kopior (komponenter)', () => {
     s().moveInstance(a, [100, 0, -50])
     expect(bodies()[0]!.frame.origin).toEqual([100, 0, -50])
   })
+
+  it('vrider en kopia runt en axel, och det går att ångra', () => {
+    const a = newPart()
+    const before = bodies()[0]!.frame
+    s().rotateInstance(a, [0, 0, 0], [0, 1, 0], 90)
+    expect(bodies()[0]!.frame.u).toEqual([0, 0, -1])
+    s().undo()
+    expect(bodies()[0]!.frame).toEqual(before)
+  })
+
+  it('vridning ett helt varv sparas inte i historiken', () => {
+    const a = newPart()
+    const steps = s().past.length
+    s().rotateInstance(a, [0, 0, 0], [0, 1, 0], 360)
+    expect(s().past).toHaveLength(steps)
+  })
 })
 
 describe('fiber och tjocklek', () => {
@@ -278,6 +294,16 @@ describe('läge', () => {
     s().moveInstance(id, [50, 0, 0])
     expect(s().doc.instances[0]!.pos).toEqual({ y: 'a' })
     expect(corner()).toEqual([150, 100, -120])
+  })
+
+  it('vridning tar bort uttrycket bara för axlar där hörnet flyttas', () => {
+    const id = newPart()
+    const p = s().addParam()
+    s().updateParam(p, { name: 'a', expr: '100' })
+    for (const axis of ['x', 'y', 'z'] as const) s().setPosition(id, axis, 'a')
+    // 90° runt Y genom delens mitt (800 × 22 × 120): x och z byter utsträckning, höjden står still.
+    s().rotateInstance(id, [400, 11, -60], [0, 1, 0], 90)
+    expect(s().doc.instances[0]!.pos).toEqual({ y: 'a' })
   })
 
   it('push/pull på sidan närmast origo tar bort uttrycket, annars flyttar delen tillbaka', () => {

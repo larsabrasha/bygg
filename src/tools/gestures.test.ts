@@ -25,6 +25,8 @@ describe('pressOwner', () => {
     expect(pressOwner('pushpull', false, 'mouse', 'body')).toBe('tool')
     expect(pressOwner('pushpull', false, 'touch', 'ground')).toBe('camera')
     expect(pressOwner('move', false, 'touch', 'body')).toBe('tool')
+    expect(pressOwner('move', false, 'mouse', 'axis')).toBe('tool')
+    expect(pressOwner('move', false, 'touch', 'rotate')).toBe('tool')
     expect(pressOwner('move', false, 'touch', 'sketch')).toBe('camera')
   })
 })

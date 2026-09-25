@@ -40,6 +40,12 @@ const SNAP_FRACTION = 0.015
 /** Golvet blir vridpunkt bara om det ligger högst så här många gånger längre bort än nuvarande vridpunkt. */
 const MAX_GROUND_PIVOT = 1.5
 
+/**
+ * Flyttpilarna och bågarna ritas ovanpå allt (de sitter mitt i delen), så de
+ * vinner alltid över det som ligger närmare kameran.
+ */
+const ON_TOP = new Set<string>(['axis', 'rotate'])
+
 const kindOf = (e: PointerEvent): PointerKind =>
   e.pointerType === 'touch' || e.pointerType === 'pen' ? e.pointerType : 'mouse'
 
@@ -100,16 +106,17 @@ export function ToolController() {
       let best: { hit: Intersection; score: number } | null = null
       for (const hit of raycaster.intersectObjects(targets, false)) {
         const kind = hit.object.userData.pick.kind
-        const score = hit.distance - (kind === 'handle' ? 2 : kind === 'sketch' ? 1 : 0)
+        const score = ON_TOP.has(kind) ? -Infinity : hit.distance - (kind === 'handle' ? 2 : kind === 'sketch' ? 1 : 0)
         if (!best || score < best.score) best = { hit, score }
       }
       return best?.hit ?? null
     }
 
     const toHit = (hit: Intersection): Hit => {
-      const p = hit.object.userData.pick as { kind: 'body' | 'sketch'; id: string } | { kind: 'handle' }
+      const p = hit.object.userData.pick as
+        { kind: 'body' | 'sketch'; id: string } | Extract<PickTarget, { kind: 'handle' | 'axis' | 'rotate' }>
       const target: PickTarget =
-        p.kind === 'handle'
+        p.kind === 'handle' || p.kind === 'axis' || p.kind === 'rotate'
           ? p
           : p.kind === 'body'
             ? { kind: 'body', id: p.id, face: FACES[hit.face?.materialIndex ?? 0]! }
@@ -135,6 +142,7 @@ export function ToolController() {
             }
           : null
 
+      if (direct && ON_TOP.has(direct.object.userData.pick.kind)) return toHit(direct)
       if (direct) return ground && groundT < direct.distance ? ground : toHit(direct)
 
       const r = PICK_RADIUS[kind]
@@ -229,10 +237,10 @@ export function ToolController() {
       }
       // Släpp utanför vyn ska ändå avsluta dragningen.
       el.setPointerCapture(e.pointerId)
-      // Push/pull tar nytt tag där ytan är; andra operationer följer pekaren direkt.
-      if (op?.kind === 'pushpull') regrab(rayOf(e))
-      else if (op) move(rayOf(e), tolForOp())
-      else {
+      // Push/pull och flytt längs en pil tar nytt tag där de är; andra operationer följer pekaren direkt.
+      if (op) {
+        if (!regrab(rayOf(e))) move(rayOf(e), tolForOp())
+      } else {
         tap(hit, hit ? tolFor(hit.point) : 0)
         press.startedOp = useToolStore.getState().op !== null
         // Greppunkten räknas från pekarens stråle, som dragningen. Träffpunkten
@@ -266,6 +274,7 @@ export function ToolController() {
         return
       }
       const hit = pick(e.clientX, e.clientY, 'mouse')
+      el.style.cursor = hit && ON_TOP.has(hit.target.kind) ? 'grab' : ''
       if (tool === 'rect') {
         hoverAt(hit, hit ? tolFor(hit.point) : 0)
         return
