@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useLibraryStore, type SyncStatus } from '../store/libraryStore'
 import { createModel, deleteModel, openModel, renameModel, syncNow } from '../sync/session'
+import { ArButton } from './ArButton'
 import { field, secondaryButton } from './ui'
 import { useDraft } from './useDraft'
 
@@ -157,6 +158,7 @@ export function ModelMenu() {
           >
             + Ny modell
           </button>
+          <ArButton onOpened={() => setOpen(false)} />
         </div>
       )}
     </div>
