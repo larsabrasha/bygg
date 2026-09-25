@@ -99,8 +99,10 @@ export function ToolController() {
      */
     let opAtStart = useToolStore.getState().op
     /**
-     * Operationen startades med ett tryck på en pil eller båge och står still
-     * tills man skriver ett mått. Nästa tryck avbryter den (se afterTapStart).
+     * Operationen står still tills man skriver ett mått, och nästa tryck avbryter
+     * den. Så blir det när den startades med ett tryck på en pil eller båge (se
+     * afterTapStart), eller utanför vyn (knappen Dra ut): annars hoppade ytan dit
+     * pekaren råkade komma in i vyn, och nästa tryck sparade det.
      */
     let waiting = false
 
@@ -463,7 +465,10 @@ export function ToolController() {
       if (!s.op) {
         opAtStart = null
         waiting = false
-      } else if (!prev.op) opAtStart = s.op
+      } else if (!prev.op) {
+        opAtStart = s.op
+        if (!press) waiting = true
+      }
     })
 
     const unsubscribePan = useViewStore.subscribe((s, prev) => {
