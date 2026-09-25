@@ -436,7 +436,16 @@ export function ToolController() {
           return
         }
         lastTap = here
+        const before = useToolStore.getState().op
         tap(hit, hit ? tolFor(hit.point, kind) : 0)
+        // Trycket startade något (första hörnet på en rektangel med mus): samma regel som i onDown,
+        // inte som en operation från utanför vyn.
+        const started = useToolStore.getState().op
+        if (started && !before) {
+          const after = afterTapStart(hit?.target.kind ?? null, started)
+          if (after === 'drop') cancel()
+          else waiting = after === 'wait'
+        }
       }
     }
 
