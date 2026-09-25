@@ -1,0 +1,88 @@
+@import 'tailwindcss';
+
+/* Smal skärm (mobil i stående läge). Liggande mobil får desktop-layouten. */
+@custom-variant narrow (@media (max-width: 720px));
+
+@theme {
+  --font-sans: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --color-ink: #2a2724;
+  --color-canvas: #f2f1ee;
+  --color-panel: #fbfaf8;
+  --color-line: #d8d4cc;
+  --color-muted: #6b655c;
+  --color-faint: #8a847a;
+  --color-hover: #f0ede7;
+  --color-accent: #1e6fd9;
+  --color-accent-soft: #dce9fb;
+  --color-accent-line: #b8d0f3;
+  /* Text på accentfärgad bakgrund (primärknappen). */
+  --color-on-accent: #ffffff;
+  --color-danger: #b3261e;
+  /* Bakgrund i inmatningsfält. */
+  --color-field: #ffffff;
+  /* Sekundärknappens bakgrund. */
+  --color-button: #e6e2da;
+  --color-disabled: #b5afa5;
+  /* Enhetstext ("mm") inne i ett fält. */
+  --color-unit: #9a9489;
+}
+
+/* Mörkt tema följer systemets inställning. Samma namn, andra värden, så att
+   komponenterna inte behöver dark:-varianter. 3D-vyns färger: src/scene/colors.ts. */
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+    --color-ink: #ebe7e0;
+    --color-canvas: #1b1a18;
+    --color-panel: #24221f;
+    --color-line: #3b3833;
+    --color-muted: #a8a196;
+    --color-faint: #8a8378;
+    --color-hover: #2e2b27;
+    --color-accent: #6aa5f5;
+    --color-accent-soft: #1f3552;
+    --color-accent-line: #34588a;
+    --color-on-accent: #0c1a2e;
+    --color-danger: #f28b82;
+    --color-field: #1b1a18;
+    --color-button: #36332e;
+    --color-disabled: #5d5850;
+    --color-unit: #857e74;
+  }
+}
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    @apply bg-canvas font-sans text-sm text-ink;
+    overscroll-behavior: none;
+  }
+
+  /* 16 px hindrar iOS från att zooma in när ett fält får fokus. */
+  @variant narrow {
+    input,
+    select {
+      font-size: 16px;
+    }
+  }
+}
+
+/* Utskrift (kaplistan): vit sida även i mörkt tema. */
+@media print {
+  @page {
+    margin: 15mm;
+  }
+
+  :root {
+    color-scheme: light;
+  }
+
+  body {
+    background: white;
+  }
+}

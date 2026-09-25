@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Bakgrund i appens accentfärg över hela ytan, så att ikonen fungerar som maskable. -->
+  <rect width="512" height="512" fill="#1e6fd9"/>
+  <!-- Snickarhammare, snett uppåt höger. Håller sig inom maskable-ikonens säkra cirkel. -->
+  <g transform="rotate(35 256 256)" stroke-linejoin="round">
+    <!-- Skaft i trä med mörkare grepp nertill. -->
+    <rect x="234" y="200" width="44" height="222" rx="14" fill="#e3c28f" stroke="#5a4632" stroke-width="8"/>
+    <rect x="229" y="330" width="54" height="98" rx="18" fill="#8b5a2b" stroke="#5a4632" stroke-width="8"/>
+    <!-- Huvud i stål: slagyta till vänster, klo till höger. -->
+    <path d="M168 136 H300 C 334 136 364 152 384 184 L 356 200 C 344 180 326 172 300 172 V 212 H168 Z"
+          fill="#d3d8df" stroke="#2b2f36" stroke-width="8"/>
+    <rect x="124" y="126" width="52" height="96" rx="10" fill="#a4acb7" stroke="#2b2f36" stroke-width="8"/>
+  </g>
+</svg>
