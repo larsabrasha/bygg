@@ -7,7 +7,7 @@ import { bottomBox, iconAction } from './ui'
 import { useCoversView } from './useCoversView'
 
 /**
- * Efter Skär ut eller Lägg till i knappraden: tala om att nästa tryck väljer
+ * Efter Tapp, Skär ut eller Lägg till i knappraden: tala om att nästa tryck väljer
  * verktyget. Längst ner i vyn, där måttrutan annars ligger.
  */
 export function CombineBar() {

@@ -43,7 +43,7 @@ export const ICON = { size: 20, strokeWidth: 1.75, 'aria-hidden': true } as cons
 export const iconAction = 'grid size-10 shrink-0 cursor-pointer place-items-center rounded-lg narrow:size-11'
 
 /**
- * Rutan längst ner i 3D-vyn (måttrutan, Foga). På smal skärm står den vid
+ * Rutan längst ner i 3D-vyn (måttrutan, valet av del för Tapp och Forma). På smal skärm står den vid
  * vänsterkanten och slutar före verktygslisten vid högerkanten, så att de inte
  * täcker varandra när vyn är låg (bladet med flikarna öppet).
  */

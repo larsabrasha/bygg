@@ -5,9 +5,9 @@ import {
   EyeOff,
   ScanEye,
   Focus,
-  SquareMinus,
   Puzzle,
-  SquarePlus,
+  SquaresSubtract,
+  SquaresUnite,
   Trash2,
   Unlink,
   X,
@@ -15,7 +15,6 @@ import {
 } from 'lucide-react'
 import { useCallback, useRef, useState } from 'react'
 import { resolveBodies } from '../model/resolve'
-import type { Combine } from '../model/types'
 import { useDocumentStore } from '../store/documentStore'
 import { useToolStore } from '../store/toolStore'
 import { useViewStore } from '../store/viewStore'
@@ -42,7 +41,7 @@ function BarButton({
     <button
       aria-label={label}
       onClick={onClick}
-      className={`flex h-9 cursor-pointer items-center gap-1.5 rounded-lg px-2 hover:bg-hover narrow:size-11 narrow:justify-center narrow:px-0 ${danger ? 'text-danger' : ''}`}
+      className={`flex h-9 shrink-0 cursor-pointer items-center gap-1.5 rounded-lg px-2 hover:bg-hover narrow:size-11 narrow:justify-center narrow:px-0 ${danger ? 'text-danger' : ''}`}
     >
       <Icon {...ICON} />
       {/* På smal skärm bara ikonen; namnet finns i aria-label. */}
@@ -52,40 +51,41 @@ function BarButton({
 }
 
 /**
- * Skär ut, Lägg till och Tapp i en meny, så att raden får plats på en telefon.
- * Efter valet trycker man på den andra delen (se CombineBar).
+ * Skär ut och Lägg till: den andra delen blir ett verktyg som formar den valda
+ * (och försvinner ur kaplistan), som Combine i Fusion. Tapp är något annat, en
+ * fog mellan två delar, och har en egen knapp. Efter valet trycker man på den
+ * andra delen (se CombineBar).
  */
-function JoinMenu({ hostId }: { hostId: string }) {
+function ShapeMenu({ hostId, name }: { hostId: string; name: string }) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
   const close = useCallback(() => setOpen(false), [])
   useDismiss(ref, open, close)
   const setCombining = useToolStore((s) => s.setCombining)
-  const choose = (op: Combine['op']) => {
+  const choose = (op: 'subtract' | 'add') => {
     close()
     setCombining({ op, host: hostId })
   }
   return (
-    <div ref={ref} className="relative">
+    <div ref={ref} className="relative shrink-0 narrow:static">
       <button
-        aria-label="Foga"
+        aria-label="Forma"
         aria-expanded={open}
         onClick={() => setOpen((o) => !o)}
         className="flex h-9 cursor-pointer items-center gap-1.5 rounded-lg px-2 hover:bg-hover aria-expanded:bg-accent-soft aria-expanded:text-accent narrow:size-11 narrow:justify-center narrow:px-0"
       >
-        <Puzzle {...ICON} />
-        <span className="text-[13px] narrow:hidden">Foga</span>
+        <SquaresUnite {...ICON} />
+        <span className="text-[13px] narrow:hidden">Forma</span>
       </button>
       {open && (
-        <div className="absolute top-full left-0 z-50 mt-1 w-60 rounded-lg border border-line bg-panel p-1 shadow-lg">
-          <MenuItem Icon={Puzzle} onClick={() => choose('joint')}>
-            Tapp i en annan del
+        // Åt vänster från knappen. På en telefon får den inte plats åt något håll från knappen;
+        // där ligger den under radens vänsterkant (knappens ruta är inte positionerad, narrow:static).
+        <div className="absolute top-full right-0 z-50 narrow:right-auto narrow:left-0 mt-1 w-max max-w-[calc(100vw-24px)] min-w-40 rounded-lg border border-line bg-panel p-1 shadow-lg">
+          <MenuItem Icon={SquaresSubtract} onClick={() => choose('subtract')}>
+            Skär ut en del ur {name}
           </MenuItem>
-          <MenuItem Icon={SquareMinus} onClick={() => choose('subtract')}>
-            Skär ut en annan del
-          </MenuItem>
-          <MenuItem Icon={SquarePlus} onClick={() => choose('add')}>
-            Lägg till en annan del
+          <MenuItem Icon={SquaresUnite} onClick={() => choose('add')}>
+            Lägg ihop en del med {name}
           </MenuItem>
         </div>
       )}
@@ -104,7 +104,7 @@ function VisibilityMenu({ id }: { id: string }) {
   const close = useCallback(() => setOpen(false), [])
   useDismiss(ref, open, close)
   return (
-    <div ref={ref} className="relative">
+    <div ref={ref} className="relative shrink-0">
       <button
         aria-label="Visa"
         aria-expanded={open}
@@ -153,6 +153,7 @@ export function SelectionBar() {
   const requestFit = useViewStore((s) => s.requestFit)
   const opActive = useToolStore((s) => s.op !== null)
   const combining = useToolStore((s) => s.combining)
+  const setCombining = useToolStore((s) => s.setCombining)
   const detach = useDocumentStore((s) => s.detach)
 
   const cover = useCoversView<HTMLDivElement>()
@@ -169,7 +170,9 @@ export function SelectionBar() {
       aria-label="Det valda"
       className="absolute top-3 left-3 flex max-w-[calc(100%-190px)] narrow:max-w-[calc(100%-80px)] items-center gap-0.5 rounded-lg border border-line bg-panel/95 p-0.5 shadow-md"
     >
-      <span className="truncate px-2 text-[13px] font-semibold narrow:max-w-20">{body ? body.name : 'Skiss'}</span>
+      <span className={`truncate px-2 text-[13px] font-semibold ${body ? 'narrow:hidden' : ''}`}>
+        {body ? body.name : 'Skiss'}
+      </span>
       {body ? (
         <>
           <BarButton label="Zooma till" Icon={Focus} onClick={() => requestFit('selection')} />
@@ -179,7 +182,8 @@ export function SelectionBar() {
           ) : (
             <>
               <BarButton label="Länkad kopia" Icon={Copy} onClick={() => duplicateLinked(body.id)} />
-              <JoinMenu hostId={body.id} />
+              <BarButton label="Tapp" Icon={Puzzle} onClick={() => setCombining({ op: 'joint', host: body.id })} />
+              <ShapeMenu hostId={body.id} name={body.name} />
               <VisibilityMenu id={body.id} />
             </>
           )}
@@ -192,13 +196,17 @@ export function SelectionBar() {
         />
       )}
       <BarButton label="Ta bort" Icon={Trash2} onClick={deleteSelection} danger />
-      {/* Avmarkera gör inget med delen, så den står för sig: bara ett kryss, som på en etikett. */}
-      <span aria-hidden className="mx-0.5 h-6 w-px bg-line" />
+      {/*
+        Avmarkera gör inget med delen, så den står för sig: bara ett kryss, som på en etikett.
+        På smal skärm får sex knappar och namnet inte plats. Där visas namnet vid delen i vyn,
+        och ett tryck bredvid avmarkerar, så de två tas bort.
+      */}
+      <span aria-hidden className="mx-0.5 h-6 w-px bg-line narrow:hidden" />
       <Tip label="Avmarkera">
         <button
           aria-label="Avmarkera"
           onClick={() => select(null)}
-          className="grid size-9 shrink-0 cursor-pointer place-items-center rounded-full text-muted hover:bg-hover hover:text-ink narrow:size-11"
+          className="grid size-9 shrink-0 cursor-pointer place-items-center rounded-full text-muted hover:bg-hover hover:text-ink narrow:hidden"
         >
           <X size={16} strokeWidth={2} aria-hidden />
         </button>

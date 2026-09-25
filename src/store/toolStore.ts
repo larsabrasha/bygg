@@ -165,7 +165,7 @@ interface ToolSnapshot {
   /** Punkten under muspekaren med Mät (bara mus). */
   rulerHover: RulerPoint | null
   /**
-   * Man har valt Skär ut eller Lägg till på host och ska trycka på delen som
+   * Man har valt Tapp, Skär ut eller Lägg till på host och ska trycka på delen som
    * är verktyget. error = varför förra trycket inte gick.
    */
   combining: { op: Combine['op']; host: string; error?: string } | null
