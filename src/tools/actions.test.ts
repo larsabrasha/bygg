@@ -258,6 +258,24 @@ describe('flyttpilarna', () => {
     expect(bodies()[0]!.frame.origin).toEqual([0, -300, 0])
   })
 
+  it('Y-pilen går att dra också rakt ovanifrån', () => {
+    const b = extrude(drawGroundRect(), '22')
+    docs().select({ kind: 'body', id: b.id })
+    tools().setTool('move')
+    // Kameran rakt ovanför mitten (300, 11, −200), med skärmens upp mot −Z.
+    const camera: Vec3 = [300, 3000, -200]
+    const toward = (x: number, z: number) => {
+      const d: Vec3 = [x - camera[0], 11 - camera[1], z - camera[2]]
+      const l = Math.hypot(...d)
+      return { origin: camera, dir: [d[0] / l, d[1] / l, d[2] / l] as Vec3, up: [0, 0, -1] as Vec3 }
+    }
+    tap({ point: [300, 11, -200], target: { kind: 'axis', axis: 1 } }, 0)
+    regrab(toward(300, -200))
+    // Uppåt på skärmen lyfter delen.
+    move(toward(300, -230), 0)
+    expect((tools().op as { delta: [number, number] }).delta[0]).toBeGreaterThan(20)
+  })
+
   it('skrivet mått utan att dra går åt pilens håll', () => {
     const b = extrude(drawGroundRect(), '22')
     docs().select({ kind: 'body', id: b.id })
@@ -422,6 +440,28 @@ describe('pilen på det valda', () => {
     expect(tools().op).toMatchObject({ distance: 30 })
     move(ray(510), 0)
     expect(tools().op).toMatchObject({ distance: 40 })
+  })
+
+  it('går att dra när ytan vetter rakt mot kameran', () => {
+    const b = extrude(drawGroundRect(), '22')
+    tools().setTool('select')
+    tap({ point: [300, 22, -200], target: { kind: 'body', id: b.id, face: 'n+' } }, 0)
+    // Kameran rakt ovanför ovansidans mitt, med skärmens upp mot −Z.
+    const camera: Vec3 = [300, 3000, -200]
+    const toward = (x: number, z: number) => {
+      const d: Vec3 = [x - camera[0], 22 - camera[1], z - camera[2]]
+      const l = Math.hypot(...d)
+      return { origin: camera, dir: [d[0] / l, d[1] / l, d[2] / l] as Vec3, up: [0, 0, -1] as Vec3 }
+    }
+    tap({ point: [300, 22, -200], target: { kind: 'handle', dir: [0, Math.SQRT1_2, -Math.SQRT1_2] } }, 0)
+    move(toward(300, -200), 0)
+    expect(tools().op).toMatchObject({ distance: 0 })
+    // Uppåt på skärmen drar ut, nedåt trycker in.
+    move(toward(300, -230), 0)
+    const out = (tools().op as { distance: number }).distance
+    expect(out).toBeGreaterThan(20)
+    move(toward(300, -170), 0)
+    expect((tools().op as { distance: number }).distance).toBeLessThan(-20)
   })
 
   it('arbetspunkten för snäpptoleransen följer ytan', () => {

@@ -1,7 +1,8 @@
 import type { CutList } from './cutlist'
+import { numberFormat } from './numberFormat'
 
 /** Utan tusentalsavgränsare: "1200", inte "1 200", så att kalkylprogram läser det som tal. */
-const mm = new Intl.NumberFormat('sv-SE', { maximumFractionDigits: 1, useGrouping: false })
+const mm = numberFormat(1)
 
 export const formatMm = (n: number) => mm.format(n)
 

@@ -1,24 +1,19 @@
 import { useFrame } from '@react-three/fiber'
-import { useMemo, useRef } from 'react'
+import { useMemo, useRef, type Ref } from 'react'
 import { Matrix4, Quaternion, Vector3, type Group, type PerspectiveCamera } from 'three'
+import { arrowDir } from '../model/arrowDir'
 import type { Vec3 } from '../model/types'
 import type { Axis } from '../store/toolStore'
 import { AXIS_COLORS } from './colors'
 
-/** Rotation som vänder en cylinder (längs +Y) mot +X, +Y och +Z. */
-const ROTATIONS: Record<Axis, [number, number, number]> = {
-  0: [0, 0, -Math.PI / 2],
-  1: [0, 0, 0],
-  2: [Math.PI / 2, 0, 0],
-}
-
 /** Ritas ovanpå delen, som i Shapr3D: pilarna börjar mitt i den. */
 const onTop = { depthTest: false, depthWrite: false, transparent: true } as const
 
-function AxisArrow({ axis }: { axis: Axis }) {
+/** En pil längs +Y; MoveGizmo vänder den mot sin axel varje bildruta. */
+function AxisArrow({ axis, ref }: { axis: Axis; ref: Ref<Group> }) {
   const color = AXIS_COLORS[axis]
   return (
-    <group rotation={ROTATIONS[axis]}>
+    <group ref={ref}>
       <mesh position={[0, 38, 0]} renderOrder={10}>
         <cylinderGeometry args={[2.5, 2.5, 52]} />
         <meshBasicMaterial color={color} {...onTop} />
@@ -36,6 +31,16 @@ function AxisArrow({ axis }: { axis: Axis }) {
 }
 
 const E = [new Vector3(1, 0, 0), new Vector3(0, 1, 0), new Vector3(0, 0, 1)] as const
+const AXIS_DIRS: readonly Vec3[] = [
+  [1, 0, 0],
+  [0, 1, 0],
+  [0, 0, 1],
+]
+const UP = E[1]
+// Återanvänds varje bildruta.
+const TO_CAMERA = new Vector3()
+const SCREEN_UP = new Vector3()
+const DIR = new Vector3()
 /** Bågens radie i px: mellan pilarnas skaft och spetsar. */
 const ARC_RADIUS = 58
 /** Bågen lämnar 15° fritt vid varje pil, så att de inte krockar. */
@@ -71,16 +76,25 @@ function RotateArc({ axis }: { axis: Axis }) {
 /**
  * Tre pilar längs X, Y och Z på den valda delen i Flytta-läget, och en båge
  * runt varje axel. Pilen flyttar delen längs axeln, bågen vrider den runt
- * axeln. Ritas i pixlar, som PushPullHandle.
+ * axeln. Ritas i pixlar, som PushPullHandle. En pil som pekar rakt mot
+ * kameran lutas mot skärmens överkant (arrowDir), och draget följer den.
  */
 export function MoveGizmo({ center }: { center: Vec3 }) {
   const ref = useRef<Group>(null)
+  const arrows = useRef<(Group | null)[]>([null, null, null])
 
   useFrame(({ camera, size }) => {
     const g = ref.current
     if (!g) return
+    const distance = camera.position.distanceTo(g.position)
     const fov = ((camera as PerspectiveCamera).fov * Math.PI) / 180
-    g.scale.setScalar((2 * camera.position.distanceTo(g.position) * Math.tan(fov / 2)) / size.height)
+    g.scale.setScalar((2 * distance * Math.tan(fov / 2)) / size.height)
+
+    const toCamera = TO_CAMERA.subVectors(camera.position, g.position).divideScalar(distance).toArray() as Vec3
+    const up = SCREEN_UP.setFromMatrixColumn(camera.matrixWorld, 1).toArray() as Vec3
+    arrows.current.forEach((arrow, axis) => {
+      arrow?.quaternion.setFromUnitVectors(UP, DIR.fromArray(arrowDir(AXIS_DIRS[axis]!, toCamera, up)))
+    })
   })
 
   return (
@@ -89,9 +103,15 @@ export function MoveGizmo({ center }: { center: Vec3 }) {
         <sphereGeometry args={[6, 16, 12]} />
         <meshBasicMaterial color="#ffffff" {...onTop} />
       </mesh>
-      <AxisArrow axis={0} />
-      <AxisArrow axis={1} />
-      <AxisArrow axis={2} />
+      {([0, 1, 2] as const).map((axis) => (
+        <AxisArrow
+          key={axis}
+          axis={axis}
+          ref={(a) => {
+            arrows.current[axis] = a
+          }}
+        />
+      ))}
       <RotateArc axis={0} />
       <RotateArc axis={1} />
       <RotateArc axis={2} />

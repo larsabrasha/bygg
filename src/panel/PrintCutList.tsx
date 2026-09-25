@@ -3,8 +3,9 @@ import { buildCutList } from '../model/cutlist'
 import { formatMm } from '../model/cutlistExport'
 import { useBodies } from '../store/documentStore'
 import { useLibraryStore } from '../store/libraryStore'
+import { numberFormat } from '../model/numberFormat'
 
-const volume = new Intl.NumberFormat('sv-SE', { maximumFractionDigits: 4 })
+const volume = numberFormat(4, true)
 
 /**
  * Kaplistan som den skrivs ut (eller sparas som PDF). Syns bara i utskrift; appen döljs då.

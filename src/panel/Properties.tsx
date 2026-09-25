@@ -14,8 +14,9 @@ import { Group } from './Group'
 import { dangerButton, field, fieldLabel, primaryButton, secondaryButton, sectionTitle } from './ui'
 import { useDraft } from './useDraft'
 import { Tip } from './Tip'
+import { numberFormat } from '../model/numberFormat'
 
-const fmt = new Intl.NumberFormat('sv-SE', { maximumFractionDigits: 1, useGrouping: false })
+const fmt = numberFormat(1)
 
 /** Fält som sparar vid Enter eller när fokus lämnar, så att varje tangent inte blir ett ångra-steg. */
 function CommitField({

@@ -7,8 +7,9 @@ import { field, secondaryButton, sectionTitle } from './ui'
 import { ExprInput } from './ExprInput'
 import { useDraft } from './useDraft'
 import { Tip } from './Tip'
+import { numberFormat } from '../model/numberFormat'
 
-const fmt = new Intl.NumberFormat('sv-SE', { maximumFractionDigits: 2, useGrouping: false })
+const fmt = numberFormat(2)
 
 function ParamRow({ param, error, used }: { param: Param; error?: string; used: boolean }) {
   const updateParam = useDocumentStore((s) => s.updateParam)

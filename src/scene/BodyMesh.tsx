@@ -1,6 +1,6 @@
 import { Edges } from '@react-three/drei'
 import { memo, useEffect, useMemo } from 'react'
-import { MeshStandardMaterial } from 'three'
+import { GreaterDepth, MeshStandardMaterial } from 'three'
 import { bodyExtents } from '../model/geometry'
 import { FACES, type Body, type Face } from '../model/types'
 import { ACCENT, ACCENT_LIGHT, EDGE, materialColor } from './colors'
@@ -52,6 +52,29 @@ function BodyMeshImpl({ body, selected = false, sibling = false, highlightFace =
       >
         <boxGeometry args={[w, h, d]} />
         <Edges color={edge} lineWidth={selected ? 2.5 : sibling ? 1.8 : 1} />
+        {/*
+          Den valda delens kanter där något ligger framför (en annan del eller
+          delen själv): streckade och svaga, som dolda linjer på en ritning.
+          GreaterDepth ritar bara bakom något. polygonOffset drar linjen mot
+          kameran, så att ytorna vid en synlig kant inte räknas som framför.
+        */}
+        {selected && !preview && (
+          <Edges
+            color={ACCENT}
+            lineWidth={1.5}
+            dashed
+            dashSize={12}
+            gapSize={8}
+            transparent
+            opacity={0.6}
+            depthFunc={GreaterDepth}
+            depthWrite={false}
+            polygonOffset
+            polygonOffsetFactor={-4}
+            polygonOffsetUnits={-4}
+            renderOrder={2}
+          />
+        )}
       </mesh>
     </group>
   )

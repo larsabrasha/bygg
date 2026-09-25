@@ -1,7 +1,7 @@
 import type { CameraControlsImpl } from '@react-three/drei'
 import { useThree } from '@react-three/fiber'
 import { useEffect, useMemo } from 'react'
-import { Raycaster, Vector2, type Intersection, type Object3D, type PerspectiveCamera } from 'three'
+import { Raycaster, Vector2, Vector3, type Intersection, type Object3D, type PerspectiveCamera } from 'three'
 import { FACES, type Vec3 } from '../model/types'
 import { useDocumentStore } from '../store/documentStore'
 import { useToolStore, type Op } from '../store/toolStore'
@@ -76,6 +76,7 @@ export function ToolController() {
   useEffect(() => {
     const el = gl.domElement
     const ndc = new Vector2()
+    const screenUp = new Vector3()
     let press: Press | null = null
     let multiTouch = false
     /** Alla nedtryckta pekare med startpunkt och hur långt de rört sig, för flerfingertryck. */
@@ -88,7 +89,11 @@ export function ToolController() {
       const r = el.getBoundingClientRect()
       ndc.set(((x - r.left) / r.width) * 2 - 1, -((y - r.top) / r.height) * 2 + 1)
       raycaster.setFromCamera(ndc, camera)
-      return { origin: raycaster.ray.origin.toArray() as Vec3, dir: raycaster.ray.direction.toArray() as Vec3 }
+      return {
+        origin: raycaster.ray.origin.toArray() as Vec3,
+        dir: raycaster.ray.direction.toArray() as Vec3,
+        up: screenUp.setFromMatrixColumn(camera.matrixWorld, 1).toArray() as Vec3,
+      }
     }
     const rayOf = (e: PointerEvent) => castRay(e.clientX, e.clientY)
 
@@ -129,6 +134,8 @@ export function ToolController() {
     /**
      * Träff under pekaren. Missar strålen alla objekt provas en ring runt
      * pekaren (PICK_RADIUS); först därefter räknas golvet.
+     * Golvet räknas bara när kameran är ovanför det. Underifrån syns det inte,
+     * och då skulle det annars ta klicken på delarnas undersidor.
      */
     const pick = (x: number, y: number, kind: PointerKind): Hit | null => {
       const targets = pickTargets()
@@ -137,7 +144,7 @@ export function ToolController() {
 
       const groundT = center.dir[1] !== 0 ? -center.origin[1] / center.dir[1] : -1
       const ground: Hit | null =
-        groundT > 0
+        groundT > 0 && center.origin[1] > 0
           ? {
               point: [center.origin[0] + center.dir[0] * groundT, 0, center.origin[2] + center.dir[2] * groundT],
               target: { kind: 'ground' },

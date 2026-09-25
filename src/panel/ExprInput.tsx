@@ -1,8 +1,9 @@
 import { useLayoutEffect, useRef, useState, type InputHTMLAttributes, type KeyboardEvent } from 'react'
 import { useDocumentStore } from '../store/documentStore'
 import { insertName, segments, suggestions } from './paramSuggest'
+import { numberFormat } from '../model/numberFormat'
 
-const fmt = new Intl.NumberFormat('sv-SE', { maximumFractionDigits: 2, useGrouping: false })
+const fmt = numberFormat(2)
 
 type Props = Omit<InputHTMLAttributes<HTMLInputElement>, 'value' | 'onChange'> & {
   value: string

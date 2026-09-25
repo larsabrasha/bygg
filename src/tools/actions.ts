@@ -6,6 +6,7 @@ import { rulerPointOn, type RulerPoint } from '../model/ruler'
 import { resolveBodies } from '../model/resolve'
 import { bodyKeyPoints, offsetTargets, planeTargets, snapDelta, snapValue, type PlaneTargets } from '../model/snapping'
 import type { Body, DimExprs, Face, Frame, Rect, Vec2, Vec3 } from '../model/types'
+import { arrowDir } from '../model/arrowDir'
 import { add, closestParamOnLine, dot, length, scale, sub } from '../model/vec'
 import { useDocumentStore, type Selection } from '../store/documentStore'
 import {
@@ -29,8 +30,8 @@ export type PickTarget =
   | { kind: 'ground' }
   | { kind: 'body'; id: string; face: Face }
   | { kind: 'sketch'; id: string }
-  /** Pilen på det valda; att dra i den gör push/pull. */
-  | { kind: 'handle' }
+  /** Pilen på det valda; att dra i den gör push/pull. dir = riktningen den ritas i just nu (se arrowDir). */
+  | { kind: 'handle'; dir?: Vec3 }
   /** En av flyttpilarna (X, Y, Z) i Flytta-läget. */
   | { kind: 'axis'; axis: Axis }
   /** En av bågarna i Flytta-läget; att dra i den vrider delen runt axeln. */
@@ -44,6 +45,17 @@ export interface Hit {
 export interface Ray {
   origin: Vec3
   dir: Vec3
+  /** Skärmens upp i världen (kamerans upp). Saknas den räknas världens Y som upp. */
+  up?: Vec3
+}
+
+/**
+ * Linjen som pekaren följer när man drar i en pil från from längs dir:
+ * lutad om pilen pekar rakt mot kameran, så som den ritas (arrowDir).
+ */
+function dragLine(from: Vec3, dir: Vec3, ray: Ray): Vec3 {
+  const toCamera = sub(ray.origin, from)
+  return arrowDir(dir, scale(toCamera, 1 / length(toCamera)), ray.up ?? [0, 1, 0])
 }
 
 /** Flest kopior i en rad, så att ett felskrivet antal inte fryser appen. */
@@ -124,7 +136,7 @@ export function tap(hit: Hit | null, tol: number) {
   if (hit?.target.kind === 'handle') {
     const sel = docs().selection
     const target = sel && pushPullTargetOf(sel)
-    if (target) beginPushPull(target, hit.point)
+    if (target) beginPushPull(target, hit.point, hit.target.dir)
     return
   }
   if (hit?.target.kind === 'axis') {
@@ -218,8 +230,9 @@ export function pushPullAnchor(target: PushPullTarget, doc = docs().doc): { anch
  * Startar push/pull utan att man trycker på själva ytan: från pilen eller
  * knappen "Dra ut". Sedan drar man, skriver ett mått eller tar förra djupet.
  * Verktyget byts inte; man är kvar i Välj när operationen är klar.
+ * grabDir = pilens riktning där man tog tag, om den är lutad (se arrowDir).
  */
-export function beginPushPull(target: PushPullTarget, grabPoint?: Vec3) {
+export function beginPushPull(target: PushPullTarget, grabPoint?: Vec3, grabDir?: Vec3) {
   const at = pushPullAnchor(target)
   if (!at) return
   const others = target.kind === 'body' ? bodies().filter((b) => b.id !== target.id) : bodies()
@@ -227,7 +240,7 @@ export function beginPushPull(target: PushPullTarget, grabPoint?: Vec3) {
     kind: 'pushpull',
     target,
     ...at,
-    grab: grabPoint ? dot(sub(grabPoint, at.anchor), at.normal) : 0,
+    grab: grabPoint ? dot(sub(grabPoint, at.anchor), grabDir ?? at.normal) : 0,
     targets: offsetTargets(others, at.anchor, at.normal),
     distance: 0,
     onTarget: false,
@@ -364,7 +377,7 @@ export function move(ray: Ray, tol: number) {
   }
 
   if (op.kind === 'move' && op.axis !== null) {
-    const t = closestParamOnLine(op.plane.origin, op.plane.u, ray.origin, ray.dir)
+    const t = closestParamOnLine(op.plane.origin, dragLine(op.plane.origin, op.plane.u, ray), ray.origin, ray.dir)
     if (t === null) return
     const snapped = snapDelta([t - op.grab, 0], op.moving, op.targets, GRID_STEP, tol)
     setOp({ ...op, delta: [snapped.delta[0], 0], onTarget: [snapped.onTarget[0], false] })
@@ -384,7 +397,7 @@ export function move(ray: Ray, tol: number) {
     return
   }
 
-  const t = closestParamOnLine(op.anchor, op.normal, ray.origin, ray.dir)
+  const t = closestParamOnLine(op.anchor, dragLine(op.anchor, op.normal, ray), ray.origin, ray.dir)
   if (t === null) return
   const s = snapValue(t - op.grab, 1, op.targets, tol)
   setOp({ ...op, distance: s.value, onTarget: s.onTarget })
@@ -410,12 +423,12 @@ export function opFocus(op: Op): Vec3 {
 export function regrab(ray: Ray): boolean {
   const { op, setOp } = tools()
   if (op?.kind === 'pushpull') {
-    const t = closestParamOnLine(op.anchor, op.normal, ray.origin, ray.dir)
+    const t = closestParamOnLine(op.anchor, dragLine(op.anchor, op.normal, ray), ray.origin, ray.dir)
     if (t !== null) setOp({ ...op, grab: t - op.distance })
     return true
   }
   if (op?.kind === 'move' && op.axis !== null) {
-    const t = closestParamOnLine(op.plane.origin, op.plane.u, ray.origin, ray.dir)
+    const t = closestParamOnLine(op.plane.origin, dragLine(op.plane.origin, op.plane.u, ray), ray.origin, ray.dir)
     if (t !== null) setOp({ ...op, grab: t - op.delta[0] })
     return true
   }

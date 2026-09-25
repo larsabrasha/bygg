@@ -16,8 +16,9 @@ import { ExprInput } from './ExprInput'
 import { rulerResult, type RulerPoint } from '../model/ruler'
 import { ghostButton, secondaryButton, toggleButton } from './ui'
 import { Tip } from './Tip'
+import { numberFormat } from '../model/numberFormat'
 
-const fmt = new Intl.NumberFormat('sv-SE', { maximumFractionDigits: 1, useGrouping: false })
+const fmt = numberFormat(1)
 
 /** Kvadratisk ikonknapp för Avbryt och OK. */
 const iconAction = 'grid size-10 shrink-0 cursor-pointer place-items-center rounded-lg narrow:size-11'

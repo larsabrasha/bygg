@@ -5,9 +5,10 @@ import { useBodies, useDocumentStore } from '../store/documentStore'
 import { useLibraryStore } from '../store/libraryStore'
 import { downloadCutListCsv, printCutList } from './cutlistActions'
 import { secondaryButton, sectionTitle } from './ui'
+import { numberFormat } from '../model/numberFormat'
 
-const num = new Intl.NumberFormat('sv-SE', { maximumFractionDigits: 1 })
-const volume = new Intl.NumberFormat('sv-SE', { maximumFractionDigits: 4 })
+const num = numberFormat(1, true)
+const volume = numberFormat(4, true)
 
 export function CutList() {
   const bodies = useBodies()

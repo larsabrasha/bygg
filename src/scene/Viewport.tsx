@@ -87,7 +87,7 @@ function Scene() {
       ))}
       {handle && <PushPullHandle anchor={handle.anchor} normal={handle.normal} />}
       {gizmoAt && <MoveGizmo center={gizmoAt} />}
-      {dims && <DimensionGuides key={dims.body.id} body={dims.body} live={dims.live} />}
+      {dims && <DimensionGuides key={dims.body.id} body={dims.body} />}
       {op && <OpOverlay op={op} />}
       {!op && hoverPoint && <HoverMarker hover={hoverPoint} />}
       <RulerOverlay />

@@ -6,8 +6,9 @@ import { useDocumentStore } from '../store/documentStore'
 import { useToolStore } from '../store/toolStore'
 import { ExprInput } from './ExprInput'
 import { Tip } from './Tip'
+import { numberFormat } from '../model/numberFormat'
 
-const fmt = new Intl.NumberFormat('sv-SE', { maximumFractionDigits: 1, useGrouping: false })
+const fmt = numberFormat(1)
 
 function DimensionLabel({
   body,

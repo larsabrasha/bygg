@@ -1,20 +1,16 @@
-import { Line } from '@react-three/drei'
 import { useFrame, useThree } from '@react-three/fiber'
-import { useEffect, useState } from 'react'
+import { useEffect } from 'react'
 import { Vector3 } from 'three'
 import { dimensionEdges, type DimensionEdge } from '../model/dimensions'
 import { bodyCenter } from '../model/geometry'
 import type { Body, Vec3 } from '../model/types'
 import { add, scale } from '../model/vec'
-import { ACCENT } from './colors'
 import { labelElements, labelSizes, setDimensionWake } from './dimensionLabels'
 
 /** Ungefärlig halv bredd och höjd på en etikett och luften mot kanten, i px. */
 const HALF_W = 30
 const HALF_H = 14
 const GAP = 6
-
-const edgesKey = (edges: DimensionEdge[]) => edges.map((e) => `${e.from}|${e.to}`).join(';')
 
 const v = new Vector3()
 
@@ -66,14 +62,13 @@ function overlaps(a: [number, number], sa: [number, number], b: [number, number]
 }
 
 /**
- * Kanterna som den valda delens mått sitter på (närmast kameran), och
- * placering av måttetiketterna (panel/DimensionLabels) på skärmen.
+ * Placerar måttetiketterna (panel/DimensionLabels) på skärmen, vid de kanter
+ * som den valda delens mått sitter på (närmast kameran). Kanterna själva syns
+ * redan i markeringen, också där något skymmer dem (BodyMesh).
  */
-export function DimensionGuides({ body, live }: { body: Body; live: boolean }) {
+export function DimensionGuides({ body }: { body: Body }) {
   const camera = useThree((s) => s.camera)
   const invalidate = useThree((s) => s.invalidate)
-  const [eye, setEye] = useState<Vec3>(() => camera.position.toArray() as Vec3)
-  const edges = dimensionEdges(body, eye)
 
   // Etiketterna ritas i en annan del av sidan; när de dyker upp behövs en bildruta som placerar dem.
   useEffect(() => {
@@ -83,10 +78,7 @@ export function DimensionGuides({ body, live }: { body: Body; live: boolean }) {
   }, [invalidate])
 
   useFrame(({ size: view }) => {
-    const now = camera.position.toArray() as Vec3
-    // Byt kanter bara när kameran gått så långt att andra kanter ligger närmast.
-    const current = dimensionEdges(body, now)
-    if (edgesKey(current) !== edgesKey(edges)) setEye(now)
+    const current = dimensionEdges(body, camera.position.toArray() as Vec3)
     const project = (p: Vec3): [number, number] | null => {
       v.set(...p).project(camera)
       return v.z > 1 ? null : [((v.x + 1) * view.width) / 2, ((1 - v.y) * view.height) / 2]
@@ -116,13 +108,5 @@ export function DimensionGuides({ body, live }: { body: Body; live: boolean }) {
     }
   })
 
-  return (
-    <group userData={{ noThumb: true }}>
-      {/* Under push/pull ändras kanterna vid varje rörelse; linjerna byggs då inte om, förhandsvisningen syns ändå. */}
-      {!live &&
-        edges.map((e) => (
-          <Line key={e.axis} points={[e.from, e.to]} color={ACCENT} lineWidth={1.5} depthTest={false} renderOrder={2} />
-        ))}
-    </group>
-  )
+  return null
 }
