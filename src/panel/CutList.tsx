@@ -4,6 +4,8 @@ import { buildCutList } from '../model/cutlist'
 import { useBodies, useDocumentStore } from '../store/documentStore'
 import { useLibraryStore } from '../store/libraryStore'
 import { downloadCutListCsv, printCutList } from './cutlistActions'
+import { EmptyState } from './EmptyState'
+import { CutListPicture } from './pictures'
 import { secondaryButton, sectionTitle } from './ui'
 import { numberFormat } from '../model/numberFormat'
 
@@ -21,7 +23,10 @@ export function CutList() {
     <section className="group-data-[tab=params]/sheet:hidden group-data-[tab=properties]/sheet:hidden">
       <h2 className={sectionTitle}>Kaplista</h2>
       {cutList.rows.length === 0 ? (
-        <p className="text-faint">Inga delar än. Rita en rektangel och dra i pilen.</p>
+        <EmptyState picture={<CutListPicture />} title="Kaplistan är tom">
+          Den fylls när du drar ut en skiss till en del. Varje del mäts i sin egen riktning: längd längs fibern, sedan
+          bredd och tjocklek.
+        </EmptyState>
       ) : (
         <>
           <table className="w-full border-collapse text-[13px] [&_td]:border-b [&_td]:border-line [&_td]:px-1.5 [&_td]:py-1 [&_th]:border-b [&_th]:border-line [&_th]:px-1.5 [&_th]:py-1 [&_th]:text-left narrow:[&_td]:py-3 narrow:[&_th]:py-3">

@@ -3,7 +3,9 @@ import { useState } from 'react'
 import { evaluateParams, isNameUsed } from '../model/params'
 import type { Param } from '../model/types'
 import { useDocumentStore } from '../store/documentStore'
-import { field, secondaryButton, sectionTitle } from './ui'
+import { EmptyState } from './EmptyState'
+import { ParamPicture } from './pictures'
+import { field, primaryButton, secondaryButton, sectionTitle } from './ui'
 import { ExprInput } from './ExprInput'
 import { useDraft } from './useDraft'
 import { useSelectAll } from './useSelectAll'
@@ -109,41 +111,48 @@ export function Params() {
   return (
     <section className="group-data-[tab=cutlist]/sheet:hidden group-data-[tab=properties]/sheet:hidden">
       <h2 className={sectionTitle}>Parametrar</h2>
-      <div className="flex flex-col gap-2.5">
-        <>
-          <p className="text-[13px] text-muted">
-            Mått med namn, som <code>tjocklek = 22</code>. Skriv namnet i en dels mått, så ändras delen när du ändrar
-            värdet här.
-          </p>
-          {doc.params.length > 0 && (
-            <>
-              <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_2.5rem] gap-2 text-xs text-muted narrow:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_2.75rem]">
-                <span>Namn</span>
-                <span>Värde (mm)</span>
-              </div>
-              <ul className="flex flex-col gap-2">
-                {doc.params.map((p) => {
-                  const r = results.get(p.id)
-                  const others = { ...doc, params: doc.params.filter((x) => x.id !== p.id) }
-                  return (
-                    <ParamRow
-                      key={p.id}
-                      param={p}
-                      error={r && !r.ok ? r.error : undefined}
-                      used={isNameUsed(others, p.name)}
-                      autoFocus={p.id === added}
-                    />
-                  )
-                })}
-              </ul>
-            </>
-          )}
+      {doc.params.length === 0 ? (
+        <div className="flex flex-col items-center gap-4">
+          <EmptyState picture={<ParamPicture />} title="Inga parametrar än">
+            Ge ett mått ett namn, som <code>bredd = 450</code>. Skriv namnet i en dels mått, så följer delen med när du
+            ändrar värdet här.
+          </EmptyState>
+          <button className={primaryButton} onClick={() => setAdded(addParam())}>
+            <Plus size={16} strokeWidth={1.75} aria-hidden />
+            Ny parameter
+          </button>
+        </div>
+      ) : (
+        <div className="flex flex-col gap-2.5">
+          <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_2.5rem] gap-2 text-xs text-muted narrow:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_2.75rem]">
+            <span>Namn</span>
+            <span>Värde (mm)</span>
+          </div>
+          <ul className="flex flex-col gap-2">
+            {doc.params.map((p) => {
+              const r = results.get(p.id)
+              const others = { ...doc, params: doc.params.filter((x) => x.id !== p.id) }
+              return (
+                <ParamRow
+                  key={p.id}
+                  param={p}
+                  error={r && !r.ok ? r.error : undefined}
+                  used={isNameUsed(others, p.name)}
+                  autoFocus={p.id === added}
+                />
+              )
+            })}
+          </ul>
           <button className={`${secondaryButton} self-start`} onClick={() => setAdded(addParam())}>
             <Plus size={16} strokeWidth={1.75} aria-hidden />
             Ny parameter
           </button>
-        </>
-      </div>
+          <p className="text-[13px] text-faint">
+            Skriv namnet i en dels mått, så följer delen med när du ändrar värdet. Ett värde kan också räkna med andra
+            namn, som <code>bredd - 2 * tjocklek</code>.
+          </p>
+        </div>
+      )}
     </section>
   )
 }

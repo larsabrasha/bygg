@@ -14,6 +14,7 @@ import { Group } from './Group'
 import { dangerButton, field, fieldLabel, primaryButton, secondaryButton, sectionTitle } from './ui'
 import { useDraft } from './useDraft'
 import { useSelectAll } from './useSelectAll'
+import { NothingSelected } from './NothingSelected'
 import { Tip } from './Tip'
 import { numberFormat } from '../model/numberFormat'
 
@@ -334,7 +335,6 @@ export function Properties() {
   const deleteSelection = useDocumentStore((s) => s.deleteSelection)
   const duplicateLinked = useDocumentStore((s) => s.duplicateLinked)
   const makeUnique = useDocumentStore((s) => s.makeUnique)
-  const clearDocument = useDocumentStore((s) => s.clearDocument)
 
   const body = selection?.kind === 'body' ? resolveBodies(doc).find((b) => b.id === selection.id) : undefined
   const def = body && doc.defs.find((d) => d.id === body.defId)
@@ -344,7 +344,7 @@ export function Properties() {
   const isEmpty = doc.instances.length === 0 && doc.sketches.length === 0 && doc.params.length === 0
 
   return (
-    <section className="group-data-[tab=cutlist]/sheet:hidden group-data-[tab=params]/sheet:hidden">
+    <section className="flex flex-1 flex-col group-data-[tab=cutlist]/sheet:hidden group-data-[tab=params]/sheet:hidden">
       <h2 className={sectionTitle}>Egenskaper</h2>
       {body && def ? (
         <div className="flex flex-col gap-4">
@@ -442,19 +442,7 @@ export function Properties() {
           </Group>
         </div>
       ) : (
-        <div className="flex flex-col items-start gap-3">
-          <p className="text-faint">
-            {isEmpty
-              ? 'Modellen är tom. Rita en rektangel (R) eller en cirkel (C) på golvet, och dra ut den till en del med pilen.'
-              : 'Inget valt. Tryck på en del eller skiss med verktyget Välj.'}
-          </p>
-          {!isEmpty && (
-            <button className={dangerButton} onClick={clearDocument}>
-              <Trash2 {...ICON_SM} />
-              Rensa modellen
-            </button>
-          )}
-        </div>
+        <NothingSelected isEmpty={isEmpty} />
       )}
     </section>
   )

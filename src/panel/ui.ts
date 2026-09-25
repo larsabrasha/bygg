@@ -18,6 +18,9 @@ export const secondaryButton = `${button} bg-button text-ink hover:bg-hover`
 
 export const dangerButton = `${button} bg-danger-soft text-danger hover:opacity-85`
 
+/** Som dangerButton, men utan bakgrund tills man pekar på den: för det man sällan gör. */
+export const quietDangerButton = `${button} text-danger hover:bg-danger-soft`
+
 /** Knapp som slår av och på ett läge (aria-pressed). */
 export const toggleButton = `${button} bg-button text-ink hover:bg-hover aria-pressed:bg-accent-soft aria-pressed:text-accent`
 
