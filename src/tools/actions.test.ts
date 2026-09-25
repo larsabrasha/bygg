@@ -56,6 +56,27 @@ function extrude(sketchId: string, text: string) {
   return bodies().at(-1)!
 }
 
+describe('skär ut och lägg till', () => {
+  it('efter Skär ut väljer nästa tryck verktyget; fel visas och läget ligger kvar; golvet avbryter', () => {
+    const host = extrude(drawGroundRect(), '22')
+    const tool = extrude(drawGroundRect(100, -100, 200, -200), '40')
+    tools().setTool('select')
+    tools().setCombining({ op: 'subtract', host: host.id })
+    // Delen själv går inte: felet visas och man kan trycka igen.
+    tap({ point: [10, 22, -10], target: { kind: 'body', id: host.id, face: 'n+' } }, 0)
+    expect(tools().combining).toMatchObject({ op: 'subtract', host: host.id, error: expect.any(String) })
+    tap({ point: [150, 40, -150], target: { kind: 'body', id: tool.id, face: 'n+' } }, 0)
+    expect(tools().combining).toBeNull()
+    expect(bodies().find((b) => b.id === tool.id)!.tool).toEqual({ op: 'subtract', host: host.id })
+    expect(docs().selection).toEqual({ kind: 'body', id: host.id })
+
+    tools().setCombining({ op: 'add', host: host.id })
+    tap({ point: [3000, 0, 0], target: { kind: 'ground' } }, 0)
+    expect(tools().combining).toBeNull()
+    expect(docs().selection).toEqual({ kind: 'body', id: host.id })
+  })
+})
+
 describe('cirkelverktyget', () => {
   it('ritar från mitten, och diametern snäpper till rutnätet', () => {
     tools().setTool('circle')

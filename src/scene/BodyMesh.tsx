@@ -1,11 +1,15 @@
 import { Edges } from '@react-three/drei'
 import { memo, useEffect, useMemo } from 'react'
-import { GreaterDepth, MeshStandardMaterial } from 'three'
-import { bodyExtents } from '../model/geometry'
+import { BoxGeometry, GreaterDepth, MeshStandardMaterial } from 'three'
+import { bodyExtents, type Box } from '../model/geometry'
 import { FACES, type Body, type Face } from '../model/types'
 import { ACCENT, ACCENT_LIGHT, EDGE, materialColor } from './colors'
+import { solidGeometry, useManifold } from './csg'
 import { cylinderGeometry } from './cylinder'
 import { frameQuaternion } from './frameTransform'
+
+/** Formens låda, för att räkna ut vilken sida en träff på resultatet ligger på (faceOnBox). */
+const boxOf = (b: Body): Box => ({ profile: b.profile, ...(b.shape && { shape: b.shape }), z0: b.z0, z1: b.z1 })
 
 interface Props {
   body: Body
@@ -15,60 +19,93 @@ interface Props {
   highlightFace?: Face | null
   /** Förhandsvisning: halvgenomskinlig och går inte att träffa med pekaren, men kameran kan vrida runt den. */
   preview?: boolean
+  /** Ett verktyg (läggs till eller skärs ut): genomskinligt med streckade kanter. */
+  ghost?: boolean
 }
 
-function BodyMeshImpl({ body, selected = false, sibling = false, highlightFace = null, preview = false }: Props) {
+function BodyMeshImpl({
+  body,
+  selected = false,
+  sibling = false,
+  highlightFace = null,
+  preview = false,
+  ghost = false,
+}: Props) {
   const quaternion = useMemo(() => frameQuaternion(body.frame), [body.frame])
   const [w, h, d] = bodyExtents(body)
   const { x0, x1, y0, y1 } = body.profile
   const center: [number, number, number] = [(x0 + x1) / 2, (y0 + y1) / 2, (body.z0 + body.z1) / 2]
 
   const round = body.shape === 'circle'
+  // Med verktyg ritas resultatet av manifold-3d, i formens koordinater (medan den laddas: bara formen).
+  const manifold = useManifold(!!body.tools)
+  const solid = useMemo(
+    () => (manifold && body.tools ? solidGeometry(manifold, body, body.tools) : null),
+    // body självt byts vid varje ändring i dokumentet; det som ritas är form och verktyg.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [manifold, body.profile, body.shape, body.z0, body.z1, body.tools],
+  )
 
   // En material per sida (i BoxGeometrys ordning) så att en sida kan markeras,
   // och så att raycast ger materialIndex = vilken sida som träffades.
   // En cylinder har tre: runda sidan, n+ och n− (CylinderGeometrys ordning).
   const color = materialColor(body.material)
   const materials = useMemo(() => {
-    const parts: (readonly Face[])[] = round ? [['u+', 'u-', 'v+', 'v-'], ['n+'], ['n-']] : FACES.map((f) => [f])
+    // Resultatet med verktyg är en enda yta; där markeras hela delen.
+    const parts: (readonly Face[])[] = solid
+      ? [FACES]
+      : round
+        ? [['u+', 'u-', 'v+', 'v-'], ['n+'], ['n-']]
+        : FACES.map((f) => [f])
     return parts.map((faces) => {
-      const marked = !!highlightFace && faces.includes(highlightFace)
+      const marked = !solid && !!highlightFace && faces.includes(highlightFace)
       const lit = selected || marked
       return new MeshStandardMaterial({
-        color,
+        color: ghost ? ACCENT : color,
         emissive: lit ? ACCENT : '#000000',
         emissiveIntensity: marked ? 0.45 : lit ? 0.2 : 0,
-        transparent: preview,
-        opacity: preview ? 0.8 : 1,
+        transparent: preview || ghost,
+        opacity: ghost ? (selected ? 0.3 : 0.15) : preview ? 0.8 : 1,
+        // Ett spöke skymmer inte det bakom sig.
+        depthWrite: !ghost,
       })
     })
-  }, [round, color, selected, highlightFace, preview])
+  }, [solid, round, color, selected, highlightFace, preview, ghost])
   useEffect(() => () => materials.forEach((m) => m.dispose()), [materials])
 
   // Cylinderns axel längs n (three.js lägger den längs y). Ändarnas kanter blir cirklar;
   // den runda sidan har inga kanter, eftersom vinkeln mellan segmenten är liten.
-  const cylinder = useMemo(() => (round ? cylinderGeometry(w, d) : null), [round, w, d])
-  useEffect(() => () => cylinder?.dispose(), [cylinder])
+  // Geometrin ges alltid som prop. Växlade den mellan prop och <boxGeometry> fick meshen en
+  // tom geometri under bytet (t.ex. när ett verktyg lossas), och Edges kraschade på den.
+  const own = useMemo(() => (round ? cylinderGeometry(w, d) : new BoxGeometry(w, h, d)), [round, w, h, d])
+  useEffect(() => () => own.dispose(), [own])
 
   const edge = selected || preview ? ACCENT : sibling ? ACCENT_LIGHT : EDGE
 
   return (
     <group position={body.frame.origin} quaternion={quaternion}>
       <mesh
-        position={center}
-        material={materials}
-        {...(cylinder && { geometry: cylinder })}
-        userData={preview ? { pivot: true } : { pick: { kind: 'body', id: body.id, round } }}
+        // Resultatet med verktyg är redan i formens koordinater; lådan och cylindern ritas kring sin mitt.
+        position={solid ? [0, 0, 0] : center}
+        // En lista med material kräver grupper i geometrin; resultatet med verktyg har inga och ett material.
+        material={solid ? materials[0] : materials}
+        geometry={solid ?? own}
+        userData={
+          preview ? { pivot: true } : { pick: { kind: 'body', id: body.id, round, ...(solid && { box: boxOf(body) }) } }
+        }
       >
-        {!cylinder && <boxGeometry args={[w, h, d]} />}
-        <Edges color={edge} lineWidth={selected ? 2.5 : sibling ? 1.8 : 1} />
+        {ghost ? (
+          <Edges color={ACCENT} lineWidth={selected ? 2 : 1.5} dashed dashSize={10} gapSize={6} />
+        ) : (
+          <Edges color={edge} lineWidth={selected ? 2.5 : sibling ? 1.8 : 1} />
+        )}
         {/*
           Den valda delens kanter där något ligger framför (en annan del eller
           delen själv): streckade och svaga, som dolda linjer på en ritning.
           GreaterDepth ritar bara bakom något. polygonOffset drar linjen mot
           kameran, så att ytorna vid en synlig kant inte räknas som framför.
         */}
-        {selected && !preview && (
+        {selected && !preview && !ghost && (
           <Edges
             color={ACCENT}
             lineWidth={1.5}
@@ -99,6 +136,7 @@ const sameBody = (a: Body, b: Body) =>
     a.z0 === b.z0 &&
     a.z1 === b.z1 &&
     a.shape === b.shape &&
+    a.tools === b.tools &&
     a.material === b.material)
 
 /**
@@ -113,5 +151,6 @@ export const BodyMesh = memo(
     a.selected === b.selected &&
     a.sibling === b.sibling &&
     a.highlightFace === b.highlightFace &&
-    a.preview === b.preview,
+    a.preview === b.preview &&
+    a.ghost === b.ghost,
 )

@@ -1,4 +1,4 @@
-import { ArrowUpFromLine, Copy, Focus, Trash2, X, type LucideIcon } from 'lucide-react'
+import { ArrowUpFromLine, Copy, Focus, SquareMinus, SquarePlus, Trash2, Unlink, X, type LucideIcon } from 'lucide-react'
 import { resolveBodies } from '../model/resolve'
 import { useDocumentStore } from '../store/documentStore'
 import { useToolStore } from '../store/toolStore'
@@ -44,8 +44,12 @@ export function SelectionBar() {
   const duplicateLinked = useDocumentStore((s) => s.duplicateLinked)
   const requestFit = useViewStore((s) => s.requestFit)
   const opActive = useToolStore((s) => s.op !== null)
+  const combining = useToolStore((s) => s.combining)
+  const setCombining = useToolStore((s) => s.setCombining)
+  const detach = useDocumentStore((s) => s.detach)
 
-  if (!selection || opActive) return null
+  // Medan man väljer verktyg för Skär ut / Lägg till visas CombineBar i stället.
+  if (!selection || opActive || combining) return null
   const body = selection.kind === 'body' ? resolveBodies(doc).find((b) => b.id === selection.id) : undefined
   if (selection.kind === 'body' && !body) return null
 
@@ -59,7 +63,24 @@ export function SelectionBar() {
       {body ? (
         <>
           <BarButton label="Zooma till" Icon={Focus} onClick={() => requestFit('selection')} />
-          <BarButton label="Länkad kopia" Icon={Copy} onClick={() => duplicateLinked(body.id)} />
+          {body.tool ? (
+            // Ett verktyg: lossa det, så blir det en vanlig del igen.
+            <BarButton label="Lossa" Icon={Unlink} onClick={() => detach(body.id)} />
+          ) : (
+            <>
+              <BarButton label="Länkad kopia" Icon={Copy} onClick={() => duplicateLinked(body.id)} />
+              <BarButton
+                label="Skär ut"
+                Icon={SquareMinus}
+                onClick={() => setCombining({ op: 'subtract', host: body.id })}
+              />
+              <BarButton
+                label="Lägg till"
+                Icon={SquarePlus}
+                onClick={() => setCombining({ op: 'add', host: body.id })}
+              />
+            </>
+          )}
         </>
       ) : (
         <BarButton

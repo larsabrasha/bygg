@@ -29,7 +29,7 @@ import {
 
 export type PickTarget =
   | { kind: 'ground' }
-  | { kind: 'body'; id: string; face: Face }
+  | { kind: 'body'; id: string; face?: Face }
   | { kind: 'sketch'; id: string }
   /** Pilen på det valda; att dra i den gör push/pull. dir = riktningen den ritas i just nu (se arrowDir). */
   | { kind: 'handle'; dir?: Vec3 }
@@ -84,11 +84,13 @@ function planeForHit(hit: Hit): { frame: Frame; bounds: Rect | null } | null {
     }
     case 'body': {
       const b = findBody(hit.target.id)
-      if (!b) return null
+      const face = hit.target.face
+      // Inne i något som skurits ut finns ingen sida att rita på.
+      if (!b || !face) return null
       // På en cylinders runda sida: planet som nuddar cylindern längs en linje, i den av
       // de fyra huvudriktningarna man tryckte närmast (sidan på lådan runt cylindern).
       // Linjen där planet nuddar är ett snäppmål (kantmitt), så att man kan rita mitt på den.
-      return { frame: faceFrame(b, hit.target.face), bounds: faceBounds(b, hit.target.face) }
+      return { frame: faceFrame(b, face), bounds: faceBounds(b, face) }
     }
     case 'handle':
     case 'axis':
@@ -127,16 +129,27 @@ function pushPullTargetFor(hit: Hit): { target: PushPullTarget; normal: Vec3 } |
     const s = docs().doc.sketches.find((x) => x.id === t.id)
     return s ? { target: t, normal: s.frame.n } : null
   }
-  if (t.kind === 'body') {
+  if (t.kind === 'body' && t.face) {
     const b = findBody(t.id)
-    return b ? { target: t, normal: faceFrame(b, t.face).n } : null
+    return b ? { target: { kind: 'body', id: t.id, face: t.face }, normal: faceFrame(b, t.face).n } : null
   }
   return null
 }
 
 /** Tryck/klick utan pågående operation. tol = snäpptolerans i mm. */
 export function tap(hit: Hit | null, tol: number) {
-  const { tool, setOp } = tools()
+  const { tool, setOp, combining } = tools()
+
+  // Skär ut / Lägg till: trycket väljer verktyget. Utanför alla delar avbryts det.
+  if (combining) {
+    if (hit?.target.kind !== 'body') {
+      tools().setCombining(null)
+      return
+    }
+    const error = docs().combine(hit.target.id, combining.op, combining.host)
+    tools().setCombining(error ? { ...combining, error } : null)
+    return
+  }
 
   if (hit?.target.kind === 'handle') {
     const sel = docs().selection
@@ -212,7 +225,8 @@ export function tap(hit: Hit | null, tol: number) {
     if (hit.target.kind !== 'body') return
     const b = findBody(hit.target.id)
     if (!b) return
-    const f = faceFrame(b, hit.target.face)
+    // Inne i ett hål: flytta i golvets riktning.
+    const f = faceFrame(b, hit.target.face ?? 'n+')
     setOp(moveOp(b, { ...f, origin: hit.point }, null))
     return
   }
@@ -405,7 +419,7 @@ function rulerPointFor(hit: Hit, tol: number): RulerPoint | null {
   }
   if (t.kind !== 'body') return null
   const b = findBody(t.id)
-  return b ? rulerPointOn(bodies(), hit.point, faceFrame(b, t.face).n, tol) : null
+  return b ? rulerPointOn(bodies(), hit.point, t.face ? faceFrame(b, t.face).n : UP, tol) : null
 }
 
 /** Tryck med Mät: första punkten, andra punkten, och sedan en ny mätning. */

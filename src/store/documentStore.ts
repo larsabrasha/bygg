@@ -11,6 +11,7 @@ import {
   sketchToPart,
 } from '../model/geometry'
 import { rotateFrame } from '../model/frame'
+import { carryTools, combineError, detachOrphans } from '../model/combine'
 import { newId } from '../model/id'
 import { applyParams, evaluateParams, isNameUsed, paramScope, setBoxExtent } from '../model/params'
 import { withAxes } from '../model/partAxes'
@@ -18,6 +19,7 @@ import { minCorner, placeAlong, WORLD_AXES, withoutPos } from '../model/placemen
 import { resolveBodies } from '../model/resolve'
 import type {
   Axis,
+  Combine,
   DimExprs,
   Face,
   Frame,
@@ -79,7 +81,15 @@ interface DocumentState extends Snapshot {
   updateParam: (id: string, patch: { name?: string; expr?: string }) => string | null
   /** False om parametern används någonstans. */
   deleteParam: (id: string) => boolean
+  /** Tar bort det valda. En del som har verktyg tar dem med sig. */
   deleteSelection: () => void
+  /**
+   * Gör toolId till ett verktyg som läggs till på eller skärs ut ur hostId.
+   * Värden blir vald. Returnerar felmeddelande eller null.
+   */
+  combine: (toolId: string, op: Combine['op'], hostId: string) => string | null
+  /** Lossar ett verktyg: det blir en vanlig del igen, där det står, och blir valt. */
+  detach: (toolId: string) => void
   select: (selection: Selection | null) => void
   /** Tömmer modellen. Går att ångra. */
   clearDocument: () => void
@@ -144,7 +154,8 @@ export const useDocumentStore = create<DocumentState>()((set, get) => {
   /** Sparar nuvarande dokument i historiken och byter till next (med parametrar omräknade). */
   const commit = (next: ModelDocument, selection: Selection | null = get().selection) => {
     const { doc, past } = get()
-    const applied = pruneDefs(applyParams(next))
+    // Verktyg följer sin värd när den flyttas; verktyg utan värd blir vanliga delar.
+    const applied = pruneDefs(detachOrphans(carryTools(doc, applyParams(next))))
     set({
       doc: applied,
       selection: selectionExists(applied, selection),
@@ -426,9 +437,43 @@ export const useDocumentStore = create<DocumentState>()((set, get) => {
       if (!selection) return
       commit(
         selection.kind === 'body'
-          ? { ...doc, instances: doc.instances.filter((i) => i.id !== selection.id) }
+          ? {
+              ...doc,
+              instances: doc.instances.filter((i) => i.id !== selection.id && i.combine?.host !== selection.id),
+            }
           : { ...doc, sketches: doc.sketches.filter((s) => s.id !== selection.id) },
         null,
+      )
+    },
+
+    combine: (toolId, op, hostId) => {
+      const { doc } = get()
+      const error = combineError(doc, toolId, hostId)
+      if (error) return error
+      commit(
+        {
+          ...doc,
+          instances: doc.instances.map((i) => (i.id === toolId ? { ...i, combine: { op, host: hostId } } : i)),
+        },
+        { kind: 'body', id: hostId },
+      )
+      return null
+    },
+
+    detach: (toolId) => {
+      const { doc } = get()
+      if (!doc.instances.some((i) => i.id === toolId && i.combine)) return
+      commit(
+        {
+          ...doc,
+          instances: doc.instances.map((i) => {
+            if (i.id !== toolId) return i
+            const { combine: _gone, ...rest } = i
+            void _gone
+            return rest
+          }),
+        },
+        { kind: 'body', id: toolId },
       )
     },
 

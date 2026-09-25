@@ -1,7 +1,7 @@
 import { create, type StoreApi } from 'zustand'
 import type { RulerPoint } from '../model/ruler'
 import type { PlaneTargets } from '../model/snapping'
-import type { ModelDocument, Shape } from '../model/types'
+import type { Combine, ModelDocument, Shape } from '../model/types'
 import { useDocumentStore, type Selection } from './documentStore'
 import type { Face, Frame, Rect, Vec2, Vec3 } from '../model/types'
 
@@ -146,6 +146,11 @@ interface ToolSnapshot {
   ruler: RulerPoint[]
   /** Punkten under muspekaren med Mät (bara mus). */
   rulerHover: RulerPoint | null
+  /**
+   * Man har valt Skär ut eller Lägg till på host och ska trycka på delen som
+   * är verktyget. error = varför förra trycket inte gick.
+   */
+  combining: { op: Combine['op']; host: string; error?: string } | null
 }
 
 interface ToolState extends ToolSnapshot {
@@ -161,6 +166,7 @@ interface ToolState extends ToolSnapshot {
   setLastOp: (last: LastOp | null) => void
   setRuler: (points: RulerPoint[]) => void
   setRulerHover: (p: RulerPoint | null) => void
+  setCombining: (c: ToolSnapshot['combining']) => void
 }
 
 const idle = { op: null, measure: ['', ''] as [string, string], measureField: 0 as const }
@@ -178,6 +184,7 @@ const initial: ToolSnapshot = previous
       lastOp: null,
       ruler: [],
       rulerHover: null,
+      combining: null,
       ...idle,
     }
   : {
@@ -190,6 +197,7 @@ const initial: ToolSnapshot = previous
       lastOp: null,
       ruler: [],
       rulerHover: null,
+      combining: null,
       ...idle,
     }
 
@@ -205,11 +213,13 @@ export const useToolStore = create<ToolState>()((set) => ({
       lastOp: null,
       ruler: [],
       rulerHover: null,
+      combining: null,
       ...idle,
     }),
   // En ny operation gör att förra kopieringen och förra operationen inte längre går att ändra.
   setOp: (op) => set(op ? { op, hoverPoint: null, lastCopy: null, lastOp: null } : idle),
   setHover: (hover) => set({ hover }),
+  setCombining: (combining) => set({ combining }),
   setHoverPoint: (hoverPoint) => set({ hoverPoint }),
   setMeasure: (field, text) =>
     set((s) => {

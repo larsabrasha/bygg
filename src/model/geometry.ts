@@ -43,6 +43,35 @@ export function circleFace([x, y, z]: Vec3): Face {
   return y >= 0 ? 'v+' : 'v-'
 }
 
+/** Hur nära en yta en träff måste ligga för att räknas till den, i mm. */
+const ON_FACE = 0.5
+
+/**
+ * Vilken av formens egna sidor en träff på en form med verktyg ligger på,
+ * från punkten och normalen i formens koordinater. Undefined om träffen
+ * ligger inne i något som skurits ut, eller på något som lagts till: där
+ * finns ingen sida att dra i eller rita på.
+ */
+export function faceOnBox(box: Box, [x, y, z]: Vec3, normal: Vec3): Face | undefined {
+  const { x0, y0, x1, y1 } = box.profile
+  const near = (a: number, b: number) => Math.abs(a - b) <= ON_FACE
+  const face = box.shape === 'circle' ? circleFace(normal) : undefined
+  if (box.shape === 'circle' && face && faceAxis(face) !== 'n') {
+    const r = (x1 - x0) / 2
+    return near(Math.hypot(x - (x0 + x1) / 2, y - (y0 + y1) / 2), r) ? face : undefined
+  }
+  const [nx, ny, nz] = normal
+  const sides: [Face, boolean][] = [
+    ['u+', nx > 0.99 && near(x, x1)],
+    ['u-', nx < -0.99 && near(x, x0)],
+    ['v+', ny > 0.99 && near(y, y1)],
+    ['v-', ny < -0.99 && near(y, y0)],
+    ['n+', nz > 0.99 && near(z, box.z1)],
+    ['n-', nz < -0.99 && near(z, box.z0)],
+  ]
+  return sides.find(([, hit]) => hit)?.[0]
+}
+
 export function isValidRect(r: Rect): boolean {
   const [w, h] = rectSize(r)
   return w >= MIN_SIZE && h >= MIN_SIZE

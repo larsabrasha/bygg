@@ -22,6 +22,19 @@ const doc: ModelDocument = {
 }
 
 describe('format', () => {
+  it('läser ett verktyg och avvisar en okänd operation', () => {
+    const tool = {
+      ...doc,
+      instances: [
+        ...doc.instances,
+        { id: 't', defId: 'd', frame: GROUND_FRAME, combine: { op: 'subtract' as const, host: 'i' } },
+      ],
+    }
+    expect(migrate(JSON.parse(JSON.stringify(serialize(tool))))).toEqual({ ok: true, doc: tool })
+    const odd = { ...doc, instances: [{ ...doc.instances[0]!, combine: { op: 'glue', host: 'i' } }] }
+    expect(migrate({ version: FORMAT_VERSION, savedAt: '', doc: odd }).ok).toBe(false)
+  })
+
   it('läser en cylinder och avvisar en okänd form', () => {
     const round = { ...doc, defs: [{ ...doc.defs[0]!, shape: 'circle' as const }] }
     expect(migrate(JSON.parse(JSON.stringify(serialize(round))))).toEqual({ ok: true, doc: round })

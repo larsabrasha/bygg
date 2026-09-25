@@ -35,3 +35,6 @@ export const iconButton =
   'grid size-9 shrink-0 cursor-pointer place-items-center rounded-lg hover:bg-hover aria-pressed:bg-accent-soft aria-pressed:text-accent narrow:size-11 disabled:cursor-default disabled:text-disabled disabled:hover:bg-transparent'
 
 export const ICON = { size: 20, strokeWidth: 1.75, 'aria-hidden': true } as const
+
+/** Fyrkantig ikonknapp i en ruta (måttrutan): kryss och bock. */
+export const iconAction = 'grid size-10 shrink-0 cursor-pointer place-items-center rounded-lg narrow:size-11'

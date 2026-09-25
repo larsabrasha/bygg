@@ -2,7 +2,7 @@ import type { CameraControlsImpl } from '@react-three/drei'
 import { useThree } from '@react-three/fiber'
 import { useEffect, useMemo } from 'react'
 import { Raycaster, Vector2, Vector3, type Intersection, type Object3D, type PerspectiveCamera } from 'three'
-import { circleFace } from '../model/geometry'
+import { circleFace, faceOnBox, type Box } from '../model/geometry'
 import { FACES, type Face, type Vec3 } from '../model/types'
 import { useDocumentStore } from '../store/documentStore'
 import { useToolStore, type Op } from '../store/toolStore'
@@ -131,13 +131,19 @@ export function ToolController() {
 
     const toHit = (hit: Intersection): Hit => {
       const p = hit.object.userData.pick as
-        | { kind: 'body' | 'sketch'; id: string; round?: boolean }
+        | { kind: 'body' | 'sketch'; id: string; round?: boolean; box?: Box }
         | Extract<PickTarget, { kind: 'handle' | 'axis' | 'rotate' }>
-      // En cylinders sida räknas fram ur normalen (i delens egna koordinater), en lådas ur materialet.
-      const face = (): Face =>
-        'round' in p && p.round && hit.face
+      // En del med verktyg: sidan räknas ur punkt och normal i formens koordinater, och
+      // saknas inne i ett hål. En cylinders sida ur normalen, en lådas ur materialet.
+      const face = (): Face | undefined => {
+        if ('box' in p && p.box && hit.face) {
+          const local = hit.object.worldToLocal(hit.point.clone()).toArray() as Vec3
+          return faceOnBox(p.box, local, hit.face.normal.toArray() as Vec3)
+        }
+        return 'round' in p && p.round && hit.face
           ? circleFace(hit.face.normal.toArray() as Vec3)
           : FACES[hit.face?.materialIndex ?? 0]!
+      }
       const target: PickTarget =
         p.kind === 'handle' || p.kind === 'axis' || p.kind === 'rotate'
           ? p
@@ -331,7 +337,12 @@ export function ToolController() {
         return
       }
       const t = hit?.target
-      const next = t && (t.kind === 'body' || (t.kind === 'sketch' && tool === 'pushpull')) ? t : null
+      const next =
+        t?.kind === 'body' && t.face
+          ? { kind: 'body' as const, id: t.id, face: t.face }
+          : t?.kind === 'sketch' && tool === 'pushpull'
+            ? t
+            : null
       if (JSON.stringify(next) !== JSON.stringify(hover)) setHover(next)
     }
 

@@ -53,24 +53,31 @@ function Scene() {
   // I Välj visas den valda delens mått vid kanterna (etiketterna i panel/DimensionLabels).
   const dims = dimensionsFor(doc, selection, tool, op)
 
+  // Verktyg (tillägg och urskärningar) syns som spöken när deras värd, eller de själva, är valda.
+  const shownHost = selectedBody?.tool?.host ?? selectedBody?.id
+
   return (
     <>
-      {bodies.map((b) => (
-        <BodyMesh
-          key={b.id}
-          body={b}
-          preview={preview?.affected.has(b.id)}
-          selected={selectedBody?.id === b.id}
-          sibling={!!selectedBody && selectedBody.id !== b.id && selectedBody.defId === b.defId}
-          highlightFace={
-            active?.kind === 'body' && active.id === b.id
-              ? active.face
-              : selectedFace?.id === b.id
-                ? selectedFace.face
-                : null
-          }
-        />
-      ))}
+      {bodies.map((b) => {
+        if (b.tool && b.tool.host !== shownHost && !preview?.affected.has(b.id)) return null
+        return (
+          <BodyMesh
+            key={b.id}
+            body={b}
+            ghost={!!b.tool}
+            preview={preview?.affected.has(b.id)}
+            selected={selectedBody?.id === b.id}
+            sibling={!!selectedBody && !b.tool && selectedBody.id !== b.id && selectedBody.defId === b.defId}
+            highlightFace={
+              active?.kind === 'body' && active.id === b.id
+                ? active.face
+                : selectedFace?.id === b.id
+                  ? selectedFace.face
+                  : null
+            }
+          />
+        )
+      })}
       {shown.sketches.map((s) => (
         <SketchMesh
           key={s.id}

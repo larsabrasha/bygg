@@ -2,7 +2,7 @@ import { axesFromLegacyGrain } from '../model/partAxes'
 import type { ModelDocument } from '../model/types'
 
 /** Höj när formatet ändras, och lägg till en konvertering i migrate. */
-export const FORMAT_VERSION = 5
+export const FORMAT_VERSION = 6
 
 export interface SavedFile {
   version: number
@@ -54,7 +54,11 @@ function isModelDocument(x: unknown): x is ModelDocument {
         typeof i.defId === 'string' &&
         isFrame(i.frame) &&
         (i.rest === undefined || isOrientation(i.rest)) &&
-        (i.pos === undefined || (isObj(i.pos) && Object.values(i.pos).every((e) => typeof e === 'string'))),
+        (i.pos === undefined || (isObj(i.pos) && Object.values(i.pos).every((e) => typeof e === 'string'))) &&
+        (i.combine === undefined ||
+          (isObj(i.combine) &&
+            (i.combine.op === 'add' || i.combine.op === 'subtract') &&
+            typeof i.combine.host === 'string')),
     ) &&
     Array.isArray(params) &&
     params.every(
@@ -92,6 +96,7 @@ export function migrate(raw: unknown): LoadResult {
   // 3 → 4: kopior kan ha rest (viloläge för vinklarna) och stå snett. Frivilligt fält.
   // 4 → 5: skisser och former kan ha shape ('circle'). Frivilligt fält.
   // (Versionen höjs ändå, så att en äldre app inte läser cylindrar som lådor.)
+  // 5 → 6: kopior kan ha combine (verktyg som läggs till eller skärs ut). Frivilligt fält.
   if (!isModelDocument(doc)) return { ok: false, reason: 'Trasigt dokument' }
   return { ok: true, doc }
 }

@@ -246,6 +246,57 @@ function GrainControls({ body, def }: { body: Body; def: PartDef }) {
 
 const ICON_SM = { size: 16, strokeWidth: 1.75, 'aria-hidden': true } as const
 
+/**
+ * Verktyg: vilken del det läggs till på eller skärs ut ur, och Lossa.
+ * Värd: dess verktyg (tryck för att välja ett), och att det gäller alla länkade kopior.
+ */
+function CombineGroup({ body }: { body: Body }) {
+  const doc = useDocumentStore((s) => s.doc)
+  const select = useDocumentStore((s) => s.select)
+  const detach = useDocumentStore((s) => s.detach)
+  const bodies = resolveBodies(doc)
+  if (body.tool) {
+    const host = bodies.find((b) => b.id === body.tool!.host)
+    return (
+      <Group title={body.tool.op === 'subtract' ? 'Skärs ut' : 'Läggs till'}>
+        <p className="text-[13px] text-muted">
+          {body.tool.op === 'subtract' ? 'Skärs ut ur' : 'Läggs till på'}{' '}
+          <button
+            className="cursor-pointer font-semibold text-accent"
+            onClick={() => select({ kind: 'body', id: body.tool!.host })}
+          >
+            {host?.name}
+          </button>
+          , och alla länkade kopior av den. Flytta eller ändra den här delen så följer resultatet med.
+        </p>
+        <button className={secondaryButton} onClick={() => detach(body.id)}>
+          <Unlink {...ICON_SM} />
+          Lossa
+        </button>
+      </Group>
+    )
+  }
+  const tools = bodies.filter((b) => b.tool?.host === body.id)
+  if (tools.length === 0) return null
+  return (
+    <Group title="Urskärningar och tillägg">
+      <ul className="flex flex-col">
+        {tools.map((t) => (
+          <li key={t.id}>
+            <button
+              className="flex h-9 w-full cursor-pointer items-center justify-between gap-2 rounded-md px-2 text-left text-[13px] hover:bg-hover narrow:h-11"
+              onClick={() => select({ kind: 'body', id: t.id })}
+            >
+              <span className="font-semibold">{t.name}</span>
+              <span className="text-muted">{t.tool!.op === 'subtract' ? 'skärs ut' : 'läggs till'}</span>
+            </button>
+          </li>
+        ))}
+      </ul>
+    </Group>
+  )
+}
+
 export function Properties() {
   const selection = useDocumentStore((s) => s.selection)
   const doc = useDocumentStore((s) => s.doc)
@@ -313,6 +364,8 @@ export function Properties() {
               </Group>
             </>
           )}
+
+          <CombineGroup body={body} />
 
           <Group title="Kopior" note={copies > 1 && <span className="text-accent">{copies} länkade</span>}>
             {copies > 1 && <p className="text-[13px] text-muted">De delar form: ändrar du måtten här ändras alla.</p>}

@@ -39,6 +39,7 @@
     "globals": "^17.12.0",
     "idb-keyval": "^6.3.0",
     "lucide-react": "^1.48.0",
+    "manifold-3d": "^3.5.4",
     "prettier": "^3.9.9",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",

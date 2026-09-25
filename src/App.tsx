@@ -1,3 +1,4 @@
+import { CombineBar } from './panel/CombineBar'
 import { Gallery } from './panel/Gallery'
 import { DimensionLabels } from './panel/DimensionLabels'
 import { MeasureBox } from './panel/MeasureBox'
@@ -44,6 +45,7 @@ export function App() {
           {/* Startvyn visar samma meddelanden själv. */}
           {screen === 'model' && <Notices />}
           <MeasureBox />
+          <CombineBar />
           <ViewButtons />
           <ToolRail />
           <SelectionBar />

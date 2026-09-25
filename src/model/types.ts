@@ -78,6 +78,17 @@ export type WorldAxis = 'x' | 'y' | 'z'
 /** En frames riktning utan läge. */
 export type Orientation = Pick<Frame, 'u' | 'v' | 'n'>
 
+/**
+ * Kopian är ett verktyg: den läggs till på (add) eller skärs ut ur (subtract)
+ * kopian host. Den ligger kvar som egen del, så att den går att flytta,
+ * ändra och lossa igen (icke-destruktivt). Resultatet gäller alla länkade
+ * kopior av host, på samma ställe i förhållande till dem.
+ */
+export interface Combine {
+  op: 'add' | 'subtract'
+  host: string
+}
+
 /** En placerad kopia av en PartDef. */
 export interface Instance {
   id: string
@@ -90,6 +101,7 @@ export interface Instance {
   rest?: Orientation
   /** Uttryck för läget av delens hörn närmast origo, per världsaxel, om läget skrevs som ett uttryck. */
   pos?: Partial<Record<WorldAxis, string>>
+  combine?: Combine
 }
 
 /** Namngivet värde som mått kan referera till. value är senast beräknade värde. */
@@ -108,6 +120,19 @@ export interface ModelDocument {
 }
 
 /**
+ * Ett verktyg som läggs till på eller skärs ut ur en form: verktygets profil
+ * och djup, och dess frame i formens egna koordinater (inte i världen).
+ */
+export interface ToolShape {
+  op: Combine['op']
+  profile: Rect
+  shape?: Shape
+  z0: number
+  z1: number
+  frame: Frame
+}
+
+/**
  * En kopia ihopslagen med sin form: det som ritas, mäts och hamnar i kaplistan.
  * id är kopians id. Härleds ur dokumentet, sparas aldrig.
  */
@@ -123,6 +148,12 @@ export interface Body {
   shape?: Shape
   z0: number
   z1: number
+  /** Kopian är ett verktyg på en annan kopia; den ritas som ett spöke och finns inte i kaplistan. */
+  tool?: Combine
+  /** Verktyg som läggs till på och skärs ut ur formen (gäller alla kopior av den). */
+  tools?: readonly ToolShape[]
+  /** Ämnet som ska kapas: formens låda utökad med det som läggs till. Saknas om inget läggs till. */
+  blank?: { profile: Rect; z0: number; z1: number }
 }
 
 /** Kroppens sex sidor, i samma ordning som three.js BoxGeometry numrerar dem. */

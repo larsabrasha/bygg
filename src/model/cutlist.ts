@@ -38,12 +38,15 @@ export function buildCutList(bodies: readonly Body[]): CutList {
   let totalVolumeM3 = 0
 
   for (const b of bodies) {
-    const d = partDims(b)
+    // Ett verktyg är ingen egen bit: det skärs ut ur eller sitter på en annan del.
+    if (b.tool) continue
+    // Med något tillagt (en tapp) kapas ämnet större än formens låda.
+    const d = partDims({ ...(b.blank ?? b), grainAxis: b.grainAxis, thicknessAxis: b.thicknessAxis })
     const length = round01(d.length)
     const width = round01(d.width)
     const thickness = round01(d.thickness)
     const [du, , dn] = bodyExtents(b)
-    const round = b.shape === 'circle' ? { diameter: round01(du), length: round01(dn) } : undefined
+    const round = b.shape === 'circle' && !b.blank ? { diameter: round01(du), length: round01(dn) } : undefined
     // En cylinder fyller π/4 av sin fyrkant.
     totalVolumeM3 += ((round ? Math.PI / 4 : 1) * d.length * d.width * d.thickness) / 1e9
 
@@ -76,5 +79,5 @@ export function buildCutList(bodies: readonly Body[]): CutList {
       b.width - a.width,
   )
 
-  return { rows, totalCount: bodies.length, totalVolumeM3 }
+  return { rows, totalCount: bodies.filter((b) => !b.tool).length, totalVolumeM3 }
 }
