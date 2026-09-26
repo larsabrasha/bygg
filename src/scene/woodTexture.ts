@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
-import { RepeatWrapping, SRGBColorSpace, TextureLoader, type Texture } from 'three'
-import { UV_MM } from './grainUv'
+import { Color, RepeatWrapping, SRGBColorSpace, TextureLoader, type Texture } from 'three'
+import { hash01, UV_MM } from './grainUv'
 import { WOOD_SOURCES, woodFile } from './woodSources'
 
 /** Bilderna i src/assets/wood, med Vites adress (med hash, så att en ny bild inte fastnar i cachen). */
@@ -63,4 +63,15 @@ export function useWoodTexture(material: string, enabled: boolean): Wood | null 
     }
   }, [e])
   return e?.loaded ? e.wood : null
+}
+
+/**
+ * Varje del är en egen bräda: lite ljusare eller mörkare (±6 %) och lite
+ * varmare eller kallare än de andra, samma varje gång för samma del.
+ * Multipliceras med texturen (materialets färg).
+ */
+export function woodTone(id: string): Color {
+  const light = 0.94 + 0.12 * hash01(id, 3)
+  const warm = (hash01(id, 4) - 0.5) * 0.06
+  return new Color(light * (1 + warm), light, light * (1 - warm))
 }

@@ -22,8 +22,8 @@ import { frameQuaternion } from './frameTransform'
 import { grainUvs, hash01 } from './grainUv'
 import { tangentPoints } from './silhouette'
 import { useColorScheme } from './useColorScheme'
-import { endGrainFor, withEndGrain } from './endGrain'
-import { useWoodTexture } from './woodTexture'
+import { endGrainFor, pliesFor, withEndGrain } from './endGrain'
+import { useWoodTexture, woodTone } from './woodTexture'
 import type { Look } from '../store/viewStore'
 
 /** Formens låda, för att räkna ut vilken sida en träff på resultatet ligger på (faceOnBox). */
@@ -117,13 +117,25 @@ function BodyMeshImpl({
     const uv = grainUvs(pos.array, normal.array, grain, [hash01(body.id), hash01(body.id, 1)])
     geometry.setAttribute('uv', new BufferAttribute(uv, 2))
   }, [real, geometry, grain, body.id])
-  // Märgen för ändträet, utanför delen eller (rund del längs fibern) nära mitten.
-  const end = useMemo(() => {
+  // Märgen för ändträet, utanför delen eller (rund del längs fibern) nära mitten,
+  // och för plywood skikten på kanterna.
+  const thickness = AXIS_INDEX[body.thicknessAxis]
+  const plywood = body.material === 'plywood'
+  const endGrain = useMemo(() => {
     if (!real) return null
     geometry.computeBoundingBox()
-    const { min, max } = geometry.boundingBox!
-    return endGrainFor(min.toArray(), max.toArray(), grain, round && grain === 2, body.id)
-  }, [real, geometry, grain, body.id, round])
+    const [min, max] = [geometry.boundingBox!.min.toArray(), geometry.boundingBox!.max.toArray()]
+    // Formens låda i geometrins koordinater: resultatet med verktyg ritas i formens,
+    // lådan kring sin mitt. Med tappar som sticker ut är geometrins låda större än formen.
+    const edges = round ? undefined : solid ? { min: [x0, y0, body.z0], max: [x1, y1, body.z1] } : { min, max }
+    return {
+      end: endGrainFor(min, max, grain, round && grain === 2, body.id),
+      plies: plywood ? pliesFor(min, max, thickness) : undefined,
+      edges,
+    }
+  }, [real, geometry, grain, body.id, round, plywood, thickness, solid, x0, y0, x1, y1, body.z0, body.z1])
+  // Varje del är en egen bräda, med lite egen ton.
+  const tone = useMemo(() => woodTone(body.id), [body.id])
 
   // En material per sida (i BoxGeometrys ordning) så att en sida kan markeras,
   // och så att raycast ger materialIndex = vilken sida som träffades.
@@ -149,7 +161,7 @@ function BodyMeshImpl({
       }
       // Trä i det realistiska utseendet: ett tunt lager lack eller olja som glänser svagt i ljuset.
       const material = new (real ? MeshPhysicalMaterial : MeshStandardMaterial)({
-        color: ghost ? ACCENT : wood ? '#ffffff' : color,
+        color: ghost ? ACCENT : wood ? tone : color,
         ...(real && { roughness: 0.62, metalness: 0, clearcoat: 0.3, clearcoatRoughness: 0.35 }),
         ...(wood && { map: wood.map, normalMap: wood.normalMap }),
         emissive: lit ? ACCENT : '#000000',
@@ -161,10 +173,10 @@ function BodyMeshImpl({
         depthWrite: !ghost && !faded,
         depthTest: !ghost,
       })
-      if (wood && end) withEndGrain(material, grain, end, wood.map.repeat.x)
+      if (wood && endGrain) withEndGrain(material, { grain, ...endGrain, repeat: wood.map.repeat.x })
       return material
     })
-  }, [solid, round, color, selected, highlightFace, preview, ghost, faded, wire, real, wood, grain, end])
+  }, [solid, round, color, selected, highlightFace, preview, ghost, faded, wire, real, wood, grain, endGrain, tone])
   useEffect(() => () => materials.forEach((m) => m.dispose()), [materials])
 
   const edge = selected || preview ? ACCENT : sibling ? ACCENT_LIGHT : wire && scheme === 'dark' ? WIRE_DARK : EDGE

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { endGrainFor } from './endGrain'
+import { endGrainFor, pliesFor } from './endGrain'
 
 describe('endGrainFor', () => {
   it('lägger märgen utanför en bräda, längs tjockleken, och bågarna längs bredden', () => {
@@ -29,5 +29,19 @@ describe('endGrainFor', () => {
     ] as const
     expect(endGrainFor(box[0], box[1], 0, false, 'a')).toEqual(endGrainFor(box[0], box[1], 0, false, 'a'))
     expect(endGrainFor(box[0], box[1], 0, false, 'a')).not.toEqual(endGrainFor(box[0], box[1], 0, false, 'x'))
+  })
+})
+
+describe('pliesFor', () => {
+  it('delar tjockleken i ett udda antal skikt runt 1,5 mm', () => {
+    // 12 mm plywood, tjockleken längs z: 8 skikt blir 9, så att ytfanéren går åt samma håll.
+    const p = pliesFor([0, 0, -6], [600, 400, 6], 2)
+    expect(p.axis).toBe(2)
+    expect(p.min).toBe(-6)
+    expect(12 / p.ply).toBeCloseTo(9)
+  })
+
+  it('ger minst tre skikt i tunn plywood', () => {
+    expect(3 / pliesFor([0, 0, 0], [3, 100, 100], 0).ply).toBeCloseTo(3)
   })
 })

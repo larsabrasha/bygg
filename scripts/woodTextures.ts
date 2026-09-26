@@ -5,6 +5,7 @@
  */
 import { mkdir } from 'node:fs/promises'
 import sharp from 'sharp'
+import { Color } from 'three'
 import { materialColor } from '../src/scene/colors.ts'
 import { WOOD_SOURCES, woodFile, type WoodSource } from '../src/scene/woodSources.ts'
 
@@ -12,6 +13,13 @@ const OUT = new URL('../src/assets/wood/', import.meta.url)
 const SIZE = 1024
 /** Buktningar större än så här (i pixlar, ca 1 mm) räknas inte som porer. */
 const BLUR = 8
+/**
+ * Ljusare och mörkare partier större än så här (i pixlar, några centimeter)
+ * kommer från fotot (ljuset, lacken, smuts), inte från träet; de tas bort.
+ */
+const FLATTEN = 48
+/** Så mörkt (i förhållande till medel) som ett parti får vara innan det har senvedens färg helt. */
+const DARKEST = 0.45
 
 type Kind = 'Diffuse' | 'Displacement'
 
@@ -40,8 +48,10 @@ function sized(photo: Buffer, src: WoodSource) {
 async function normalsFrom(height: Buffer, src: WoodSource): Promise<Buffer> {
   const raw = await sized(height, src).extractChannel(0).raw({ depth: 'ushort' }).toBuffer()
   const h = Float32Array.from(new Uint16Array(raw.buffer, raw.byteOffset, SIZE * SIZE))
-  const smooth = blurred(h)
-  const detail = h.map((v, i) => v - smooth[i]!)
+  // Först en lätt suddning mot bruset i skanningen, sedan bort med buktningarna.
+  const clean = blurred(h, 1)
+  const smooth = blurred(clean, BLUR)
+  const detail = clean.map((v, i) => v - smooth[i]!)
   const at = (x: number, y: number) => detail[((y + SIZE) % SIZE) * SIZE + ((x + SIZE) % SIZE)]!
   const dx = new Float32Array(SIZE * SIZE)
   const dy = new Float32Array(SIZE * SIZE)
@@ -67,19 +77,41 @@ async function normalsFrom(height: Buffer, src: WoodSource): Promise<Buffer> {
   return out
 }
 
-/** Lådsuddning med radien BLUR, i båda led, runt kanten. */
-function blurred(h: Float32Array): Float32Array {
+/** Lådsuddning med radien r (pixlar), i båda led, runt kanten. Löpande summa: lika snabb för alla r. */
+function blurred(h: Float32Array, r: number): Float32Array {
   const pass = (src: Float32Array, step: (i: number, k: number) => number) => {
     const out = new Float32Array(src.length)
-    for (let i = 0; i < src.length; i++) {
+    for (let line = 0; line < SIZE; line++) {
+      const first = step === across ? line * SIZE : line
       let s = 0
-      for (let k = -BLUR; k <= BLUR; k++) s += src[step(i, k)]!
-      out[i] = s / (2 * BLUR + 1)
+      for (let k = -r; k <= r; k++) s += src[step(first, k)]!
+      for (let j = 0; j < SIZE; j++) {
+        const i = step(first, j)
+        out[i] = s / (2 * r + 1)
+        s += src[step(first, j + r + 1)]! - src[step(first, j - r)]!
+      }
     }
     return out
   }
-  const across = pass(h, (i, k) => Math.floor(i / SIZE) * SIZE + (((i % SIZE) + k + SIZE) % SIZE))
-  return pass(across, (i, k) => (i + k * SIZE + SIZE * SIZE) % (SIZE * SIZE))
+  return pass(pass(h, across), down)
+}
+/** Pixeln k steg till höger om, eller under, pixeln i, runt kanten. */
+const across = (i: number, k: number) => Math.floor(i / SIZE) * SIZE + (((i % SIZE) + (k % SIZE) + SIZE) % SIZE)
+const down = (i: number, k: number) => (i + (k % SIZE) * SIZE + SIZE * SIZE) % (SIZE * SIZE)
+
+const hex = (c: string) => [1, 3, 5].map((i) => parseInt(c.slice(i, i + 2), 16))
+
+/**
+ * Senvedens färg ur grundfärgen: mörkare, mer mättad och lite rödare. Mörka
+ * partier i trä är brunare, inte bara en mörkare variant av samma gula
+ * (som ser grönaktig ut).
+ */
+function lateWood([r, g, b]: number[]): number[] {
+  const c = new Color(r! / 255, g! / 255, b! / 255)
+  const hsl = { h: 0, s: 0, l: 0 }
+  c.getHSL(hsl)
+  c.setHSL((hsl.h - 0.02 + 1) % 1, Math.min(1, hsl.s * 1.25), hsl.l * 0.55)
+  return [c.r * 255, c.g * 255, c.b * 255]
 }
 
 const save = (data: Buffer, file: URL, quality: number) =>
@@ -97,20 +129,25 @@ const fetchOnce = async (id: string, map: Kind) => {
 }
 
 for (const [material, src] of Object.entries(WOOD_SOURCES)) {
-  // Färgen: mönstret kring medianen. Medianen får materialets färg, ljusare och
-  // mörkare partier blir ljusare och mörkare efter contrast.
+  // Färgen: mönstret kring det lokala medelvärdet (så att fotots ljus och
+  // fläckar försvinner). Medel får grundfärgen, ljusare partier blir ljusare
+  // och mörkare glider mot senvedens färg, efter contrast.
   const grey = await sized(await fetchOnce(src.id, 'Diffuse'), src)
     .greyscale()
     .raw()
     .toBuffer()
-  const sorted = Uint8Array.from(grey).sort()
-  const median = sorted[sorted.length >> 1]!
-  const hex = materialColor(material)
-  const color = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16))
+  const lum = Float32Array.from(grey)
+  const mean = blurred(lum, FLATTEN)
+  const base = hex(src.color ?? materialColor(material))
+  const late = lateWood(base)
   const out = Buffer.alloc(SIZE * SIZE * 3)
   for (let i = 0; i < SIZE * SIZE; i++) {
-    const g = Math.min(1.25, Math.max(0.3, 1 + ((grey[i]! - median) / median) * src.contrast))
-    for (let c = 0; c < 3; c++) out[i * 3 + c] = Math.min(255, Math.round(color[c]! * g))
+    const v = 1 + (lum[i]! / Math.max(1, mean[i]!) - 1) * src.contrast
+    const t = Math.min(1, Math.max(0, (1 - v) / (1 - DARKEST)))
+    const light = Math.min(1.2, Math.max(1, v))
+    for (let c = 0; c < 3; c++) {
+      out[i * 3 + c] = Math.min(255, Math.round((base[c]! + (late[c]! - base[c]!) * t) * light))
+    }
   }
   await save(out, new URL(woodFile(material), OUT), 82)
 
