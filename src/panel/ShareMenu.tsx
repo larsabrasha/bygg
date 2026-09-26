@@ -10,7 +10,7 @@ import { MenuItem } from './MenuItem'
 import { useDismiss } from './useDismiss'
 import { Tip } from './Tip'
 
-/** Sätt att visa eller ta ut modellen: AR, ritningen (där kaplistan skrivs ut) och kaplistan som CSV. */
+/** Sätt att visa eller ta ut modellen: AR, ritningen (kaplistan är sista bladet) och kaplistan som CSV. */
 export function ShareMenu({ buttonClass }: { buttonClass: string }) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
@@ -39,7 +39,7 @@ export function ShareMenu({ buttonClass }: { buttonClass: string }) {
               useViewStore.getState().setDrawing(true)
             }}
           >
-            Ritning och kaplista (skriv ut / PDF)
+            Ritning
           </MenuItem>
           <MenuItem
             Icon={FileDown}

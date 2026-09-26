@@ -5,7 +5,7 @@ import { widthAxis } from './partAxes'
 import type { Axis, Body } from './types'
 
 /**
- * Detaljblad: en del ritad i tre vyer med mått, på ett liggande A4 (245 × 170 mm,
+ * Detaljblad: en del ritad i tre vyer med mått, på ett liggande A4 (287 × 200 mm,
  * mitt på sidan i PDF:en). Allt här är i millimeter på papperet, med y nedåt som i SVG.
  */
 
@@ -164,10 +164,11 @@ export function drawingPositions(bodies: readonly Body[]): CutListRow[] {
 
 /**
  * Bladet och ytan för vyerna: ovanför titelrutan, innanför ramen. Står i verklig storlek
- * mitt på en liggande A4 i PDF:en (drawingPdf.tsx), så att skalan stämmer på papperet.
- * Samma form i Drawing.tsx (Sheet).
+ * mitt på en liggande A4 i PDF:en (drawingPdf.tsx), så att skalan stämmer på papperet:
+ * 5 mm från papperets kant, och ramen 5 mm in, alltså 10 mm från kanten som på en
+ * vanlig ritning. Skrivare brukar inte nå närmare kanten än 4–5 mm.
  */
-export const SHEET = { width: 245, height: 170, frame: 5, title: { width: 125, height: 30 } } as const
+export const SHEET = { width: 287, height: 200, frame: 5, title: { width: 125, height: 30 } } as const
 
 export const AREA = {
   x: SHEET.frame,

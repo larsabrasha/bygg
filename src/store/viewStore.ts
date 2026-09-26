@@ -48,16 +48,9 @@ export interface ViewState {
   /** Utseendet i 3D-vyn (inte på ritningen). Sparas per enhet. */
   look: Look
   setLook: (look: Look) => void
-  /** Ritningen (sprängskiss och stycklista) visas över hela appen. Sparas inte. */
+  /** Ritningen (PDF:en med sprängskiss, blad och kaplista) visas över hela appen. Sparas inte. */
   drawing: boolean
   setDrawing: (on: boolean) => void
-  /**
-   * Ritningens blad på smal skärm: anpassade till skärmens bredd (man ser hela bladet,
-   * inget skrollas i sidled), eller förstorade så att måtten går att läsa. Påverkar
-   * inte utskriften. Sparas per enhet; anpassade från början.
-   */
-  drawingFit: boolean
-  toggleDrawingFit: () => void
   /** Längd, bredd och tjocklek visas vid den valda delen (knappen Mått). Av från början; sparas inte. */
   showDims: boolean
   toggleDims: () => void
@@ -83,7 +76,6 @@ export function isShown(view: Pick<ViewState, 'hidden' | 'isolated'>, id: string
 
 const PANEL_KEY = 'bygg.panelOpen'
 const LOOK_KEY = 'bygg.look'
-const DRAWING_FIT_KEY = 'bygg.drawingFit'
 
 /** Utan lagring, eller med ett okänt värde, skuggat. */
 function readLook(): Look {
@@ -120,22 +112,6 @@ function savePanelOpen(open: boolean) {
   }
 }
 
-function readDrawingFit(): boolean {
-  try {
-    return localStorage.getItem(DRAWING_FIT_KEY) !== 'false'
-  } catch {
-    return true
-  }
-}
-
-function saveDrawingFit(fit: boolean) {
-  try {
-    localStorage.setItem(DRAWING_FIT_KEY, String(fit))
-  } catch {
-    // Går inte att spara; valet gäller tills sidan laddas om.
-  }
-}
-
 /** Kamerabegäran från knappar och kortkommandon utanför 3D-vyn. Kameran själv ligger i CameraRig. */
 export const useViewStore = create<ViewState>()((set) => ({
   fit: null,
@@ -166,12 +142,6 @@ export const useViewStore = create<ViewState>()((set) => ({
   },
   drawing: false,
   setDrawing: (drawing) => set({ drawing }),
-  drawingFit: readDrawingFit(),
-  toggleDrawingFit: () =>
-    set((s) => {
-      saveDrawingFit(!s.drawingFit)
-      return { drawingFit: !s.drawingFit }
-    }),
   showDims: false,
   toggleDims: () => set((s) => ({ showDims: !s.showDims })),
   penMode: false,

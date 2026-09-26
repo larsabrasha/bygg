@@ -254,8 +254,7 @@ describe('detaljer', () => {
     expect(layout.scale).toBe(2)
     expect(layout.details).toHaveLength(1)
     const [a] = layout.details
-    // 1:1, dubbelt så stort som vyerna i 1:2 (2:1 ryms inte bredvid dem på bladet).
-    expect(a).toMatchObject({ letter: 'A', scale: 1 })
+    expect(a).toMatchObject({ letter: 'A', scale: 0.5 })
     // Tjockleken i kedjan: 7,5 + 7 + 7,5 och totalt 22.
     expect(a!.dims.filter((d) => d.vertical).map((d) => d.text)).toEqual(['7,5', '7', '7,5', '22'])
     // Detaljen står inte på titelrutan.
@@ -268,9 +267,9 @@ describe('detaljer', () => {
   })
 
   it('hoppar över en detalj som inte ryms någonstans', () => {
-    // Ett hål 10 × 10 genom en skiva 1800 × 800: 1 mm på papperet i 1:10, men vyerna tar nästan hela bladet.
+    // Ett hål 10 × 10 genom en skiva 2300 × 1100: 1 mm på papperet i 1:10, men vyerna tar nästan hela bladet.
     const big = testBody({
-      profile: { x0: 0, y0: 0, x1: 1800, y1: 800 },
+      profile: { x0: 0, y0: 0, x1: 2300, y1: 1100 },
       tools: [tool('subtract', 100, 100, 0, 110, 110, 22)],
     })
     const g = partGeometry(big)

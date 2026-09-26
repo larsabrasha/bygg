@@ -260,9 +260,10 @@ async function drawSvg(doc: jsPDF, sheet: ReactElement) {
 function drawCutList(doc: jsPDF, input: DrawingPdfInput) {
   const W = 210
   const H = 297
-  const mx = 18
-  const top = 18
-  const bottom = H - 18
+  // 12 mm till kanten: skrivare når inte närmare än 4–5 mm, och det ska se luftigt ut.
+  const mx = 12
+  const top = 12
+  const bottom = H - 12
   const cw = W - 2 * mx
   const col = {
     box: mx,

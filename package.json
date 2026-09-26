@@ -43,6 +43,7 @@
     "jspdf": "^4.2.1",
     "lucide-react": "^1.48.0",
     "manifold-3d": "^3.5.4",
+    "pdfjs-dist": "^6.3.289",
     "postprocessing": "^6.39.5",
     "prettier": "^3.9.9",
     "react": "^19.3.0",

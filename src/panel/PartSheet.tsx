@@ -38,7 +38,7 @@ interface Props {
 
 /**
  * Detaljblad för en position: tre vyer med mått, i en SVG med millimeter som
- * enhet. Skrivs bladet ut 245 mm brett stämmer skalan på papperet.
+ * enhet. Skrivs bladet ut 287 mm brett stämmer skalan på papperet.
  */
 export function PartSheet({ pos, row, geometry, modelName, date, sheet, sheets }: Props) {
   const layout = useMemo(() => layoutPartSheet(geometry), [geometry])
@@ -101,7 +101,7 @@ export interface TitleCell {
 
 /**
  * Ett blad som SVG med millimeter som enhet: ram, en rad anteckningar nere
- * till vänster och titelrutan nere till höger. Skrivs bladet ut 245 mm brett
+ * till vänster och titelrutan nere till höger. Skrivs bladet ut 287 mm brett
  * stämmer skalan på papperet.
  */
 export function SheetSvg({

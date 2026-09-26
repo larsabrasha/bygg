@@ -32,8 +32,9 @@ export default defineConfig({
         ],
       },
       workbox: {
-        // wasm: manifold-3d (lägg till och skär ut) ska fungera offline också; webp: trätexturerna.
-        globPatterns: ['**/*.{js,css,html,svg,png,webp,ico,webmanifest,wasm}'],
+        // wasm: manifold-3d (lägg till och skär ut) ska fungera offline också; webp: trätexturerna;
+        // mjs: pdf.js-workern (PDF-visaren i ritningen).
+        globPatterns: ['**/*.{js,mjs,css,html,svg,png,webp,ico,webmanifest,wasm}'],
         // Appens sidor får index.html från cachen; API:t går alltid till nätet.
         navigateFallback: '/index.html',
         navigateFallbackDenylist: [/^\/api\//],
