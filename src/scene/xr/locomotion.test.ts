@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { Object3D, Vector3 } from 'three'
 import {
   grabRig,
+  liftStep,
   MAX_SCALE,
   MM_PER_M,
   scaleLabel,
@@ -83,14 +84,18 @@ describe('grabRig', () => {
     const { position, yaw } = grabRig(start, hand, 1000)
     const world = handInWorld(position, yaw, hand.pos)
     expect(world.x).toBeCloseTo(start.pos[0], 6)
+    expect(world.y).toBeCloseTo(start.pos[1], 6)
     expect(world.z).toBeCloseTo(start.pos[2], 6)
     // Handens riktning i världen är densamma som när greppet började.
     expect(yaw + hand.yaw).toBeCloseTo(start.yaw, 9)
   })
 
-  it('origo står kvar i höjd: på golvet, eller där en zoom med båda händerna lämnade den', () => {
-    expect(grabRig({ pos: [0, 1500, 0], yaw: 0 }, { pos: [0.1, 0.9, 0.1], yaw: 0 }, 1000).position[1]).toBe(0)
-    expect(grabRig({ pos: [0, 1500, 0], yaw: 0 }, { pos: [0.1, 0.9, 0.1], yaw: 0 }, 1000, 420).position[1]).toBe(420)
+  it('i höjd också: lyfter man handen följer världen med, och man själv sjunker', () => {
+    const start = { pos: [0, 1100, 0] as [number, number, number], yaw: 0 }
+    const { position } = grabRig(start, { pos: [0, 1.3, 0], yaw: 0 }, 1000)
+    expect(position[1]).toBeCloseTo(-200, 9)
+    const world = handInWorld(position, 0, [0, 1.3, 0])
+    expect(world.y).toBeCloseTo(1100, 6)
   })
 
   it('vrider man handen åt vänster vrids världen med: man själv vrids åt höger', () => {
@@ -172,5 +177,16 @@ describe('scaleLabel', () => {
     expect(scaleLabel(MM_PER_M * 1.5)).toBe('1:1,5')
     expect(scaleLabel(MM_PER_M * 12.4)).toBe('1:12')
     expect(scaleLabel(MM_PER_M / 2)).toBe('2:1')
+  })
+})
+
+describe('liftStep', () => {
+  it('spaken framåt lyfter, bakåt sänker, lika fort som man går', () => {
+    expect(liftStep(0, -1, 1)).toBe(WALK_MM_PER_S)
+    expect(liftStep(0, 0.5, 1)).toBe(-WALK_MM_PER_S / 2)
+  })
+  it('inget inom dödzonen, och inget när spaken förs mer åt sidan (då vrider man sig)', () => {
+    expect(liftStep(0, 0.1, 1)).toBe(0)
+    expect(liftStep(0.8, -0.5, 1)).toBe(0)
   })
 })

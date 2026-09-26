@@ -39,6 +39,7 @@ import { closestObject, groundHit, ON_TOP, pickTargets, toHit } from '../pick'
 import {
   DEAD_ZONE,
   grabRig,
+  liftStep,
   MM_PER_M,
   SNAP_TURN,
   startPlacement,
@@ -81,7 +82,7 @@ const DRAG_RAD = 0.035
 const DRAG_MM = 30
 /** Skyltarna om vad knapparna gör (se VrLegend). */
 const LEGEND_RIGHT =
-  'Avtryckare: välj och dra\nGrepp: håll i världen\nBåda greppen: zooma\nSpak: vrid dig\nA: ångra    B: gör om\nTryck in spaken: dölj'
+  'Avtryckare: välj och dra\nGrepp: håll i världen\nBåda greppen: zooma\nSpak: vrid, upp/ner\nA: ångra    B: gör om\nTryck in spaken: dölj'
 const LEGEND_LEFT = 'Spak: gå\nTryck in spaken: dölj'
 
 /** Två tryck på samma del inom så här många ms är ett dubbeltryck. */
@@ -307,12 +308,14 @@ function Controllers() {
             tmp.hand.set(p.x, p.y, p.z).applyMatrix4(rig.matrixWorld)
             hand.grab = { pos: tmp.hand.toArray() as Vec3, yaw: rig.rotation.y + now.yaw }
           }
-          const next = grabRig(hand.grab, now, rig.scale.x, rig.position.y)
+          const next = grabRig(hand.grab, now, rig.scale.x)
           rig.position.fromArray(next.position)
           rig.rotation.set(0, next.yaw, 0)
         } else hand.grab = null
-        // Ett ryck per gång spaken förs ut: nästa kräver att den varit i mitten.
-        const out = Math.abs(x) > 0.6
+        // Spaken framåt och bakåt: uppåt och nedåt, lika fort sett från ögat i alla skalor.
+        if (!hand.grab) rig.position.y += liftStep(x, y, Math.min(delta, 0.1)) * k
+        // Ett ryck per gång spaken förs ut åt sidan: nästa kräver att den varit i mitten.
+        const out = Math.abs(x) > 0.6 && Math.abs(x) > Math.abs(y)
         if (out && !hand.turned) {
           const angle = x > 0 ? -SNAP_TURN : SNAP_TURN
           rig.position.fromArray(turnAround(rig.position.toArray(), tmp.head.toArray(), angle))

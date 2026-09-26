@@ -59,20 +59,30 @@ export interface HandYaw {
 /**
  * Origo medan man håller i världen (greppknappen): punkten man tog tag i och
  * handens riktning står still i världen, så att världen följer handen när man
- * drar och vrider. Bara vridning runt lodlinjen, och origo står kvar i höjd
- * (y): golvet ligger kvar, och skalan står fast.
+ * drar, lyfter och vrider. Drar man handen uppåt följer världen med uppåt,
+ * och man själv sjunker. Bara vridning runt lodlinjen, och skalan står fast.
  * start är handen i världen (mm) när greppet började; hand är handen nu i
  * sessionens koordinater (meter); scale är origos skala (MM_PER_M i verklig storlek).
  */
-export function grabRig(start: HandYaw, hand: HandYaw, scale: number, y = 0): { position: Vec3; yaw: number } {
+export function grabRig(start: HandYaw, hand: HandYaw, scale: number): { position: Vec3; yaw: number } {
   const yaw = start.yaw - hand.yaw
   const c = Math.cos(yaw)
   const s = Math.sin(yaw)
-  const [x, , z] = hand.pos
+  const [x, y, z] = hand.pos
   // Handen i världen = origo + vridning(yaw) · (hand · scale); lös ut origo.
   const hx = (c * x + s * z) * scale
   const hz = (-s * x + c * z) * scale
-  return { position: [start.pos[0] - hx, y, start.pos[2] - hz], yaw }
+  return { position: [start.pos[0] - hx, start.pos[1] - y * scale, start.pos[2] - hz], yaw }
+}
+
+/**
+ * Hur högt origo flyttas för högra spakens läge under dt sekunder, i mm: framåt
+ * (y negativ) uppåt, bakåt nedåt, lika fort som man går. Bara när spaken förs
+ * mer framåt eller bakåt än åt sidan; åt sidan vrider man sig (SNAP_TURN).
+ */
+export function liftStep(x: number, y: number, dt: number): number {
+  if (Math.abs(y) < DEAD_ZONE || Math.abs(y) <= Math.abs(x)) return 0
+  return -y * WALK_MM_PER_S * dt
 }
 
 /** Origos läge, vridning runt lodlinjen och skala (MM_PER_M = verklig storlek). */
