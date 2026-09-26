@@ -2,40 +2,14 @@ import { autoUpdate, flip, offset, shift, useFloating } from '@floating-ui/react
 import { Check, Delete, Keyboard } from 'lucide-react'
 import { useLayoutEffect, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
+import { NUMPAD_KEYS, type KeyTone, type NumpadKey } from './numpadKeys'
 
-/** En tangent: text som sätts in, eller en åtgärd. */
-/** Tangentens färg, som i miniräknaren i iOS: siffror, räknesätt, funktioner (översta raden) och OK. */
-type Tone = 'digit' | 'op' | 'fn' | 'ok'
-
-/** En tangent: text som sätts in, eller en åtgärd. */
-type Key = { label: ReactNode; aria?: string; insert?: string; action?: 'back' | 'ok' | 'keyboard'; tone: Tone }
-
-/**
- * Som miniräknaren i iOS: räknesätten i en kolumn till höger med egen färg, OK längst ner
- * där = brukar sitta, och radera och parenteser överst som funktionsrad.
- */
-const KEYS: Key[] = [
-  { label: <Delete size={20} strokeWidth={1.75} aria-hidden />, aria: 'Radera', action: 'back', tone: 'fn' },
-  { label: '(', aria: 'Vänsterparentes', insert: '(', tone: 'fn' },
-  { label: ')', aria: 'Högerparentes', insert: ')', tone: 'fn' },
-  { label: '÷', aria: 'Delat med', insert: ' / ', tone: 'op' },
-  { label: '7', insert: '7', tone: 'digit' },
-  { label: '8', insert: '8', tone: 'digit' },
-  { label: '9', insert: '9', tone: 'digit' },
-  { label: '×', aria: 'Gånger', insert: ' * ', tone: 'op' },
-  { label: '4', insert: '4', tone: 'digit' },
-  { label: '5', insert: '5', tone: 'digit' },
-  { label: '6', insert: '6', tone: 'digit' },
-  { label: '−', aria: 'Minus', insert: ' - ', tone: 'op' },
-  { label: '1', insert: '1', tone: 'digit' },
-  { label: '2', insert: '2', tone: 'digit' },
-  { label: '3', insert: '3', tone: 'digit' },
-  { label: '+', aria: 'Plus', insert: ' + ', tone: 'op' },
-  { label: <Keyboard size={20} strokeWidth={1.75} aria-hidden />, aria: 'Tangentbord', action: 'keyboard', tone: 'fn' },
-  { label: '0', insert: '0', tone: 'digit' },
-  { label: ',', aria: 'Komma', insert: ',', tone: 'digit' },
-  { label: <Check size={20} strokeWidth={2.25} aria-hidden />, aria: 'OK', action: 'ok', tone: 'ok' },
-]
+/** Ikonerna på tangenterna (se NUMPAD_KEYS). */
+const ICONS: Record<NonNullable<NumpadKey['icon']>, ReactNode> = {
+  back: <Delete size={20} strokeWidth={1.75} aria-hidden />,
+  keyboard: <Keyboard size={20} strokeWidth={1.75} aria-hidden />,
+  ok: <Check size={20} strokeWidth={2.25} aria-hidden />,
+}
 
 interface Props {
   /** Rutan runt fältet (eller fältet); blocket hamnar intill den. */
@@ -73,14 +47,14 @@ export function Numpad({ anchor, placement, names, onInsert, onName, onBackspace
   })
   useLayoutEffect(() => setReference(anchor), [anchor, setReference])
 
-  const press = (k: Key) => {
+  const press = (k: NumpadKey) => {
     if (k.insert) onInsert(k.insert)
     else if (k.action === 'back') onBackspace()
     else if (k.action === 'keyboard') onKeyboard()
     else onOk()
   }
   const keyClass = 'grid h-12 cursor-pointer place-items-center rounded-lg tabular-nums'
-  const colors: Record<Tone, string> = {
+  const colors: Record<KeyTone, string> = {
     digit: 'bg-button text-lg font-medium text-ink active:bg-hover',
     op: 'bg-accent-soft text-xl font-semibold text-accent active:opacity-80',
     fn: 'bg-ink/15 text-lg text-ink active:bg-ink/25',
@@ -122,7 +96,7 @@ export function Numpad({ anchor, placement, names, onInsert, onName, onBackspace
         </div>
       )}
       <div className="grid grid-cols-4 gap-1.5">
-        {KEYS.map((k, i) => (
+        {NUMPAD_KEYS.map((k, i) => (
           <button
             key={i}
             type="button"
@@ -134,7 +108,7 @@ export function Numpad({ anchor, placement, names, onInsert, onName, onBackspace
             }}
             className={`${keyClass} ${colors[k.tone]}`}
           >
-            {k.label}
+            {k.icon ? ICONS[k.icon] : k.label}
           </button>
         ))}
       </div>

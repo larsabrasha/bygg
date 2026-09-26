@@ -2,12 +2,13 @@ import { ChevronLeft } from 'lucide-react'
 import { useState } from 'react'
 import { useLibraryStore } from '../store/libraryStore'
 import { renameModel, showGallery } from '../sync/session'
+import { Logo } from './Logo'
 import { field } from './ui'
 import { Tip } from './Tip'
 
 /**
- * Tillbaka till startvyn, och modellens namn. Namnet är text, inte en knapp:
- * ett tryck bredvid bakåtpilen ska inte börja redigera. Dubbeltryck eller
+ * Tillbaka till startvyn (Bygg), och modellens namn. Namnet är text, inte en knapp:
+ * ett tryck bredvid bakåtknappen ska inte börja redigera. Dubbeltryck eller
  * dubbelklick byter namn; det går också från "…" i startvyn.
  */
 export function ModelTitle() {
@@ -22,15 +23,23 @@ export function ModelTitle() {
   }
 
   return (
-    <div className="flex min-w-0 items-center gap-1 narrow:gap-2">
-      {/* 40 px, 44 px med finger (också på iPad, som har bred layout); bredare än hög på smal skärm. */}
+    <div className="flex min-w-0 items-center gap-2 narrow:gap-1">
+      {/*
+        Tillbaka till alla modeller. Bred skärm: loggan (Bygg), som i startvyn och som i
+        Google Docs och Onshape, med luft före modellens namn: skrivstilen skiljer dem, så inget
+        tecken behövs emellan. Smal skärm: bara en bakåtpil,
+        som i appar för iPhone, så att namnet får platsen. 44 px hög med finger (också på iPad).
+      */}
       <Tip label="Alla modeller">
         <button
-          className="grid size-10 shrink-0 cursor-pointer place-items-center rounded-lg hover:bg-hover pointer-coarse:size-11 narrow:h-11 narrow:w-12"
+          className="flex h-10 shrink-0 cursor-pointer items-center gap-2 rounded-lg px-1.5 font-semibold hover:bg-hover pointer-coarse:h-11 narrow:h-11 narrow:w-12 narrow:justify-center narrow:px-0"
           aria-label="Alla modeller"
           onClick={() => void showGallery()}
         >
-          <ChevronLeft size={24} strokeWidth={1.75} aria-hidden />
+          <ChevronLeft size={24} strokeWidth={1.75} aria-hidden className="hidden narrow:block" />
+          <span className="narrow:hidden">
+            <Logo height={24} />
+          </span>
         </button>
       </Tip>
       {renaming ? (
@@ -50,7 +59,7 @@ export function ModelTitle() {
       ) : (
         <Tip label="Dubbelklicka för att byta namn">
           <h1
-            className="min-w-0 truncate font-semibold select-none"
+            className="min-w-0 truncate pl-1 font-semibold select-none narrow:pl-0"
             onDoubleClick={() => {
               setName(currentName)
               setRenaming(true)

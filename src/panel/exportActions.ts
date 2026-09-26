@@ -6,7 +6,7 @@ export type ExportFormat = 'bygg' | 'glb' | 'usdz' | 'obj' | 'stl' | '3mf'
 
 /** Formaten i den ordning menyn visar dem, med vad de passar till. */
 export const EXPORT_FORMATS: readonly { format: ExportFormat; label: string; hint: string }[] = [
-  { format: 'bygg', label: 'Modellfil', hint: 'Öppnas i Bygg, allt kommer med' },
+  { format: 'bygg', label: 'Bygg-fil', hint: 'Allt kommer med' },
   { format: 'glb', label: 'GLB', hint: 'Blender, webben, Windows' },
   { format: 'usdz', label: 'USDZ', hint: 'iPhone, iPad och Mac, AR' },
   { format: 'obj', label: 'OBJ', hint: 'SketchUp, Fusion, Shapr3D (mm)' },

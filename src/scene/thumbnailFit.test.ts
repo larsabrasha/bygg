@@ -1,14 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { centerCrop, fitDistance } from './thumbnailFit'
-
-describe('centerCrop', () => {
-  it('tar full höjd i en bred yta', () => {
-    expect(centerCrop(1600, 900)).toEqual({ x: 200, y: 0, w: 1200, h: 900 })
-  })
-  it('tar full bredd i en hög yta (mobil)', () => {
-    expect(centerCrop(780, 1400)).toEqual({ x: 0, y: 407.5, w: 780, h: 585 })
-  })
-})
+import { fitDistance } from './thumbnailFit'
 
 describe('fitDistance', () => {
   it('ställer kameran längre bort när utsnittet är en mindre del av ytan', () => {

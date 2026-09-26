@@ -18,10 +18,16 @@ export function CombineBar() {
   if (!combining) return null
   const host = resolveBodies(doc).find((b) => b.id === combining.host)
   if (!host) return null
+  // Delens namn halvfett, som i menyerna och i Egenskaper.
+  const name = <span className="font-semibold">{host.name}</span>
   const text = {
-    subtract: `Tryck på delen som ska skäras ut ur ${host.name}.`,
-    add: `Tryck på delen som ska läggas till på ${host.name}.`,
-    joint: `Tryck på delen som tappen på ${host.name} ska in i. Änden på ${host.name} ska ligga an mot den.`,
+    subtract: <>Tryck på delen som ska skäras ut ur {name}.</>,
+    add: <>Tryck på delen som ska läggas till på {name}.</>,
+    joint: (
+      <>
+        Tryck på delen som tappen på {name} ska in i. Änden på {name} ska ligga an mot den.
+      </>
+    ),
   }[combining.op]
   return (
     <div ref={cover} role="status" className={`${bottomBox} flex items-center gap-2 pl-3`}>

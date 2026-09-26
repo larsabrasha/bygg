@@ -41,7 +41,7 @@ import { add, scale } from '../model/vec'
 export type Selection = { kind: 'sketch'; id: string } | { kind: 'body'; id: string; face?: Face }
 
 /** Ett steg i ångra-historiken: dokumentet och det som var valt då. */
-interface HistoryEntry {
+export interface HistoryEntry {
   doc: ModelDocument
   selection: Selection | null
 }
@@ -113,11 +113,17 @@ interface DocumentState extends Snapshot {
   clearDocument: () => void
   /** Ersätter dokumentet, t.ex. vid inläsning. Rensar historiken. */
   load: (doc: ModelDocument) => void
+  /** Sätter tillbaka historiken som sparades med dokumentet (se sync/history). Dokumentet rörs inte. */
+  setHistory: (past: HistoryEntry[], future: HistoryEntry[]) => void
   undo: () => void
   redo: () => void
 }
 
-const HISTORY_LIMIT = 100
+/**
+ * Så många steg går att ångra. Stegen delar det som inte ändrats, så de tar
+ * lite plats, också när historiken sparas (sync/history).
+ */
+export const HISTORY_LIMIT = 500
 /** Avstånd mellan original och ny kopia, i mm. */
 const DUPLICATE_GAP = 50
 
@@ -540,6 +546,8 @@ export const useDocumentStore = create<DocumentState>()((set, get) => {
     clearDocument: () => commit(emptyDocument(), null),
 
     load: (doc) => set({ doc: applyParams(doc), selection: null, past: [], future: [] }),
+
+    setHistory: (past, future) => set({ past: past.slice(-HISTORY_LIMIT), future }),
 
     // Valet blir det som var valt i det läget, så att man kan fortsätta där man var
     // (ångrar man en utdragning är skissen vald igen). Finns det inte längre, det nuvarande.

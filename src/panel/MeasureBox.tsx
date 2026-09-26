@@ -1,25 +1,20 @@
 import { Check, Copy, Repeat, X } from 'lucide-react'
 import { useEffect, useRef } from 'react'
-import { isConstant } from '../model/expr'
 import { AXIS_COLORS } from '../scene/colors'
 import { useDocumentStore } from '../store/documentStore'
-import { useToolStore, type Axis } from '../store/toolStore'
+import { useToolStore } from '../store/toolStore'
 import { useViewStore } from '../store/viewStore'
-import {
-  amendableOp,
-  applyMeasure,
-  cancel,
-  extendableCopy,
-  faceDimension,
-  liveMeasure,
-  readyPushPull,
-  repeatLastPushPull,
-  typedPushPull,
-  setCopy,
-  startReadyPushPull,
-  undoLast,
-} from '../tools/actions'
+import { cancel, faceDimension, typedPushPull, setCopy, undoLast } from '../tools/actions'
 import { ExprInput } from './ExprInput'
+import {
+  measureModel,
+  repeatLast,
+  setSketchMode,
+  sketchModeOf,
+  SKETCH_MODES,
+  submitMeasure,
+  typeMeasure,
+} from './measureModel'
 import { rulerResult, type RulerPoint } from '../model/ruler'
 import { bottomBox, ghostButton, iconAction, toggleButton } from './ui'
 import { Tip } from './Tip'
@@ -77,92 +72,10 @@ export function MeasureBox() {
   /** Det fälten fylldes med när de fick fokus (fillOnFocus), per fält. */
   const filled = useRef<(string | null)[]>([null, null])
 
-  // Efter en kopia kan man skriva hur många det ska bli (som "5x" i SketchUp).
-  const extending = !op && tool === 'move' ? extendableCopy() : null
-  // Efter ett drag ligger rutan kvar med värdet, så att man kan skriva ett exakt mått i stället.
-  // Sparar man med OK (eller Enter, Som förra) stängs den. Skriver man ett tal direkt efteråt
-  // (tangentbordet) visas den igen och ändrar det man nyss gjorde, som i SketchUp.
-  const amendable = !op && !extending ? amendableOp() : null
-  const amend = amendable && (!amendable.saved || measure.some((m) => m !== '')) ? amendable : null
-  const shown = op ?? amend?.op ?? null
-  // En vald sida eller skiss i Välj: rutan syns direkt, och det man skriver drar ut den.
   useToolStore((s) => s.combining)
   useViewStore((s) => s.exploded)
-  const ready = !shown && !extending ? readyPushPull() : null
-
-  // I Välj syns rutan bara när något är valt, och under och direkt efter en operation.
-  if (tool === 'select' && !shown && !ready) return null
-
-  // Push/pull ser likadan ut hela vägen: vald sida, medan man drar och efter ett drag (ändra).
-  // Samma text och samma knappar på samma plats, så att rutan inte hoppar när läget byts.
-  const pushpullBox = ready !== null || shown?.kind === 'pushpull'
-  const hint = extending
-    ? 'Kopian är gjord. Skriv antal för fler med samma avstånd.'
-    : pushpullBox
-      ? 'Dra i pilen, eller skriv måttet.'
-      : amend
-        ? 'Klart. Skriv ett annat värde för att ändra.'
-        : !op && tool === 'move' && copy
-          ? 'Kopia: dra i en pil, en båge eller delen. Originalet står kvar.'
-          : !op
-            ? {
-                select: '',
-                rect: 'Tryck där första hörnet ska vara – på golvet eller på en yta.',
-                circle: 'Tryck där mitten ska vara – på golvet eller på en yta.',
-                pushpull: 'Dra i en skiss eller en sida av en del, eller tryck på den.',
-                move: 'Dra i en pil för att flytta längs X, Y eller Z, eller i en båge för att vrida. Du kan också dra i själva delen.',
-                measure: '',
-              }[tool]
-            : {
-                rect:
-                  op.kind === 'rect' && op.shape === 'circle'
-                    ? 'Tryck där kanten ska vara, eller skriv diametern.'
-                    : 'Tryck på andra hörnet, eller skriv längd och bredd.',
-                pushpull: 'Dra längs pilen, eller skriv avståndet.',
-                move:
-                  op.kind === 'move' && op.axis !== null
-                    ? 'Dra längs pilen, eller skriv avståndet.'
-                    : 'Dra dit delen ska, eller skriv avståndet.',
-                rotate: 'Dra runt bågen (steg om 15°), eller skriv vinkeln.',
-              }[op.kind]
-
-  // En sida på en del: fältet visar hela måttet (det delen blir), inte ändringen; den syns vid pilen.
-  // Under draget är dokumentet som före, efteråt som efter.
-  const faceTarget =
-    shown?.kind === 'pushpull' && shown.target.kind === 'body'
-      ? shown.target
-      : !shown && ready?.kind === 'body'
-        ? ready
-        : null
-  const dimension = faceTarget ? faceDimension(faceTarget) : null
-  // Vad det skrivna blir: "+70" eller ett uttryck visar hela måttet efteråt under fältet.
-  // Måttet före: under draget är dokumentet som före, efter ett drag (ändra) som efter.
-  const pushpull = shown?.kind === 'pushpull' ? shown : null
-  const base = dimension && pushpull ? dimension.extent - (op ? 0 : pushpull.distance) : null
-  const typed = pushpull ? typedPushPull(pushpull, measure[0], base) : null
-  const total = typed?.total != null && (!typed.whole || !isConstant(measure[0])) ? typed.total : null
-  const live = dimension
-    ? [dimension.extent + (op?.kind === 'pushpull' ? op.distance : 0)]
-    : shown
-      ? liveMeasure(shown)
-      : extending
-        ? [extending.count]
-        : ready
-          ? [0]
-          : []
-  const axis = shown?.kind === 'rotate' ? shown.axis : shown?.kind === 'move' ? shown.axis : null
-  const fields: { label: string; axis: Axis | null }[] = extending
-    ? [{ label: 'Antal kopior', axis: null }]
-    : shown?.kind === 'rect' && shown.shape === 'circle'
-      ? [{ label: 'Diameter', axis: null }]
-      : shown?.kind === 'rect'
-        ? [
-            { label: 'Längd', axis: null },
-            { label: 'Bredd', axis: null },
-          ]
-        : [{ label: dimension?.label ?? (shown?.kind === 'rotate' ? 'Vinkel runt' : 'Avstånd'), axis }]
-  const unit = extending ? 'st' : shown?.kind === 'rotate' ? '°' : 'mm'
-
+  const { visible, shown, amend, extending, ready, pushpullBox, hint, total, live, fields, unit } = measureModel()
+  if (!visible) return null
   const copyToggle = tool === 'move' && (
     <Tip label="Det du flyttar eller vrider blir en ny länkad kopia" keys="Alt" side="top">
       <button type="button" aria-pressed={copy} onClick={() => setCopy(!copy)} className={toggleButton}>
@@ -173,26 +86,15 @@ export function MeasureBox() {
   )
 
   // En skiss på en del: ny del, tillägg på delen eller urtag i den. Förvalt efter riktningen.
-  const sketchOn = op?.kind === 'pushpull' && op.target.kind === 'sketch' ? op : null
-  const onPart =
-    sketchOn?.target.kind === 'sketch' &&
-    doc.sketches.some((s) => s.id === sketchOn.target.id && s.on && doc.instances.some((i) => i.id === s.on))
-  const effective = sketchOn ? (sketchOn.mode ?? 'auto') : 'auto'
-  const current = effective === 'auto' ? (sketchOn && sketchOn.distance < 0 ? 'subtract' : 'new') : effective
-  const modeToggle = sketchOn && onPart && (
+  const sketchMode = sketchModeOf(op, doc)
+  const modeToggle = sketchMode && (
     <div role="group" aria-label="Blir" className="flex gap-0.5">
-      {(
-        [
-          ['new', 'Ny del', 'En egen del, med egen rad i kaplistan'],
-          ['add', 'Lägg till', 'Sitter ihop med delen skissen ligger på, t.ex. en tapp'],
-          ['subtract', 'Skär ut', 'Skärs ut ur delen skissen ligger på, t.ex. ett tapphål'],
-        ] as const
-      ).map(([mode, label, tip]) => (
+      {SKETCH_MODES.map(([mode, label, tip]) => (
         <Tip key={mode} label={tip} side="top">
           <button
             type="button"
-            aria-pressed={current === mode}
-            onClick={() => useToolStore.getState().setOp({ ...sketchOn, mode })}
+            aria-pressed={sketchMode.current === mode}
+            onClick={() => setSketchMode(mode)}
             className={toggleButton}
           >
             {label}
@@ -216,17 +118,7 @@ export function MeasureBox() {
             className="flex flex-wrap items-center gap-1.5"
             onSubmit={(e) => {
               e.preventDefault()
-              // OK betyder klar, i ett tryck: det man ändrat sparas, och i push/pull avmarkeras sidan,
-              // så att rutan inte kommer tillbaka för samma sida och behöver ett OK till.
-              const t = useToolStore.getState()
-              const text = t.measure[0].trim()
-              const unchanged = ready && !t.op && (text === '' || text === fmt.format(live[0] ?? 0))
-              if (!unchanged && !applyMeasure()) return
-              if (!pushpullBox) return
-              // Fältet tomt igen, så att det inte står kvar till nästa sida som väljs.
-              t.setMeasure(0, '')
-              t.setMeasure(1, '')
-              useDocumentStore.getState().select(null)
+              submitMeasure()
             }}
           >
             {fields.map(({ label, axis }, i) => (
@@ -264,11 +156,8 @@ export function MeasureBox() {
                     if (!t.op && t.measure[i] === filled.current[i]) t.setMeasure(i as 0 | 1, '')
                     filled.current[i] = null
                   }}
-                  onChange={(t) => {
-                    // Det första man ändrar startar dragningen av det valda.
-                    if (ready) startReadyPushPull()
-                    setMeasure(i as 0 | 1, t)
-                  }}
+                  // Det första man ändrar startar dragningen av det valda.
+                  onChange={(t) => typeMeasure(i as 0 | 1, t)}
                   onKeyDown={(e) => {
                     if (e.key === 'Escape') cancel()
                   }}
@@ -287,10 +176,7 @@ export function MeasureBox() {
                   // Efter ett drag är förra djupet just det draget: inget att upprepa.
                   disabled={!op && !ready}
                   className={`${ghostButton} text-muted`}
-                  onClick={() => {
-                    if (ready) startReadyPushPull()
-                    repeatLastPushPull()
-                  }}
+                  onClick={repeatLast}
                 >
                   <Repeat size={15} strokeWidth={1.75} aria-hidden />
                   Som förra

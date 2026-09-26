@@ -17,6 +17,7 @@ import {
   commit,
   doubleTap,
   extendCopies,
+  handleOf,
   hoverAt,
   liveMeasure,
   move,
@@ -27,6 +28,7 @@ import {
   repeatLastPushPull,
   setCopy,
   setExploded,
+  sideHandleFaces,
   startReadyPushPull,
   tap,
   typedPushPull,
@@ -422,6 +424,21 @@ describe('flytta', () => {
     expect(tools().tool).toBe('rect')
   })
 
+  it('andra trycket på pilen som första trycket tog fram räknas också: pilen står mitt på sidan', () => {
+    const b = extrude(drawGroundRect(), '22')
+    tools().setTool('select')
+    docs().select(null)
+    tap({ point: [300, 22, -200], target: { kind: 'body', id: b.id, face: 'n+' } }, 0)
+    expect(doubleTap({ point: [300, 22, -200], target: { kind: 'handle' } })).toBe(true)
+    expect(tools().tool).toBe('move')
+    expect(tools().op).toBeNull()
+    // Pilen på en skiss är ingen del.
+    tools().setTool('select')
+    docs().select({ kind: 'sketch', id: drawGroundRect(1000, 0, 1400, -400) })
+    tools().setTool('select')
+    expect(doubleTap({ point: [1200, 0, -200], target: { kind: 'handle' } })).toBe(false)
+  })
+
   it('tryck utanför den valda delen lämnar Flytta/vrid, som ett tryck i Välj', () => {
     const a = extrude(drawGroundRect(), '22')
     const b = extrude(drawGroundRect(1000, 0, 1400, -400), '22')
@@ -803,6 +820,56 @@ describe('pilen på det valda', () => {
   })
 })
 
+describe('pilarna på de andra sidorna', () => {
+  it('en smal kant dras ut direkt från sin pil, och blir den valda sidan', () => {
+    const b = extrude(drawGroundRect(), '22')
+    tools().setTool('select')
+    tap({ point: [300, 22, -200], target: { kind: 'body', id: b.id, face: 'n+' } }, 0)
+    tap({ point: [650, 11, -200], target: { kind: 'handle', face: 'u+' } }, 0)
+    expect(docs().selection).toEqual({ kind: 'body', id: b.id, face: 'u+' })
+    expect(tools().op).toMatchObject({ kind: 'pushpull', anchor: [600, 11, -200], normal: [1, 0, 0] })
+    tools().setMeasure(0, '650')
+    applyMeasure()
+    expect(bodies()[0]!.profile.x1).toBe(650)
+    expect(bodies()[0]).toMatchObject({ z0: 0, z1: 22 })
+  })
+
+  it('går också när delen är vald utan yta', () => {
+    const b = extrude(drawGroundRect(), '22')
+    docs().select({ kind: 'body', id: b.id })
+    tools().setTool('select')
+    tap({ point: [300, 72, -200], target: { kind: 'handle', face: 'n+' } }, 0)
+    expect(tools().op).toMatchObject({ kind: 'pushpull', target: { kind: 'body', id: b.id, face: 'n+' } })
+  })
+
+  it('pekar den rakt mot kameran händer inget', () => {
+    const b = extrude(drawGroundRect(), '22')
+    tools().setTool('select')
+    tap({ point: [300, 22, -200], target: { kind: 'body', id: b.id, face: 'n+' } }, 0)
+    tap({ point: [650, 11, -200], target: { kind: 'handle', face: 'u+', headOn: true } }, 0)
+    expect(tools().op).toBeNull()
+    expect(docs().selection).toEqual({ kind: 'body', id: b.id, face: 'n+' })
+  })
+
+  it('finns bara i Välj, på en del, och inte på den valda sidan', () => {
+    expect(sideHandleFaces({ kind: 'body', id: 'a', face: 'n+' }, 'select')).toEqual(['u+', 'u-', 'v+', 'v-', 'n-'])
+    expect(sideHandleFaces({ kind: 'body', id: 'a' }, 'select')).toHaveLength(6)
+    expect(sideHandleFaces({ kind: 'body', id: 'a', face: 'n+' }, 'rect')).toEqual([])
+    expect(sideHandleFaces({ kind: 'body', id: 'a', face: 'n+' }, 'move')).toEqual([])
+    expect(sideHandleFaces({ kind: 'sketch', id: 's' }, 'select')).toEqual([])
+    expect(sideHandleFaces(null, 'select')).toEqual([])
+  })
+
+  it('lyser upp en i taget', () => {
+    expect(handleOf({ kind: 'handle', face: 'u+' })).toEqual({ kind: 'handle', face: 'u+' })
+    tools().setHoverHandle({ kind: 'handle', face: 'u+' })
+    tools().setHoverHandle({ kind: 'handle', face: 'v-' })
+    expect(tools().hoverHandle).toEqual({ kind: 'handle', face: 'v-' })
+    tools().setHoverHandle({ kind: 'handle' })
+    expect(tools().hoverHandle).toEqual({ kind: 'handle' })
+  })
+})
+
 describe('välj', () => {
   it('väljer del och avmarkerar på golvet', () => {
     tap({ point: [0, 0, 0], target: { kind: 'body', id: 'x', face: 'n+' } }, 0)
@@ -1051,5 +1118,27 @@ describe('mät', () => {
     tap({ point: [0, 0, 0], target: { kind: 'ground' } }, 0)
     tools().setTool('select')
     expect(tools().ruler).toHaveLength(0)
+  })
+})
+
+describe('pilen under pekaren', () => {
+  it('pilar och bågar lyser upp, men inte en pil som pekar rakt mot kameran', () => {
+    expect(handleOf({ kind: 'handle' })).toEqual({ kind: 'handle' })
+    expect(handleOf({ kind: 'handle', headOn: true })).toBeNull()
+    expect(handleOf({ kind: 'axis', axis: 1 })).toEqual({ kind: 'axis', axis: 1 })
+    expect(handleOf({ kind: 'axis', axis: 1, headOn: true })).toBeNull()
+    expect(handleOf({ kind: 'rotate', axis: 2 })).toEqual({ kind: 'rotate', axis: 2 })
+    expect(handleOf({ kind: 'ground' })).toBeNull()
+    expect(handleOf(undefined)).toBeNull()
+  })
+  it('samma pil igen ändrar inte storen (ingen ny rendering), och en operation släcker den', () => {
+    tools().setHoverHandle({ kind: 'axis', axis: 0 })
+    const before = tools().hoverHandle
+    tools().setHoverHandle({ kind: 'axis', axis: 0 })
+    expect(tools().hoverHandle).toBe(before)
+    tools().setHoverHandle({ kind: 'axis', axis: 1 })
+    expect(tools().hoverHandle).toEqual({ kind: 'axis', axis: 1 })
+    drawGroundRect()
+    expect(tools().hoverHandle).toBeNull()
   })
 })

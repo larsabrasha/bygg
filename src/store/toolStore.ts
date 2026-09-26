@@ -145,12 +145,29 @@ export interface HoverPoint {
   guides: [Vec3, Vec3][]
 }
 
+/**
+ * En pil eller båge att dra i (pilen på det valda, flyttpilarna, vridbågarna).
+ * face = en av de mindre pilarna på den valda delens andra sidor.
+ */
+export type HandleHover =
+  { kind: 'handle'; face?: Face } | { kind: 'axis'; axis: Axis } | { kind: 'rotate'; axis: Axis }
+
+const sameHandle = (a: HandleHover | null, b: HandleHover | null) =>
+  a === b ||
+  (!!a &&
+    !!b &&
+    (a.kind === 'handle'
+      ? b.kind === 'handle' && a.face === b.face
+      : a.kind === b.kind && a.axis === (b as { axis: Axis }).axis))
+
 interface ToolSnapshot {
   tool: Tool
   op: Op | null
   /** Ytan under muspekaren i push/pull- och flytta-läget (bara mus; touch har ingen hover). */
   hover: PushPullTarget | null
   hoverPoint: HoverPoint | null
+  /** Pilen eller bågen under pekaren (mus, penna som svävar, strålen i VR): den lyser upp. */
+  hoverHandle: HandleHover | null
   /** Inskrivna mått. Två fält för rektangel (längd, bredd), annars ett. */
   measure: [string, string]
   measureField: 0 | 1
@@ -176,6 +193,7 @@ interface ToolState extends ToolSnapshot {
   setOp: (op: Op | null) => void
   setHover: (hover: PushPullTarget | null) => void
   setHoverPoint: (p: HoverPoint | null) => void
+  setHoverHandle: (h: HandleHover | null) => void
   setMeasure: (field: 0 | 1, text: string) => void
   setMeasureField: (field: 0 | 1) => void
   setLastPushPull: (last: { distance: number; expr?: string }) => void
@@ -196,6 +214,7 @@ const initial: ToolSnapshot = previous
       tool: previous.getState().tool,
       hover: null,
       hoverPoint: null,
+      hoverHandle: null,
       lastPushPull: previous.getState().lastPushPull ?? null,
       copy: previous.getState().copy ?? false,
       lastCopy: null,
@@ -209,6 +228,7 @@ const initial: ToolSnapshot = previous
       tool: 'select',
       hover: null,
       hoverPoint: null,
+      hoverHandle: null,
       lastPushPull: null,
       copy: false,
       lastCopy: null,
@@ -226,6 +246,7 @@ export const useToolStore = create<ToolState>()((set) => ({
       tool,
       hover: null,
       hoverPoint: null,
+      hoverHandle: null,
       copy: false,
       lastCopy: null,
       lastOp: null,
@@ -235,10 +256,11 @@ export const useToolStore = create<ToolState>()((set) => ({
       ...idle,
     }),
   // En ny operation gör att förra kopieringen och förra operationen inte längre går att ändra.
-  setOp: (op) => set(op ? { op, hoverPoint: null, lastCopy: null, lastOp: null } : idle),
+  setOp: (op) => set(op ? { op, hoverPoint: null, hoverHandle: null, lastCopy: null, lastOp: null } : idle),
   setHover: (hover) => set({ hover }),
   setCombining: (combining) => set({ combining }),
   setHoverPoint: (hoverPoint) => set({ hoverPoint }),
+  setHoverHandle: (hoverHandle) => set((s) => (sameHandle(s.hoverHandle, hoverHandle) ? s : { hoverHandle })),
   setMeasure: (field, text) =>
     set((s) => {
       const measure: [string, string] = [...s.measure]

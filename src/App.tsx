@@ -4,7 +4,6 @@ import { DimensionLabels } from './panel/DimensionLabels'
 import { MeasureBox } from './panel/MeasureBox'
 import { Notices } from './panel/Notices'
 import { OpeningOverlay } from './panel/OpeningOverlay'
-import { PrintExploded } from './panel/PrintExploded'
 import { ExplodeBar } from './panel/ExplodeBar'
 import { Drawing } from './panel/Drawing'
 import { VisibilityBar } from './panel/VisibilityBar'
@@ -35,7 +34,7 @@ export function App() {
   return (
     <TipProvider>
       {/* minmax(0, …): annars får raden inte bli lägre än canvasens nuvarande höjd.
-          Vid utskrift döljs appen; det som skrivs ut är ritningen eller sprängskissen. */}
+          Vid utskrift döljs appen; det som skrivs ut är ritningen. */}
       {/* inert: under startvyn går 3D-vyns knappar inte att nå med Tab eller skärmläsare.
           Under ritningen är appen också osynlig, så att en öppen meny (z-50) inte syns ovanpå. */}
       {/* Dold detaljpanel (bara bred skärm): 3D-vyn tar hela bredden. Fokusläge: bara 3D-vyn. */}
@@ -54,7 +53,7 @@ export function App() {
         }`}
       >
         <Toolbar />
-        <main className="relative min-h-0 min-w-0 [grid-area:viewport]">
+        <main className="@container/view relative min-h-0 min-w-0 [grid-area:viewport]">
           {/* Stängd medan ritningen är öppen: det frigör hela dess grafikminne, som ritningens egna
               bilder behöver på en telefon. Kameran står kvar när den öppnas igen (CameraRig). */}
           {!drawing && <Viewport />}
@@ -82,7 +81,6 @@ export function App() {
       <OpeningOverlay />
       {/* Ritningen ligger ovanpå allt, som startvyn. */}
       <Drawing />
-      <PrintExploded />
     </TipProvider>
   )
 }

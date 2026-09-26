@@ -22,7 +22,17 @@ import {
   snapValue,
   type PlaneTargets,
 } from '../model/snapping'
-import type { Body, DimExpr, DimExprs, Face, Frame, Rect, Vec2, Vec3 } from '../model/types'
+import {
+  FACES,
+  type Body,
+  type DimExpr,
+  type DimExprs,
+  type Face,
+  type Frame,
+  type Rect,
+  type Vec2,
+  type Vec3,
+} from '../model/types'
 import { arrowDir, isHeadOn } from '../model/arrowDir'
 import { add, closestParamOnLine, cross, dot, length, scale, sub } from '../model/vec'
 import { useDocumentStore, type Selection } from '../store/documentStore'
@@ -40,6 +50,8 @@ import {
   type PushPullTarget,
   type RectOp,
   type RotateOp,
+  type HandleHover,
+  type Tool,
 } from '../store/toolStore'
 
 /**
@@ -53,13 +65,25 @@ export type PickTarget =
   | { kind: 'sketch'; id: string }
   /**
    * Pilen på det valda; att dra i den gör push/pull. headOn = den pekar nästan
-   * rakt mot kameran just nu (se isHeadOn) och går inte att dra i.
+   * rakt mot kameran just nu (se isHeadOn) och går inte att dra i. Med face är
+   * det en av de mindre pilarna på den valda delens andra sidor (se sideHandleFaces).
    */
-  | { kind: 'handle'; headOn?: boolean }
+  | { kind: 'handle'; face?: Face; headOn?: boolean }
   /** En av flyttpilarna (X, Y, Z) i Flytta-läget. headOn som för pilen på det valda. */
   | { kind: 'axis'; axis: Axis; headOn?: boolean }
   /** En av bågarna i Flytta-läget; att dra i den vrider delen runt axeln. */
   | { kind: 'rotate'; axis: Axis }
+
+/**
+ * Pilen eller bågen en träff gäller, för att lysa upp den under pekaren.
+ * En pil som pekar rakt mot kameran (headOn) går inte att dra i och lyser inte.
+ */
+export function handleOf(t: PickTarget | undefined): HandleHover | null {
+  if (t?.kind === 'handle') return t.headOn ? null : t.face ? { kind: 'handle', face: t.face } : { kind: 'handle' }
+  if (t?.kind === 'axis') return t.headOn ? null : { kind: 'axis', axis: t.axis }
+  if (t?.kind === 'rotate') return { kind: 'rotate', axis: t.axis }
+  return null
+}
 
 export interface Hit {
   point: Vec3
@@ -81,7 +105,7 @@ function headOnFrom(from: Vec3, dir: Vec3, ray: Ray): boolean {
 
 /** Pilen pekar rakt mot en: säg vad man kan göra i stället. */
 function headOnNotice() {
-  useLibraryStore.getState().notify('Pilen pekar rakt mot dig. Vrid vyn lite, eller skriv avståndet.')
+  useLibraryStore.getState().notify('Pilen pekar rakt mot dig. Titta på den från sidan, eller skriv avståndet.')
 }
 
 /** Flest kopior i en rad, så att ett felskrivet antal inte fryser appen. */
@@ -190,6 +214,12 @@ export function tap(hit: Hit | null, tol: number) {
 
   if (hit?.target.kind === 'handle') {
     if (hit.target.headOn) return headOnNotice()
+    const { face } = hit.target
+    // En mindre pil på en annan sida: den sidan blir vald, och det är den som dras ut.
+    if (face) {
+      const sel = docs().selection
+      if (sel?.kind === 'body') docs().select({ kind: 'body', id: sel.id, face })
+    }
     const sel = docs().selection
     const target = sel && pushPullTargetOf(sel)
     if (target) beginPushPull(target, hit.point)
@@ -297,8 +327,12 @@ export function tap(hit: Hit | null, tol: number) {
  * False om dubbeltrycket inte betyder något här; då räknas det som ett vanligt tryck.
  */
 export function doubleTap(hit: Hit | null): boolean {
-  if (tools().tool !== 'select' || hit?.target.kind !== 'body') return false
-  docs().select({ kind: 'body', id: hit.target.id, face: hit.target.face })
+  if (tools().tool !== 'select') return false
+  const sel = docs().selection
+  // Första trycket valde en sida, och dess pil står mitt på den: trycker man där igen träffas pilen.
+  const target = hit?.target.kind === 'handle' && sel?.kind === 'body' ? sel : hit?.target
+  if (target?.kind !== 'body') return false
+  docs().select({ kind: 'body', id: target.id, face: target.face })
   tools().setTool('move')
   return true
 }
@@ -312,6 +346,17 @@ export function opRect(op: RectOp): Rect {
 export function pushPullTargetOf(sel: Selection): PushPullTarget | null {
   if (sel.kind === 'sketch') return { kind: 'sketch', id: sel.id }
   return sel.face ? { kind: 'body', id: sel.id, face: sel.face } : null
+}
+
+/**
+ * Sidorna som får en mindre pil när en del är vald i Välj: alla utom den valda,
+ * som redan har den stora. Vilka av dem som syns avgör kameran (PushPullHandle):
+ * bara de som vetter mot en. Så går en smal kant att dra ut utan att man först
+ * måste träffa den med fingret.
+ */
+export function sideHandleFaces(sel: Selection | null, tool: Tool): Face[] {
+  if (tool !== 'select' || sel?.kind !== 'body') return []
+  return FACES.filter((f) => f !== sel.face)
 }
 
 /** Var pilen sitter och vart den pekar: mitt på skissen eller ytan, längs normalen. */
