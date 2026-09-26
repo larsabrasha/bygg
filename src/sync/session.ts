@@ -308,9 +308,13 @@ export async function openInitial() {
 
   const currentId = await repo.getCurrentId().catch(() => null)
   const current = currentId ? await repo.get(currentId) : undefined
-  // Visa hela modellen när 3D-vyn kommit igång.
-  useViewStore.getState().requestFit('all')
-  if (current && !current.deleted && showModel(current)) return
+  // Visa hela modellen när 3D-vyn kommit igång, direkt och utan att glida dit.
+  useViewStore.getState().requestFit('all', { animate: false })
+  if (current && !current.deleted) {
+    lib().set({ opening: { id: current.id, name: current.name } })
+    if (showModel(current)) return
+    lib().set({ opening: null })
+  }
   // Ny enhet: hämta från servern först, så att vi inte laddar upp en tom modell i onödan.
   if ((await repo.list()).length === 0) await syncNow()
   await openFallback()
@@ -433,12 +437,35 @@ export async function showGallery() {
 }
 
 /** Öppnar en modell från startvyn (eller en ny) och går till den. */
+/**
+ * Väntar tills webbläsaren har ritat det som just ändrats, så att brickan
+ * visar "Öppnar …" innan 3D-vyn räknar (det låser sidan en stund på en stor
+ * modell). I en dold flik ritas inget; då går det vidare efter en stund ändå.
+ */
+const nextPaint = () =>
+  new Promise<void>((resolve) => {
+    const done = setTimeout(resolve, 200)
+    requestAnimationFrame(() =>
+      requestAnimationFrame(() => {
+        clearTimeout(done)
+        resolve()
+      }),
+    )
+  })
+
 export async function openFromGallery(id: string | 'new') {
+  // Ett tryck till medan en modell öppnas gör ingenting.
+  if (lib().opening) return
+  // Den öppna modellen ligger redan ritad under startvyn, och en ny är tom: de öppnas direkt.
+  if (id !== 'new' && id !== lib().currentId) {
+    lib().set({ opening: { id, name: lib().models.find((m) => m.id === id)?.name ?? '' } })
+    await nextPaint()
+  }
   if (id === 'new') await createModel()
   else await openModel(id)
   lib().set({ screen: 'model' })
-  // Kameran från förra modellen passar sällan; visa hela den här.
-  useViewStore.getState().requestFit('all')
+  // Kameran från förra modellen passar sällan; visa hela den här, direkt och utan att glida dit.
+  useViewStore.getState().requestFit('all', { animate: false })
 }
 
 /** Startar autospar och bakgrundssynk. Returnerar en funktion som stänger av dem. */

@@ -3,6 +3,7 @@ import { Gallery } from './panel/Gallery'
 import { DimensionLabels } from './panel/DimensionLabels'
 import { MeasureBox } from './panel/MeasureBox'
 import { Notices } from './panel/Notices'
+import { OpeningOverlay } from './panel/OpeningOverlay'
 import { PrintExploded } from './panel/PrintExploded'
 import { ExplodeBar } from './panel/ExplodeBar'
 import { Drawing } from './panel/Drawing'
@@ -76,6 +77,7 @@ export function App() {
       </div>
       {/* Startvyn ligger ovanpå; 3D-vyn hålls kvar under så att den kan ta bilder och öppnas snabbt. */}
       {screen === 'gallery' && <Gallery />}
+      <OpeningOverlay />
       {/* Ritningen ligger ovanpå allt, som startvyn. */}
       <Drawing />
       <PrintExploded />

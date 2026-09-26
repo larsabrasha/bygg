@@ -31,6 +31,7 @@ function boundsOf(scene: Scene, onlyId: string | null): Box3 {
 export function CameraRig() {
   const ref = useRef<CameraControlsImpl>(null)
   const scene = useThree((s) => s.scene)
+  const invalidate = useThree((s) => s.invalidate)
   const fit = useViewStore((s) => s.fit)
 
   // Bara i dev: webbläsartester läser kameran härifrån.
@@ -43,17 +44,19 @@ export function CameraRig() {
     if (!c || !fit) return
     const selection = useDocumentStore.getState().selection
     const box = boundsOf(scene, fit.target === 'selection' ? (selection?.id ?? null) : null)
-    void c.setFocalOffset(0, 0, 0, true)
+    void c.setFocalOffset(0, 0, 0, fit.animate)
+    // Kameran flyttas när den uppdateras, i nästa bild; utan glidning ritar inget annat den bilden.
+    invalidate()
     if (box.isEmpty()) {
-      void c.setLookAt(...HOME.position, ...HOME.target, true)
+      void c.setLookAt(...HOME.position, ...HOME.target, fit.animate)
       return
     }
     // En sfär i stället för lådan: fitToBox vrider vyn rakt mot en sida, fitToSphere behåller vinkeln.
     // Lite luft runt modellen.
     const sphere = box.getBoundingSphere(new Sphere())
     sphere.radius = Math.max(sphere.radius * 1.25, 100)
-    void c.fitToSphere(sphere, true)
-  }, [fit, scene])
+    void c.fitToSphere(sphere, fit.animate)
+  }, [fit, scene, invalidate])
 
   return (
     <CameraControls

@@ -1,4 +1,4 @@
-import { Box, Copy, Ellipsis, Pencil, Plus, Trash2 } from 'lucide-react'
+import { Box, Copy, Ellipsis, LoaderCircle, Pencil, Plus, Trash2 } from 'lucide-react'
 import { useCallback, useRef, useState } from 'react'
 import { useLibraryStore, type ModelListItem } from '../store/libraryStore'
 import { deleteWithUndo, duplicateModel, openFromGallery, renameModel } from '../sync/session'
@@ -44,6 +44,8 @@ function ModelTile({ model, thumb, isCurrent }: { model: ModelListItem; thumb?: 
   const closeMenu = useCallback(() => setMenuOpen(false), [])
   useDismiss(menuRef, menuOpen, closeMenu)
   const status = useLibraryStore((s) => s.status)
+  // Den här öppnas: bilden dimmas och "Öppnar …" visas direkt, så att trycket syns.
+  const opening = useLibraryStore((s) => s.opening?.id === model.id)
   const conflict = splitConflict(model.name)
   const title = conflict?.base ?? model.name
 
@@ -52,12 +54,13 @@ function ModelTile({ model, thumb, isCurrent }: { model: ModelListItem; thumb?: 
       <button
         className="block w-full cursor-pointer rounded-lg focus-visible:outline-2 focus-visible:outline-accent"
         aria-label={`Öppna ${model.name}`}
+        aria-busy={opening}
         onClick={() => void openFromGallery(model.id)}
       >
-        {/* Den modell man kom ifrån får en ram. */}
+        {/* Den modell man kom ifrån, och den som öppnas, får en ram. */}
         <div
-          className={`grid aspect-[4/3] place-items-center overflow-hidden rounded-lg border bg-panel ${
-            isCurrent ? 'border-accent ring-2 ring-accent-soft' : 'border-line'
+          className={`relative grid aspect-[4/3] place-items-center overflow-hidden rounded-lg border bg-panel ${
+            isCurrent || opening ? 'border-accent ring-2 ring-accent-soft' : 'border-line'
           }`}
         >
           {thumb ? (
@@ -65,10 +68,19 @@ function ModelTile({ model, thumb, isCurrent }: { model: ModelListItem; thumb?: 
               src={thumb}
               alt=""
               draggable={false}
-              className="size-full object-contain select-none [-webkit-touch-callout:none]"
+              className={`size-full object-contain select-none [-webkit-touch-callout:none] ${
+                opening ? 'opacity-30' : ''
+              }`}
             />
           ) : (
             <Box size={40} strokeWidth={1.25} className="text-faint" aria-hidden />
+          )}
+          {opening && (
+            <div className="absolute inset-0 flex items-center justify-center gap-2 text-[13px]" role="status">
+              {/* En CSS-animation: den snurrar också medan sidan räknar fram delarna. */}
+              <LoaderCircle size={20} strokeWidth={2} className="animate-spin text-accent" aria-hidden />
+              Öppnar …
+            </div>
           )}
         </div>
       </button>

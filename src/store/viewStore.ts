@@ -7,9 +7,12 @@ export type Look = 'wireframe' | 'shaded' | 'realistic'
 export const LOOKS: readonly Look[] = ['wireframe', 'shaded', 'realistic']
 
 export interface ViewState {
-  /** Senaste begäran att zooma så att något syns. n ändras vid varje begäran, även till samma mål. */
-  fit: { target: FitTarget; n: number } | null
-  requestFit: (target: FitTarget) => void
+  /**
+   * Senaste begäran att zooma så att något syns. n ändras vid varje begäran, även till samma mål.
+   * animate: kameran glider dit (Visa allt), eller hoppar dit direkt (när en modell öppnas).
+   */
+  fit: { target: FitTarget; n: number; animate: boolean } | null
+  requestFit: (target: FitTarget, options?: { animate?: boolean }) => void
   /** Detaljpanelen på bred skärm. På smal skärm är den ett blad som alltid finns. */
   panelOpen: boolean
   togglePanel: () => void
@@ -112,7 +115,7 @@ function savePanelOpen(open: boolean) {
 /** Kamerabegäran från knappar och kortkommandon utanför 3D-vyn. Kameran själv ligger i CameraRig. */
 export const useViewStore = create<ViewState>()((set) => ({
   fit: null,
-  requestFit: (target) => set((s) => ({ fit: { target, n: (s.fit?.n ?? 0) + 1 } })),
+  requestFit: (target, { animate = true } = {}) => set((s) => ({ fit: { target, n: (s.fit?.n ?? 0) + 1, animate } })),
   spacePan: { held: false, used: false },
   setSpacePan: (spacePan) => set({ spacePan }),
   exploded: false,

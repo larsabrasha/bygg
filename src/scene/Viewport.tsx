@@ -21,6 +21,7 @@ import { DimensionGuides } from './DimensionGuides'
 import { dimensionsFor, shownDimensionsOf } from './dimensionLabels'
 import { AXIS_COLORS, SCENE } from './colors'
 import { MoveGizmo } from './MoveGizmo'
+import { OpenWatcher } from './OpenWatcher'
 import { HoverMarker, OpOverlay } from './OpPreview'
 import { PushPullHandle } from './PushPullHandle'
 import { RulerOverlay } from './RulerOverlay'
@@ -268,6 +269,7 @@ export function Viewport() {
       <ThumbnailCapturer />
       <ViewCapturer />
       <ExplodeAnimator />
+      <OpenWatcher />
 
       <CameraRig />
       <GizmoHelper alignment="bottom-left" margin={[70, 70]}>

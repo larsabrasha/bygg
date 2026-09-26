@@ -45,9 +45,13 @@ export function useManifold(needed: boolean): ManifoldToplevel | null {
   return current
 }
 
-/** Senast använda geometrier, per form och verktyg. Länkade kopior delar samma. */
+/**
+ * Senast använda geometrier, per form och verktyg. Länkade kopior delar samma.
+ * Rymmer en stor modell (Matgrupp har runt 90 delar med verktyg), så att den
+ * inte räknas om när delarna ritas om.
+ */
 const cache = new Map<string, BufferGeometry>()
-const CACHE_SIZE = 64
+const CACHE_SIZE = 256
 
 /**
  * Formen med sina verktyg som three.js-geometri, i formens koordinater.

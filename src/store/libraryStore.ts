@@ -31,6 +31,8 @@ interface LibrarySnapshot {
   status: SyncStatus
   error: string | null
   notices: Notice[]
+  /** Modellen som öppnas, tills 3D-vyn har ritat den (se OpenWatcher). */
+  opening: { id: string; name: string } | null
 }
 
 interface LibraryState extends LibrarySnapshot {
@@ -43,6 +45,7 @@ interface LibraryState extends LibrarySnapshot {
 const previous = import.meta.hot?.data.libraryStore as StoreApi<LibraryState> | undefined
 const initial: LibrarySnapshot = previous
   ? (({ models, thumbs, screen, pendingDelete, currentId, currentName, currentBase, status, error, notices }) => ({
+      opening: null,
       models,
       thumbs: thumbs ?? {},
       screen: screen ?? 'model',
@@ -65,6 +68,7 @@ const initial: LibrarySnapshot = previous
       status: 'starting',
       error: null,
       notices: [],
+      opening: null,
     }
 
 let noticeSeq = 0
