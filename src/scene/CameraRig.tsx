@@ -24,6 +24,12 @@ function boundsOf(scene: Scene, onlyId: string | null): Box3 {
 }
 
 /**
+ * Kameran när 3D-vyn stängdes (den är stängd medan ritningen är öppen), och
+ * den senaste "Visa allt" då, så att den inte görs om när vyn öppnas igen.
+ */
+let saved: { json: string; fit: unknown } | null = null
+
+/**
  * Kameran. Den vrider runt punkten man trycker på (ToolController sätter
  * punkten) och zoomar mot pekaren. Ingen tröghet när man drar: vyn stannar
  * när man släpper. Zoomning och "Visa allt" glider kort.
@@ -39,9 +45,24 @@ export function CameraRig() {
     if (import.meta.env.DEV) window.__camera = ref.current ?? undefined
   })
 
+  // Före effekten för "Visa allt" nedan, som hoppar över den som redan gjorts.
+  const restoredFit = useRef<unknown>(null)
   useEffect(() => {
     const c = ref.current
-    if (!c || !fit) return
+    if (!c) return
+    if (saved) {
+      c.fromJSON(saved.json, false)
+      restoredFit.current = saved.fit
+      saved = null
+    }
+    return () => {
+      saved = { json: c.toJSON(), fit: useViewStore.getState().fit }
+    }
+  }, [])
+
+  useEffect(() => {
+    const c = ref.current
+    if (!c || !fit || fit === restoredFit.current) return
     const selection = useDocumentStore.getState().selection
     const box = boundsOf(scene, fit.target === 'selection' ? (selection?.id ?? null) : null)
     void c.setFocalOffset(0, 0, 0, fit.animate)

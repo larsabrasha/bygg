@@ -352,7 +352,7 @@ export function Viewport() {
   // Realistiskt: studioljuset i RealisticLight ersätter det jämna ljuset och huvudljusen,
   // och bakgrunden är studiopapper utan rutnät.
   const realistic = useViewStore((s) => s.look) === 'realistic'
-  const effects = useViewStore((s) => realistic && !s.drawing)
+  const effects = realistic
   const studio = useMemo(() => beforeNeutral(colors.studio, EXPOSURE), [colors.studio])
 
   return (
@@ -389,8 +389,6 @@ export function Viewport() {
       <OpenWatcher />
 
       <CameraRig />
-      {/* Medan ritningen är öppen syns inte vyn; utan efterbehandlingen frigörs dess minne,
-          som ritningens egna bilder behöver på en telefon. */}
       {effects && <RealisticEffects />}
       {/* Axelkorset ritas ovanpå, efter efterbehandlingen när den finns (den ritar med prioritet 1). */}
       <GizmoHelper alignment="bottom-left" margin={[70, 70]} renderPriority={effects ? 2 : 1}>

@@ -71,8 +71,9 @@ async function refreshList() {
 /** Tar en ny bild av den öppna modellen, högst var THUMB_INTERVAL_MS om inte force. */
 async function updateThumbnail(id: string, force = false) {
   // Med dolda delar blir bilden bara en del av modellen; ta den när allt syns igen.
+  // Med ritningen öppen finns ingen 3D-vy att ta bilden i (den är stängd), och då togs bilden bort.
   const view = useViewStore.getState()
-  if (view.hidden.length > 0 || view.isolated) return
+  if (view.hidden.length > 0 || view.isolated || view.drawing) return
   const now = Date.now()
   if (!force && lastThumb.id === id && now - lastThumb.at < THUMB_INTERVAL_MS) return
   lastThumb = { id, at: now }
