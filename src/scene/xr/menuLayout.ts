@@ -18,9 +18,11 @@ export type MenuAction =
   | { kind: 'ok' }
   | { kind: 'cancel' }
   | { kind: 'field'; field: 0 | 1 }
+  | { kind: 'noticeAction'; id: string }
+  | { kind: 'dismiss'; id: string }
 
 export type Tone =
-  'tool' | 'toolActive' | 'digit' | 'op' | 'fn' | 'ok' | 'name' | 'field' | 'fieldActive' | 'hint' | 'panel'
+  'tool' | 'toolActive' | 'digit' | 'op' | 'fn' | 'ok' | 'name' | 'field' | 'fieldActive' | 'hint' | 'panel' | 'notice'
 
 /** Ikonerna, samma som i 3D-vyns verktygsrad och sifferblock (se menuIcons). */
 export type MenuIcon = 'select' | 'rect' | 'circle' | 'move' | 'measure' | 'back' | 'ok' | 'cancel'
@@ -58,6 +60,8 @@ export interface MenuState {
   measure: MeasureInfo | null
   /** Text utan sifferblock: avståndet i Mät, eller verktygets hjälptext när inget pågår. */
   note: string | null
+  /** Det senaste meddelandet (som Notices i 3D-vyn: synken, ångra borttagning), och hur många som finns. */
+  notice?: { id: string; text: string; action: string | null; count: number } | null
 }
 
 const TOOLS: { tool: Tool; label: string; icon: MenuIcon }[] = [
@@ -102,6 +106,8 @@ const KEY_H = 0.032
 const FIELD_H = 0.03
 const NAME_H = 0.024
 const HINT_H = 0.026
+/** Tre rader text: det längsta meddelandet från synken får plats. */
+const NOTICE_H = 0.04
 
 export function menuLayout(state: MenuState): MenuItem[] {
   const items: MenuItem[] = []
@@ -169,6 +175,20 @@ export function menuLayout(state: MenuState): MenuItem[] {
         })),
       )
     if (m.hint) row(HINT_H * 1.5, [{ id: 'hint', label: m.hint, tone: 'hint' }])
+  }
+
+  // Överst, längst från handen: meddelandet ligger kvar tills man stänger det, som i 3D-vyn.
+  // Knapparna under texten, till höger: dess egen (t.ex. Ångra) och Stäng.
+  const n = state.notice
+  if (n) {
+    y += GAP
+    const w = (inner - GAP) / 2
+    const button = (id: string, label: string, tone: Tone, action: MenuAction, x: number) =>
+      items.push({ id, label, tone, action, x, y: y + TOOL_H / 2, w, h: TOOL_H })
+    if (n.action) button('notice-action', n.action, 'ok', { kind: 'noticeAction', id: n.id }, left + w / 2)
+    button('notice-close', 'Stäng', 'fn', { kind: 'dismiss', id: n.id }, left + inner - w / 2)
+    y += TOOL_H + GAP
+    row(NOTICE_H, [{ id: 'notice', label: n.count > 1 ? `${n.text} (${n.count - 1} till)` : n.text, tone: 'notice' }])
   }
 
   // Bakgrunden bakom allt, lika hög som innehållet.

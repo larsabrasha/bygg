@@ -12,6 +12,7 @@ import {
 } from '../../panel/measureModel'
 import { nameAt } from '../../panel/numpadEdit'
 import { useDocumentStore } from '../../store/documentStore'
+import { useLibraryStore } from '../../store/libraryStore'
 import { useToolStore } from '../../store/toolStore'
 import { cancel, undoLast } from '../../tools/actions'
 import { applyKey, backspace, type MenuAction, type MenuState } from './menuLayout'
@@ -84,11 +85,30 @@ export function runMenuAction(action: MenuAction) {
     case 'field':
       t.setMeasureField(action.field)
       return
+    case 'noticeAction': {
+      // Som knappen i Notices: meddelandet ligger kvar tills man stänger det.
+      const notice = useLibraryStore.getState().notices.find((n) => n.id === action.id)
+      void notice?.action?.run()
+      return
+    }
+    case 'dismiss':
+      useLibraryStore.getState().dismiss(action.id)
+      return
   }
 }
 
 /** Menyns innehåll just nu, ur storarna. */
 export function menuState(): MenuState {
+  return { ...toolState(), notice: latestNotice() }
+}
+
+function latestNotice(): MenuState['notice'] {
+  const notices = useLibraryStore.getState().notices
+  const n = notices.at(-1)
+  return n ? { id: n.id, text: n.text, action: n.action?.label ?? null, count: notices.length } : null
+}
+
+function toolState(): Omit<MenuState, 'notice'> {
   const t = useToolStore.getState()
   if (t.tool === 'measure') {
     const [a, b] = t.ruler.length === 2 ? t.ruler : [t.ruler[0], t.rulerHover]

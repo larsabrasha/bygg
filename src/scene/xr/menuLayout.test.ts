@@ -140,3 +140,37 @@ describe('applyKey och backspace', () => {
     expect(backspace('')).toBe('')
   })
 })
+
+describe('meddelanden', () => {
+  const notice = { id: 'n1', text: '"Byrå" uppdaterades från en annan enhet.', action: null, count: 1 }
+
+  it('överst, ovanför sifferblocket, med Stäng under texten', () => {
+    const items = menuLayout({ tool: 'select', measure, note: null, notice })
+    const text = items.find((i) => i.id === 'notice')!
+    const close = items.find((i) => i.id === 'notice-close')!
+    expect(text.label).toBe(notice.text)
+    expect(close.action).toEqual({ kind: 'dismiss', id: 'n1' })
+    expect(close.y).toBeLessThan(text.y)
+    const others = items.filter((i) => i.tone !== 'panel' && !i.id.startsWith('notice'))
+    expect(close.y - close.h / 2).toBeGreaterThan(Math.max(...others.map((i) => i.y + i.h / 2)))
+    expect(items.some((i) => i.id === 'notice-action')).toBe(false)
+  })
+
+  it('meddelandets egen knapp bredvid Stäng, och hur många fler som finns', () => {
+    const items = menuLayout({
+      tool: 'rect',
+      measure: null,
+      note: 'Rita på golvet.',
+      notice: { ...notice, action: 'Ångra', count: 3 },
+    })
+    expect(items.find((i) => i.id === 'notice-action')?.action).toEqual({ kind: 'noticeAction', id: 'n1' })
+    expect(items.find((i) => i.id === 'notice')?.label).toBe(`${notice.text} (2 till)`)
+    const panel = items[0]!
+    const rest = items.slice(1)
+    for (const a of rest) {
+      expect(Math.abs(a.x) + a.w / 2).toBeLessThanOrEqual(MENU_W / 2 + 1e-9)
+      expect(a.y + a.h / 2).toBeLessThanOrEqual(panel.h + 1e-9)
+      for (const b of rest) if (a !== b) expect(overlaps(a, b)).toBe(false)
+    }
+  })
+})

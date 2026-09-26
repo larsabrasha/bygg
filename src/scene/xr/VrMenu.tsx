@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type RefObject } from 'react'
 import { DoubleSide, type Group } from 'three'
 import { useDocumentStore } from '../../store/documentStore'
+import { useLibraryStore } from '../../store/libraryStore'
 import { useToolStore } from '../../store/toolStore'
 import { useViewStore } from '../../store/viewStore'
 import { menuState, useVrHover, type VrUi } from './menuActions'
@@ -26,6 +27,8 @@ const COLORS: Record<Tone, { bg: string; color: string; hover: string }> = {
   field: { bg: '#1b1a18', color: '#ebe7e0', hover: '#1b1a18' },
   fieldActive: { bg: '#1b1a18', color: '#6aa5f5', hover: '#1b1a18' },
   hint: { bg: 'rgba(0,0,0,0)', color: '#a8a196', hover: 'rgba(0,0,0,0)' },
+  // Meddelanden sticker ut i accentens mörka ton, så att man ser dem i ögonvrån.
+  notice: { bg: '#1f3552', color: '#ebe7e0', hover: '#1f3552' },
 }
 
 function MenuMesh({ item, hovered }: { item: MenuItem; hovered: boolean }) {
@@ -33,15 +36,17 @@ function MenuMesh({ item, hovered }: { item: MenuItem; hovered: boolean }) {
   // Fälten har namn, värde och enhet på en rad, två bredvid varandra i en rektangel.
   // Som i sifferblocket i 3D-vyn: räknesätten något större än siffrorna.
   const size =
-    item.tone === 'hint' || item.tone === 'name'
+    item.tone === 'hint' || item.tone === 'name' || item.tone === 'notice'
       ? 0.009
-      : item.tone === 'op'
-        ? 0.016
-        : item.tone === 'digit' || item.tone === 'fn' || item.tone === 'ok'
-          ? 0.014
-          : item.tone === 'field' || item.tone === 'fieldActive'
-            ? 0.0085
-            : 0.011
+      : item.id.startsWith('notice-')
+        ? 0.011
+        : item.tone === 'op'
+          ? 0.016
+          : item.tone === 'digit' || item.tone === 'fn' || item.tone === 'ok'
+            ? 0.014
+            : item.tone === 'field' || item.tone === 'fieldActive'
+              ? 0.0085
+              : 0.011
   // Ikonen laddas som bild (se iconImage). Tills den finns står namnet där.
   const [image, setImage] = useState<{ key: string; img: HTMLImageElement } | null>(null)
   const iconKey = item.icon ? `${item.icon} ${c.color}` : null
@@ -67,7 +72,8 @@ function MenuMesh({ item, hovered }: { item: MenuItem; hovered: boolean }) {
         size,
         bold: item.tone !== 'hint',
         radius: item.tone === 'panel' ? 0.01 : 0.005,
-        align: item.tone === 'field' || item.tone === 'fieldActive' ? 'right' : 'center',
+        align:
+          item.tone === 'field' || item.tone === 'fieldActive' ? 'right' : item.tone === 'notice' ? 'left' : 'center',
         icon,
       }),
     [item.label, item.w, item.h, item.tone, item.action, hovered, c, size, icon],
@@ -107,6 +113,7 @@ export function VrMenu({ group }: { group: RefObject<Group | null> }) {
   useDocumentStore((s) => s.selection)
   useDocumentStore((s) => s.doc)
   useViewStore((s) => s.exploded)
+  useLibraryStore((s) => s.notices)
   const hover = useVrHover((s) => s.id)
   const items = menuLayout(menuState())
 
