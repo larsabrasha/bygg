@@ -81,7 +81,7 @@ function headOnFrom(from: Vec3, dir: Vec3, ray: Ray): boolean {
 
 /** Pilen pekar rakt mot en: säg vad man kan göra i stället. */
 function headOnNotice() {
-  useLibraryStore.getState().notify('Pilen pekar rakt mot dig. Vrid vyn lite, eller skriv avståndet.')
+  useLibraryStore.getState().notify('Pilen pekar rakt mot dig. Titta på den från sidan, eller skriv avståndet.')
 }
 
 /** Flest kopior i en rad, så att ett felskrivet antal inte fryser appen. */

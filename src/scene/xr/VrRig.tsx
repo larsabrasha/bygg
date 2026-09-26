@@ -220,6 +220,19 @@ function Controllers() {
     }
   }, [gl, scene, report])
 
+  // Ett nytt meddelande (synken, en borttagen modell) står på menyn på vänster hand:
+  // den vibrerar till, så att man tittar dit.
+  useEffect(
+    () =>
+      useLibraryStore.subscribe((s, prev) => {
+        if (s.notices.length <= prev.notices.length) return
+        const session = gl.xr.getSession()
+        const left = session && [...session.inputSources].find((src) => src.handedness === 'left')
+        if (left?.gamepad) pulse(left.gamepad)
+      }),
+    [gl],
+  )
+
   useFrame((_state, delta, frame?: XRFrame) => {
     const xrCam = gl.xr.getCamera()
     const rig = xrCam.parent
@@ -423,6 +436,17 @@ function Controllers() {
       </mesh>
     </>
   )
+}
+
+/**
+ * En kort vibration. hapticActuators finns i WebXR i Chrome men saknas i
+ * TypeScripts typer, och alla kontroller har det inte.
+ */
+function pulse(gamepad: Gamepad) {
+  const actuators = (gamepad as Gamepad & { hapticActuators?: { pulse?: (v: number, ms: number) => unknown }[] })
+    .hapticActuators
+  // Avvisas löftet (kontrollen kan inte vibrera nu) gör det inget.
+  Promise.resolve(actuators?.[0]?.pulse?.(0.6, 80)).catch(() => {})
 }
 
 function handOf(hands: Map<XRHandedness, Hand>, h: XRHandedness) {
