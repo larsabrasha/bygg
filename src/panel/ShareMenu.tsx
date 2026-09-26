@@ -6,6 +6,7 @@ import { useBodies, useDocumentStore } from '../store/documentStore'
 import { useLibraryStore } from '../store/libraryStore'
 import { useViewStore } from '../store/viewStore'
 import { ArButton } from './ArButton'
+import { VrButton } from './VrButton'
 import { downloadCutListCsv } from './cutlistActions'
 import { buildExportFile, EXPORT_FORMATS, type ExportFormat } from './exportActions'
 import { deliverFile } from './fileOut'
@@ -48,6 +49,7 @@ export function ShareMenu({ buttonClass }: { buttonClass: string }) {
           {page === 'main' ? (
             <>
               <ArButton onOpened={close} />
+              <VrButton onOpened={close} />
               <MenuItem
                 Icon={DraftingCompass}
                 disabled={empty}

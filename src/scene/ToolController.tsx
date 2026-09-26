@@ -2,11 +2,9 @@ import type { CameraControlsImpl } from '@react-three/drei'
 import { useThree } from '@react-three/fiber'
 import { useEffect, useMemo } from 'react'
 import { Raycaster, Vector2, Vector3, type Intersection, type Object3D, type PerspectiveCamera } from 'three'
-import { circleFace, faceOnBox, type Box } from '../model/geometry'
-import { FACES, type Face, type Vec3 } from '../model/types'
+import type { Vec3 } from '../model/types'
 import { useDocumentStore } from '../store/documentStore'
 import { useLibraryStore } from '../store/libraryStore'
-import { pickScore } from '../tools/pickPriority'
 import { useToolStore, type Op } from '../store/toolStore'
 import { useViewStore } from '../store/viewStore'
 import {
@@ -21,7 +19,6 @@ import {
   repeatLastPushPull,
   tap,
   type Hit,
-  type PickTarget,
   type Ray,
 } from '../tools/actions'
 import {
@@ -33,7 +30,6 @@ import {
   hovers,
   movesCamera,
   isDoubleTap,
-  pickable,
   pressOwner,
   snapPx,
   TAP_SLOP,
@@ -42,6 +38,7 @@ import {
   type TapPoint,
 } from '../tools/gestures'
 import { applyCameraButtons } from './camera'
+import { closestObject, groundHit, ON_TOP, pickTargets, toHit } from './pick'
 
 /**
  * Hur nära en del pekaren måste vara för att träffa den, i px. Gör tunna
@@ -50,9 +47,6 @@ import { applyCameraButtons } from './camera'
 const PICK_RADIUS: Record<PointerKind, number> = { mouse: 6, pen: 8, touch: 16 }
 /** Golvet blir vridpunkt bara om det ligger högst så här många gånger längre bort än nuvarande vridpunkt. */
 const MAX_GROUND_PIVOT = 1.5
-
-/** Pilen på det valda, flyttpilarna och bågarna: ritas ovanpå allt och vinner över delar (se pickScore). */
-const ON_TOP = new Set<string>(['handle', 'axis', 'rotate'])
 
 const kindOf = (e: PointerEvent): PointerKind =>
   e.pointerType === 'touch' || e.pointerType === 'pen' ? e.pointerType : 'mouse'
@@ -127,53 +121,7 @@ export function ToolController() {
     }
     const rayOf = (e: PointerEvent) => castRay(e.clientX, e.clientY)
 
-    const pickTargets = (): Object3D[] => {
-      // Nya objekt har ingen giltig matrixWorld förrän nästa bildruta ritats,
-      // och med frameloop="demand" kan det dröja. Räkna om före raycast.
-      scene.updateMatrixWorld()
-      // Medan man väljer verktyg för Skär ut / Lägg till räknas inte värden: verktyget
-      // ligger ofta inuti den (ett tapphål), och trycket ska nå det.
-      const skip = useToolStore.getState().combining?.host
-      const targets: Object3D[] = []
-      scene.traverse((o) => {
-        if (o.userData.pick && pickable(o.userData.pick, skip)) targets.push(o)
-      })
-      return targets
-    }
-
-    /** Den träff längs den senast kastade strålen som vinner (pickScore). */
-    const closestObject = (targets: Object3D[]): Intersection | null => {
-      let best: { hit: Intersection; score: number } | null = null
-      for (const hit of raycaster.intersectObjects(targets, false)) {
-        const score = pickScore(hit.object.userData.pick, hit.distance)
-        if (!best || score < best.score) best = { hit, score }
-      }
-      return best?.hit ?? null
-    }
-
-    const toHit = (hit: Intersection): Hit => {
-      const p = hit.object.userData.pick as
-        | { kind: 'body' | 'sketch'; id: string; round?: boolean; box?: Box }
-        | Extract<PickTarget, { kind: 'handle' | 'axis' | 'rotate' }>
-      // En del med verktyg: sidan räknas ur punkt och normal i formens koordinater, och
-      // saknas inne i ett hål. En cylinders sida ur normalen, en lådas ur materialet.
-      const face = (): Face | undefined => {
-        if ('box' in p && p.box && hit.face) {
-          const local = hit.object.worldToLocal(hit.point.clone()).toArray() as Vec3
-          return faceOnBox(p.box, local, hit.face.normal.toArray() as Vec3)
-        }
-        return 'round' in p && p.round && hit.face
-          ? circleFace(hit.face.normal.toArray() as Vec3)
-          : FACES[hit.face?.materialIndex ?? 0]!
-      }
-      const target: PickTarget =
-        p.kind === 'handle' || p.kind === 'axis' || p.kind === 'rotate'
-          ? p
-          : p.kind === 'body'
-            ? { kind: 'body', id: p.id, face: face() }
-            : { kind: 'sketch', id: p.id }
-      return { point: hit.point.toArray() as Vec3, target }
-    }
+    const closest = (targets: Object3D[]) => closestObject(raycaster, targets)
 
     /**
      * Träff under pekaren. Missar strålen alla objekt provas en ring runt
@@ -182,21 +130,15 @@ export function ToolController() {
      * och då skulle det annars ta klicken på delarnas undersidor.
      */
     const pick = (x: number, y: number, kind: PointerKind): Hit | null => {
-      const targets = pickTargets()
+      const targets = pickTargets(scene)
       const center = castRay(x, y)
-      const direct = closestObject(targets)
+      const direct = closest(targets)
 
-      const groundT = center.dir[1] !== 0 ? -center.origin[1] / center.dir[1] : -1
-      const ground: Hit | null =
-        groundT > 0 && center.origin[1] > 0
-          ? {
-              point: [center.origin[0] + center.dir[0] * groundT, 0, center.origin[2] + center.dir[2] * groundT],
-              target: { kind: 'ground' },
-            }
-          : null
+      const floor = groundHit(center)
+      const ground = floor?.hit ?? null
 
       if (direct && ON_TOP.has(direct.object.userData.pick.kind)) return toHit(direct)
-      if (direct) return ground && groundT < direct.distance ? ground : toHit(direct)
+      if (direct) return floor && floor.distance < direct.distance ? floor.hit : toHit(direct)
 
       const r = PICK_RADIUS[kind]
       for (const radius of [r / 2, r]) {
@@ -204,7 +146,7 @@ export function ToolController() {
         for (let i = 0; i < 8; i++) {
           const a = (i / 8) * Math.PI * 2
           castRay(x + Math.cos(a) * radius, y + Math.sin(a) * radius)
-          const h = closestObject(targets)
+          const h = closest(targets)
           if (h && (!best || h.distance < best.distance)) best = h
         }
         if (best) return toHit(best)
