@@ -471,8 +471,8 @@ function Controllers() {
       <VrMenu group={menu} />
       <VrLegend group={legendLeft} text={LEGEND_LEFT} width={0.09} height={0.034} />
       <VrLegend group={legendRight} text={LEGEND_RIGHT} width={0.11} height={0.084} />
-      {/* Strålen från handkontrollen (kontrollerna själva ritas av xrStore). Inte med på modellbilderna. */}
-      <group ref={beam} userData={{ noThumb: true }} visible={false}>
+      {/* Strålen från handkontrollen (kontrollerna själva ritas av xrStore). */}
+      <group ref={beam} visible={false}>
         {/* Accentfärgen, som markeringen av det valda: syns mot både ljus och mörk bakgrund (vitt syntes inte i ljust läge). */}
         <mesh ref={beamLine} rotation={[Math.PI / 2, 0, 0]}>
           <cylinderGeometry args={[1.6, 1.6, 1, 8]} />
@@ -480,7 +480,7 @@ function Controllers() {
         </mesh>
       </group>
       {/* Efter menyn (renderOrder 10 och 11), så att punkten syns ovanpå knapparna. */}
-      <mesh ref={cursor} userData={{ noThumb: true }} visible={false} renderOrder={12}>
+      <mesh ref={cursor} visible={false} renderOrder={12}>
         <sphereGeometry args={[1, 16, 12]} />
         <meshBasicMaterial color={ACCENT} depthTest={false} transparent opacity={0.95} toneMapped={false} />
       </mesh>

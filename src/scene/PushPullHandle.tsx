@@ -92,7 +92,7 @@ export function PushPullHandle({ anchor, normal, face }: { anchor: Vec3; normal:
   })
 
   return (
-    <group ref={ref} position={anchor} userData={{ noThumb: true }}>
+    <group ref={ref} position={anchor}>
       <mesh position={[0, 26, 0]} renderOrder={10}>
         <cylinderGeometry args={[2.5, 2.5, 44]} />
         <meshBasicMaterial {...material} />

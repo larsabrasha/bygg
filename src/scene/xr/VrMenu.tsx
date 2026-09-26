@@ -153,7 +153,7 @@ export function VrMenu({ group }: { group: RefObject<Group | null> }) {
   const items = menuLayout(menuState())
 
   return (
-    <group ref={group} matrixAutoUpdate={false} visible={false} userData={{ noThumb: true }}>
+    <group ref={group} matrixAutoUpdate={false} visible={false}>
       {items.map((item) => (
         <MenuMesh key={item.id} item={item} hovered={hover === item.id} />
       ))}
@@ -192,7 +192,7 @@ export function VrLegend({
   )
   useEffect(() => () => texture.dispose(), [texture])
   return (
-    <group ref={group} matrixAutoUpdate={false} visible={false} userData={{ noThumb: true }}>
+    <group ref={group} matrixAutoUpdate={false} visible={false}>
       <mesh renderOrder={10}>
         <planeGeometry args={[width, height]} />
         <meshBasicMaterial map={texture} transparent side={DoubleSide} depthTest={false} toneMapped={false} />

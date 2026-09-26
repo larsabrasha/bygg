@@ -39,7 +39,6 @@ import { RulerOverlay } from './RulerOverlay'
 import { SketchMesh } from './SketchMesh'
 import { ShadedLights } from './ShadedLights'
 import { ThumbnailCapturer } from './ThumbnailCapturer'
-import { ViewCapturer } from './ViewCapturer'
 import { ExplodeAnimator } from './ExplodeAnimator'
 import { ToolController } from './ToolController'
 import { useColorScheme } from './useColorScheme'
@@ -228,8 +227,6 @@ function RealisticLight({ bodies, scheme }: { bodies: readonly Body[]; scheme: '
   const floor = radius * 3
   const dark = scheme === 'dark'
   return (
-    // Ljuset är med på modellbilderna; bara golvet och dess skuggor döljs där. Ett dolt ljus
-    // ändrar antalet ljus, och då kompilerar three.js om alla shaders för bilden.
     <group>
       <StudioEnvironment />
       <primitive object={target} position={center} />
@@ -259,7 +256,6 @@ function RealisticLight({ bodies, scheme }: { bodies: readonly Body[]; scheme: '
         // Skalad i stället för en ny geometri: storleken följer modellen, också i varje bildruta under ett drag.
         scale={[floor, floor, 1]}
         receiveShadow
-        userData={{ noThumb: true }}
       >
         <planeGeometry args={[1, 1]} />
         <shadowMaterial opacity={dark ? 0.34 : 0.32} transparent depthWrite={false} />
@@ -274,7 +270,6 @@ function RealisticLight({ bodies, scheme }: { bodies: readonly Body[]; scheme: '
       */}
       {!inVr && (
         <ContactShadows
-          userData={{ noThumb: true }}
           position={[center[0], -1, center[2]]}
           scale={floor}
           far={CONTACT_MM}
@@ -393,8 +388,8 @@ export function Viewport() {
         <color attach="background" args={[realistic ? studio : colors.background]} />
         <ShadedLights on={!realistic} />
 
-        {/* Lite under y=0 så att delarnas undersida inte flimrar mot linjerna. Inte med på modellbilderna. */}
-        <group userData={{ noThumb: true }} visible={!realistic}>
+        {/* Lite under y=0 så att delarnas undersida inte flimrar mot linjerna. */}
+        <group visible={!realistic}>
           <Grid
             position={[0, -0.5, 0]}
             cellSize={100}
@@ -412,7 +407,6 @@ export function Viewport() {
         <Scene />
         <ToolController />
         {!inVr && <ThumbnailCapturer />}
-        {!inVr && <ViewCapturer />}
         <ExplodeAnimator />
         <OpenWatcher />
         <VrRig />

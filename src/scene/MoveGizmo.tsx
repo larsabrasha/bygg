@@ -119,7 +119,7 @@ export function MoveGizmo({ center }: { center: Vec3 }) {
   })
 
   return (
-    <group ref={ref} position={center} userData={{ noThumb: true }}>
+    <group ref={ref} position={center}>
       <mesh renderOrder={10}>
         <sphereGeometry args={[6, 16, 12]} />
         <meshBasicMaterial color="#ffffff" {...onTop} />

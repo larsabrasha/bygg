@@ -17,7 +17,7 @@ export function RulerOverlay() {
   const result = a && b ? rulerResult(a, b) : null
   const done = ruler.length === 2
   return (
-    <group userData={{ noThumb: true }}>
+    <group>
       {ruler.map((p, i) => (
         <SnapMarker key={i} position={p.point} onTarget={p.snap !== null} />
       ))}

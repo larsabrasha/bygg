@@ -1,18 +1,15 @@
-import { Printer, X } from 'lucide-react'
-import { useLibraryStore } from '../store/libraryStore'
+import { X } from 'lucide-react'
 import { useViewStore } from '../store/viewStore'
 import { setExploded } from '../tools/actions'
-import { printExploded } from './explodeActions'
 import { Tip } from './Tip'
-import { bottomBox, ghostButton, iconAction } from './ui'
+import { bottomBox, iconAction } from './ui'
 import { useCoversView } from './useCoversView'
 
-/** Längst ner i vyn i sprängskissen: hur långt isär, skriv ut och stäng. */
+/** Längst ner i vyn i sprängskissen: hur långt isär, och stäng. */
 export function ExplodeBar() {
   const exploded = useViewStore((s) => s.exploded)
   const amount = useViewStore((s) => s.explodeAmount)
   const setAmount = useViewStore((s) => s.setExplodeAmount)
-  const modelName = useLibraryStore((s) => s.currentName)
   const cover = useCoversView<HTMLDivElement>()
   if (!exploded) return null
   return (
@@ -30,10 +27,6 @@ export function ExplodeBar() {
           className="w-36 accent-accent narrow:w-24"
         />
       </label>
-      <button type="button" className={ghostButton} onClick={() => void printExploded(modelName)}>
-        <Printer size={16} strokeWidth={1.75} aria-hidden />
-        <span className="narrow:hidden">Skriv ut</span>
-      </button>
       <Tip label="Stäng sprängskissen" keys="Esc" side="top">
         <button
           type="button"
