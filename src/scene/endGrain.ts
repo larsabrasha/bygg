@@ -21,7 +21,7 @@ export interface EndGrain {
 /** Hur mycket tätare ringarna är än ränderna på långsidan (där ringarna skärs snett). */
 const RING = 2
 /** Så mycket mörkare ändträ är. */
-const DARKER = 0.78
+export const DARKER = 0.78
 
 const plane = (grain: 0 | 1 | 2) =>
   (

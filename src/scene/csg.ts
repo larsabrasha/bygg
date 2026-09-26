@@ -45,6 +45,12 @@ export function useManifold(needed: boolean): ManifoldToplevel | null {
   return current
 }
 
+/** manifold-3d när den laddats, eller null om den inte gick att ladda. För exporten, som inte ritar. */
+export async function loadManifold(): Promise<ManifoldToplevel | null> {
+  if (!api) await load()
+  return api
+}
+
 /**
  * Senast använda geometrier, per form och verktyg. Länkade kopior delar samma.
  * Rymmer en stor modell (Matgrupp har runt 90 delar med verktyg), så att den

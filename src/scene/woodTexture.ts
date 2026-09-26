@@ -47,6 +47,13 @@ function entry(material: string): Entry {
   return e
 }
 
+/** Texturerna för ett material när båda laddats. För AR-exporten, som inte ritar. */
+export async function loadWood(material: string): Promise<Wood> {
+  const e = entry(material)
+  await e.ready
+  return e.wood
+}
+
 /**
  * Texturerna när båda laddats, annars null (då ritas delen i sin färg under tiden).
  * Laddas först när de behövs, alltså när man väljer det realistiska utseendet.
