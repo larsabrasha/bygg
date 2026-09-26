@@ -8,10 +8,16 @@ import {
   layoutPartSheet,
   partGeometry,
   scaleLabel,
+  SHEET,
   wantedDetails,
 } from './partSheet'
 import { testBody } from './testFixtures'
 import type { Body, ToolShape } from './types'
+
+/** Titelrutans övre och vänstra kant, och ramens högra. */
+const TITLE_TOP = SHEET.height - SHEET.frame - SHEET.title.height
+const TITLE_LEFT = SHEET.width - SHEET.frame - SHEET.title.width
+const FRAME_RIGHT = SHEET.width - SHEET.frame
 
 /** Verktyg i formens koordinater, utan vridning. */
 const tool = (
@@ -132,8 +138,8 @@ describe('layoutPartSheet', () => {
     const { shapes } = layoutPartSheet(partGeometry({ ...testBody(), profile: { x0: 0, y0: 0, x1: 2400, y1: 600 } }))
     for (const s of shapes) {
       expect(s.x).toBeGreaterThanOrEqual(5)
-      expect(s.x + s.w).toBeLessThanOrEqual(262)
-      expect(s.y + s.h).toBeLessThanOrEqual(150)
+      expect(s.x + s.w).toBeLessThanOrEqual(FRAME_RIGHT)
+      expect(s.y + s.h).toBeLessThanOrEqual(TITLE_TOP)
     }
   })
 
@@ -248,11 +254,12 @@ describe('detaljer', () => {
     expect(layout.scale).toBe(2)
     expect(layout.details).toHaveLength(1)
     const [a] = layout.details
-    expect(a).toMatchObject({ letter: 'A', scale: 0.5 })
+    // 1:1, dubbelt så stort som vyerna i 1:2 (2:1 ryms inte bredvid dem på bladet).
+    expect(a).toMatchObject({ letter: 'A', scale: 1 })
     // Tjockleken i kedjan: 7,5 + 7 + 7,5 och totalt 22.
     expect(a!.dims.filter((d) => d.vertical).map((d) => d.text)).toEqual(['7,5', '7', '7,5', '22'])
     // Detaljen står inte på titelrutan.
-    expect(a!.clip.y + a!.clip.h <= 150 || a!.clip.x + a!.clip.w <= 137).toBe(true)
+    expect(a!.clip.y + a!.clip.h <= TITLE_TOP || a!.clip.x + a!.clip.w <= TITLE_LEFT).toBe(true)
   })
 
   it('behövs inte när allt är stort nog på papperet', () => {

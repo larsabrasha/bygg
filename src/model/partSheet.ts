@@ -5,7 +5,7 @@ import { widthAxis } from './partAxes'
 import type { Axis, Body } from './types'
 
 /**
- * Detaljblad: en del ritad i tre vyer med mått, på ett liggande A4 (267 × 185 mm,
+ * Detaljblad: en del ritad i tre vyer med mått, på ett liggande A4 (255 × 177 mm,
  * utskriftens yta). Allt här är i millimeter på papperet, med y nedåt som i SVG.
  */
 
@@ -162,8 +162,12 @@ export function drawingPositions(bodies: readonly Body[]): CutListRow[] {
   })
 }
 
-/** Bladet och ytan för vyerna: ovanför titelrutan, innanför ramen. */
-export const SHEET = { width: 267, height: 185, frame: 5, title: { width: 125, height: 30 } } as const
+/**
+ * Bladet och ytan för vyerna: ovanför titelrutan, innanför ramen. Så stort att det ryms
+ * på A4 också med Safaris marginaler på iPhone och iPad, där sidhuvud och sidfot tar
+ * plats och bladet vrids (ca 261 × 184 mm). Samma storlek i Drawing.tsx (Sheet).
+ */
+export const SHEET = { width: 255, height: 177, frame: 5, title: { width: 125, height: 30 } } as const
 
 export const AREA = {
   x: SHEET.frame,

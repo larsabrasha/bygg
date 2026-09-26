@@ -10,10 +10,10 @@ export interface ViewImage {
 
 interface PrintState {
   /**
-   * Vad som skrivs ut: sprängskissen (ExplodeBar) eller ritningen, där
-   * kaplistan är sista bladet. none: inget; appen själv skrivs aldrig ut.
+   * Vad som skrivs ut: sprängskissen (ExplodeBar). none: inget; appen själv skrivs aldrig ut.
+   * Ritningen skrivs ut när den är öppen och behöver inget här (se Drawing).
    */
-  what: 'none' | 'exploded' | 'drawing'
+  what: 'none' | 'exploded'
   image: ViewImage | null
   setPrint: (what: PrintState['what'], image?: ViewImage | null) => void
 }

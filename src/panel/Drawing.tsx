@@ -1,5 +1,6 @@
 import { Printer, RotateCcw, RotateCw, X } from 'lucide-react'
 import { useEffect, useEffectEvent, useMemo, useRef, useState, type ReactNode } from 'react'
+import { flushSync } from 'react-dom'
 import { buildCutList, groupByMaterial, type CutList, type CutListRow } from '../model/cutlist'
 import { compactNames } from '../model/cutlistExport'
 import { overallSize } from '../model/drawing'
@@ -12,7 +13,6 @@ import { DrawingCanvas, type DrawingLayout } from '../scene/DrawingCanvas'
 import { OrthoRenderer, type OrthoShot } from '../scene/OrthoRenderer'
 import { useBodies } from '../store/documentStore'
 import { useLibraryStore } from '../store/libraryStore'
-import { usePrintStore } from '../store/printStore'
 import { useViewStore } from '../store/viewStore'
 import { MainViewsSheet } from './MainViewsSheet'
 import { PartSheet } from './PartSheet'
@@ -58,7 +58,6 @@ function DrawingView() {
   const setAmount = useViewStore((s) => s.setExplodeAmount)
   const close = () => useViewStore.getState().setDrawing(false)
   const name = useLibraryStore((s) => s.currentName) || 'Modell'
-  const printing = usePrintStore((s) => s.what) === 'drawing'
 
   // Inte rakt på hörnet (45°): där hamnar främre och bakre ben i linje och skymmer varandra.
   // Vridningen går ett kvarts varv, så att man ser möbeln från vart och ett av hörnen.
@@ -97,26 +96,40 @@ function DrawingView() {
   const sheets = (size ? 2 : 1) + details.length + 1
   const date = new Date().toLocaleDateString('sv-SE')
 
-  /** Bilderna kopieras till <img>: en WebGL-canvas kommer inte med på papperet i alla webbläsare. */
-  const print = async () => {
-    setSnapshots({
-      exploded: canvases.current.exploded?.toDataURL('image/png'),
-      assembled: canvases.current.assembled?.toDataURL('image/png'),
-    })
-    usePrintStore.getState().setPrint('drawing')
-    const previous = document.title
-    document.title = `${name.replace(/[\\/:*?"<>|]/g, '').trim()} – ritning`
-    window.addEventListener(
-      'afterprint',
-      () => {
-        document.title = previous
-        usePrintStore.getState().setPrint('none')
-      },
-      { once: true },
+  /**
+   * Bilderna kopieras till <img>: en WebGL-canvas kommer inte med på papperet i alla webbläsare.
+   * flushSync: kopiorna ska stå i sidan redan när utskriften ritas, också från beforeprint.
+   */
+  const snapshot = () =>
+    flushSync(() =>
+      setSnapshots({
+        exploded: canvases.current.exploded?.toDataURL('image/png'),
+        assembled: canvases.current.assembled?.toDataURL('image/png'),
+      }),
     )
+
+  const print = async () => {
+    snapshot()
+    // En bildruta så att kopiorna hinner avkodas innan dialogen öppnas.
     await nextFrame()
     window.print()
   }
+
+  // Medan ritningen är öppen är det den som skrivs ut, hur utskriften än startas (knappen, ⌘P,
+  // Safaris dela-meny). Inget slås av vid afterprint: på iPhone och iPad kommer den innan
+  // förhandsvisningen ritats (window.print väntar inte där), och då blev sidan tom.
+  // Rubriken blir filnamnet på PDF:en.
+  const onBeforePrint = useEffectEvent(() => snapshot())
+  useEffect(() => {
+    const previous = document.title
+    document.title = `${name.replace(/[\\/:*?"<>|]/g, '').trim()} – ritning`
+    const listener = () => onBeforePrint()
+    window.addEventListener('beforeprint', listener)
+    return () => {
+      window.removeEventListener('beforeprint', listener)
+      document.title = previous
+    }
+  }, [name])
 
   // Esc stänger; ⌘P skriver ut som knappen, så att bilderna hinner kopieras (webbläsarens egen utskrift gör inte det).
   const onKey = useEffectEvent((e: KeyboardEvent) => {
@@ -136,9 +149,9 @@ function DrawingView() {
     <div
       role="dialog"
       aria-label="Ritning"
-      className={`fixed inset-0 z-40 flex flex-col bg-canvas ${printing ? 'print:static print:block print:bg-white' : 'print:hidden'}`}
+      className="fixed inset-0 z-40 flex flex-col bg-canvas print:static print:block print:bg-white"
     >
-      {printing && <style>{'@page { size: A4 landscape; margin: 10mm; }'}</style>}
+      <style>{'@page { size: A4 landscape; margin: 10mm; }'}</style>
 
       <div className="flex h-14 flex-none items-center gap-1 border-b border-line bg-panel px-2 pt-[env(safe-area-inset-top)] print:hidden">
         <Tip label="Stäng ritningen" keys="Esc">
@@ -287,25 +300,28 @@ function DrawingView() {
 }
 
 /**
- * Ett liggande A4-blad. På skärmen så stort att det ryms i höjden. På smal skärm
+ * Ett liggande A4-blad, 255 × 177 mm (SHEET i partSheet.ts). På skärmen så stort att det ryms i höjden. På smal skärm
  * blir ett responsive blad en vanlig kolumn; de andra behåller sin form och är
  * bredare än skärmen, så att man skrollar i sidled i stället för att måtten blir oläsliga.
  *
- * Utskrift: på liggande papper 267 mm brett (A4 minus marginalerna), eller
- * smalare om skrivarens marginaler är större, hellre än att det klipps. Safari
- * på iPad skriver ut stående fast @page ber om liggande; då vrids bladet ett
- * kvarts varv och står i full storlek, så att skalan på detaljbladen stämmer.
+ * Utskrift: på liggande papper 255 mm brett, eller smalare om skrivarens
+ * marginaler är större, hellre än att det klipps. Safari på iPhone och iPad
+ * skriver ut stående fast @page ber om liggande; då vrids bladet ett kvarts varv
+ * och står i full storlek, så att skalan på detaljbladen stämmer. Med 267 mm
+ * (A4 minus 10 mm) stack det ut under Safaris sidfot, och en remsa av varje blad
+ * hamnade på en egen sida. overflow-hidden: det ovridna bladet är bredare än
+ * sidan, och Chrome krympte då hela utskriften (fast det vridna ryms).
  * Sidan bryts efter varje blad utom det sista.
  */
 function Sheet({ responsive = false, last, children }: { responsive?: boolean; last: boolean; children: ReactNode }) {
   return (
     <div
-      className={`flex-none print-landscape:w-full print-portrait:relative print-portrait:h-[267mm] print-portrait:w-[185mm] ${
+      className={`flex-none print-landscape:w-full print-portrait:relative print-portrait:h-[255mm] print-portrait:w-[177mm] print-portrait:overflow-hidden ${
         last ? '' : 'print:break-after-page'
-      } ${responsive ? 'narrow:w-full' : 'narrow:self-start'} w-[min(100%,calc((100dvh-6rem)*267/185))]`}
+      } ${responsive ? 'narrow:w-full' : 'narrow:self-start'} w-[min(100%,calc((100dvh-6rem)*255/177))]`}
     >
       <div
-        className={`@container aspect-[267/185] w-full rounded-sm bg-white text-black shadow-lg print:rounded-none print:shadow-none print-landscape:max-w-[267mm] print-portrait:absolute print-portrait:top-0 print-portrait:left-0 print-portrait:h-[185mm] print-portrait:w-[267mm] print-portrait:origin-top-left print-portrait:translate-x-[185mm] print-portrait:rotate-90 ${
+        className={`@container aspect-[255/177] w-full rounded-sm bg-white text-black shadow-lg print:rounded-none print:shadow-none print-landscape:max-w-[255mm] print-portrait:absolute print-portrait:top-0 print-portrait:left-0 print-portrait:h-[177mm] print-portrait:w-[255mm] print-portrait:origin-top-left print-portrait:translate-x-[177mm] print-portrait:rotate-90 ${
           responsive ? 'narrow:aspect-auto' : 'narrow:w-[900px] narrow:max-w-none'
         }`}
       >

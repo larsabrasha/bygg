@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { layoutMainViews } from './mainViews'
+import { SHEET } from './partSheet'
 
 describe('layoutMainViews', () => {
   const layout = layoutMainViews({ width: 470, depth: 378, height: 538 })
@@ -8,7 +9,7 @@ describe('layoutMainViews', () => {
     expect(layout.scale).toBe(10)
     for (const v of Object.values(layout.views)) {
       expect(v.x).toBeGreaterThanOrEqual(5)
-      expect(v.y + v.h).toBeLessThanOrEqual(150)
+      expect(v.y + v.h).toBeLessThanOrEqual(SHEET.height - SHEET.frame - SHEET.title.height)
     }
   })
 

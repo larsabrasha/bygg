@@ -5,6 +5,9 @@ import { useDocumentStore } from '../store/documentStore'
 import { usePrintStore } from '../store/printStore'
 import { useViewStore } from '../store/viewStore'
 
+/** Avslutar den senaste utskriften av sprängskissen: tar bort bilden och ger sidan sin rubrik igen. */
+let endPrint: (() => void) | null = null
+
 const nextFrame = () => new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r())))
 
 /**
@@ -24,18 +27,21 @@ export async function printExploded(modelName: string) {
   if (selection) useDocumentStore.getState().select(selection)
   if (!image) return
 
-  const print = usePrintStore.getState()
-  print.setPrint('exploded', image)
+  endPrint?.()
+  usePrintStore.getState().setPrint('exploded', image)
   const previous = document.title
   document.title = `${modelName.replace(/[\\/:*?"<>|]/g, '').trim() || 'Modell'} – sprängskiss`
-  window.addEventListener(
-    'afterprint',
-    () => {
-      document.title = previous
-      usePrintStore.getState().setPrint('none')
-    },
-    { once: true },
-  )
+  // Bilden står kvar tills sprängskissen stängs, inte till afterprint: på iPhone och iPad
+  // kommer den innan förhandsvisningen ritats (window.print väntar inte där), och då blev sidan tom.
+  const stop = useViewStore.subscribe((s) => {
+    if (!s.exploded) endPrint?.()
+  })
+  endPrint = () => {
+    endPrint = null
+    stop()
+    document.title = previous
+    usePrintStore.getState().setPrint('none')
+  }
   // Utskriften ritas först med bilden; sedan öppnas dialogen.
   await nextFrame()
   window.print()
