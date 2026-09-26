@@ -32,6 +32,7 @@ import {
   type Ray,
 } from '../../tools/actions'
 import { afterTapStart } from '../../tools/gestures'
+import { ACCENT } from '../colors'
 import { closestObject, groundHit, ON_TOP, pickTargets, toHit } from '../pick'
 import {
   DEAD_ZONE,
@@ -410,14 +411,15 @@ function Controllers() {
       <VrLegend group={legendRight} text={LEGEND_RIGHT} width={0.11} height={0.072} />
       {/* Strålen från handkontrollen (kontrollerna själva ritas av xrStore). Inte med på modellbilderna. */}
       <group ref={beam} userData={{ noThumb: true }} visible={false}>
+        {/* Accentfärgen, som markeringen av det valda: syns mot både ljus och mörk bakgrund (vitt syntes inte i ljust läge). */}
         <mesh ref={beamLine} rotation={[Math.PI / 2, 0, 0]}>
-          <cylinderGeometry args={[1.2, 1.2, 1, 8]} />
-          <meshBasicMaterial color="#ffffff" transparent opacity={0.55} depthWrite={false} />
+          <cylinderGeometry args={[1.6, 1.6, 1, 8]} />
+          <meshBasicMaterial color={ACCENT} transparent opacity={0.8} depthWrite={false} toneMapped={false} />
         </mesh>
       </group>
       <mesh ref={cursor} userData={{ noThumb: true }} visible={false}>
         <sphereGeometry args={[1, 16, 12]} />
-        <meshBasicMaterial color="#ffffff" depthTest={false} transparent opacity={0.9} />
+        <meshBasicMaterial color={ACCENT} depthTest={false} transparent opacity={0.95} toneMapped={false} />
       </mesh>
     </>
   )

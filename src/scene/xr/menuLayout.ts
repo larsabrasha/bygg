@@ -1,3 +1,4 @@
+import { SKETCH_MODES, type ChosenSketchMode } from '../../panel/measureModel'
 import { NUMPAD_KEYS, type NumpadKey } from '../../panel/numpadKeys'
 import type { Tool } from '../../store/toolStore'
 
@@ -11,6 +12,8 @@ export type MenuAction =
   | { kind: 'tool'; tool: Tool }
   | { kind: 'key'; insert: string }
   | { kind: 'name'; name: string }
+  | { kind: 'mode'; mode: ChosenSketchMode }
+  | { kind: 'repeat' }
   | { kind: 'back' }
   | { kind: 'ok' }
   | { kind: 'cancel' }
@@ -43,6 +46,10 @@ export interface MeasureInfo {
   active: 0 | 1
   /** Parametrarnas namn, att sätta in med ett tryck (som överst i sifferblocket i 3D-vyn). */
   names: string[]
+  /** Som förra i måttrutan: texten med förra måttet, eller null när det inte går. */
+  repeat: string | null
+  /** En skiss på en del: vad den blir (se SKETCH_MODES), eller null. */
+  mode: string | null
 }
 
 export interface MenuState {
@@ -149,6 +156,18 @@ export function menuLayout(state: MenuState): MenuItem[] {
         action: { kind: 'field', field: i as 0 | 1 },
       })),
     )
+    // Ovanför fältet, som i måttrutan: Som förra, och vad en skiss på en del blir.
+    if (m.repeat) row(TOOL_H, [{ id: 'repeat', label: m.repeat, tone: 'tool', action: { kind: 'repeat' } }])
+    if (m.mode)
+      row(
+        TOOL_H,
+        SKETCH_MODES.map(([mode, label]) => ({
+          id: `mode-${mode}`,
+          label,
+          tone: m.mode === mode ? 'toolActive' : 'tool',
+          action: { kind: 'mode', mode },
+        })),
+      )
     if (m.hint) row(HINT_H * 1.5, [{ id: 'hint', label: m.hint, tone: 'hint' }])
   }
 

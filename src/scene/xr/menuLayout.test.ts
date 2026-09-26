@@ -9,6 +9,8 @@ const measure = {
   fields: [{ label: 'Tjocklek', value: '22', unit: 'mm' }],
   active: 0 as const,
   names: [] as string[],
+  repeat: null as string | null,
+  mode: null as string | null,
 }
 
 describe('menuLayout', () => {
@@ -94,6 +96,28 @@ describe('sifferblocket, som i 3D-vyn', () => {
   it('parametrarnas namn på en rad ovanför, högst fyra', () => {
     const items = menuLayout({ tool: 'select', measure: { ...measure, names: ['a', 'b', 'c', 'd', 'e'] }, note: null })
     expect(items.filter((i) => i.tone === 'name').map((i) => i.label)).toEqual(['a', 'b', 'c', 'd'])
+  })
+})
+
+describe('Som förra och vad skissen blir', () => {
+  it('ovanför fältet, med det valda läget markerat', () => {
+    const items = menuLayout({
+      tool: 'select',
+      measure: { ...measure, repeat: 'Som förra 8 mm', mode: 'add' },
+      note: null,
+    })
+    const field = items.find((i) => i.id === 'field-0')!
+    const repeat = items.find((i) => i.id === 'repeat')!
+    const modes = items.filter((i) => i.id.startsWith('mode-'))
+    expect(modes.map((i) => i.label)).toEqual(['Ny del', 'Lägg till', 'Skär ut'])
+    expect(modes.find((i) => i.tone === 'toolActive')?.label).toBe('Lägg till')
+    expect(repeat.label).toBe('Som förra 8 mm')
+    expect(repeat.y).toBeGreaterThan(field.y)
+    expect(modes[0]!.y).toBeGreaterThan(field.y)
+  })
+  it('inget av dem när det inte finns', () => {
+    const items = menuLayout({ tool: 'select', measure, note: null })
+    expect(items.some((i) => i.id === 'repeat' || i.id.startsWith('mode-'))).toBe(false)
   })
 })
 

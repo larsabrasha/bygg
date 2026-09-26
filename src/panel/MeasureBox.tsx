@@ -4,17 +4,17 @@ import { AXIS_COLORS } from '../scene/colors'
 import { useDocumentStore } from '../store/documentStore'
 import { useToolStore } from '../store/toolStore'
 import { useViewStore } from '../store/viewStore'
-import {
-  cancel,
-  faceDimension,
-  repeatLastPushPull,
-  typedPushPull,
-  setCopy,
-  startReadyPushPull,
-  undoLast,
-} from '../tools/actions'
+import { cancel, faceDimension, typedPushPull, setCopy, undoLast } from '../tools/actions'
 import { ExprInput } from './ExprInput'
-import { measureModel, submitMeasure, typeMeasure } from './measureModel'
+import {
+  measureModel,
+  repeatLast,
+  setSketchMode,
+  sketchModeOf,
+  SKETCH_MODES,
+  submitMeasure,
+  typeMeasure,
+} from './measureModel'
 import { rulerResult, type RulerPoint } from '../model/ruler'
 import { bottomBox, ghostButton, iconAction, toggleButton } from './ui'
 import { Tip } from './Tip'
@@ -86,26 +86,15 @@ export function MeasureBox() {
   )
 
   // En skiss på en del: ny del, tillägg på delen eller urtag i den. Förvalt efter riktningen.
-  const sketchOn = op?.kind === 'pushpull' && op.target.kind === 'sketch' ? op : null
-  const onPart =
-    sketchOn?.target.kind === 'sketch' &&
-    doc.sketches.some((s) => s.id === sketchOn.target.id && s.on && doc.instances.some((i) => i.id === s.on))
-  const effective = sketchOn ? (sketchOn.mode ?? 'auto') : 'auto'
-  const current = effective === 'auto' ? (sketchOn && sketchOn.distance < 0 ? 'subtract' : 'new') : effective
-  const modeToggle = sketchOn && onPart && (
+  const sketchMode = sketchModeOf(op, doc)
+  const modeToggle = sketchMode && (
     <div role="group" aria-label="Blir" className="flex gap-0.5">
-      {(
-        [
-          ['new', 'Ny del', 'En egen del, med egen rad i kaplistan'],
-          ['add', 'Lägg till', 'Sitter ihop med delen skissen ligger på, t.ex. en tapp'],
-          ['subtract', 'Skär ut', 'Skärs ut ur delen skissen ligger på, t.ex. ett tapphål'],
-        ] as const
-      ).map(([mode, label, tip]) => (
+      {SKETCH_MODES.map(([mode, label, tip]) => (
         <Tip key={mode} label={tip} side="top">
           <button
             type="button"
-            aria-pressed={current === mode}
-            onClick={() => useToolStore.getState().setOp({ ...sketchOn, mode })}
+            aria-pressed={sketchMode.current === mode}
+            onClick={() => setSketchMode(mode)}
             className={toggleButton}
           >
             {label}
@@ -187,10 +176,7 @@ export function MeasureBox() {
                   // Efter ett drag är förra djupet just det draget: inget att upprepa.
                   disabled={!op && !ready}
                   className={`${ghostButton} text-muted`}
-                  onClick={() => {
-                    if (ready) startReadyPushPull()
-                    repeatLastPushPull()
-                  }}
+                  onClick={repeatLast}
                 >
                   <Repeat size={15} strokeWidth={1.75} aria-hidden />
                   Som förra

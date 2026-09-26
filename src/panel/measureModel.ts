@@ -1,7 +1,9 @@
 import { isConstant } from '../model/expr'
 import { numberFormat } from '../model/numberFormat'
 import { useDocumentStore } from '../store/documentStore'
-import { useToolStore, type Axis } from '../store/toolStore'
+import type { SketchMode } from '../model/combine'
+import type { ModelDocument } from '../model/types'
+import { useToolStore, type Axis, type Op, type PushPullOp } from '../store/toolStore'
 import {
   amendableOp,
   applyMeasure,
@@ -9,6 +11,7 @@ import {
   faceDimension,
   liveMeasure,
   readyPushPull,
+  repeatLastPushPull,
   startReadyPushPull,
   typedPushPull,
 } from '../tools/actions'
@@ -133,4 +136,43 @@ export function submitMeasure() {
   t.setMeasure(0, '')
   t.setMeasure(1, '')
   useDocumentStore.getState().select(null)
+}
+
+/** Vad en skiss på en del blir när den dras ut, med knappens text och förklaring. */
+export const SKETCH_MODES = [
+  ['new', 'Ny del', 'En egen del, med egen rad i kaplistan'],
+  ['add', 'Lägg till', 'Sitter ihop med delen skissen ligger på, t.ex. en tapp'],
+  ['subtract', 'Skär ut', 'Skärs ut ur delen skissen ligger på, t.ex. ett tapphål'],
+] as const
+
+export type ChosenSketchMode = (typeof SKETCH_MODES)[number][0]
+
+/**
+ * En skiss på en del som dras ut: operationen och vad den blir. Förvalt efter
+ * riktningen (utåt ny del, inåt urtag). Null när det inte finns något att välja.
+ */
+export function sketchModeOf(
+  op: Op | null,
+  doc: ModelDocument,
+): { op: PushPullOp; current: Exclude<SketchMode, 'auto'> } | null {
+  const sketchOn = op?.kind === 'pushpull' && op.target.kind === 'sketch' ? op : null
+  if (sketchOn?.target.kind !== 'sketch') return null
+  const id = sketchOn.target.id
+  const onPart = doc.sketches.some((s) => s.id === id && s.on && doc.instances.some((i) => i.id === s.on))
+  if (!onPart) return null
+  const effective = sketchOn.mode ?? 'auto'
+  return { op: sketchOn, current: effective === 'auto' ? (sketchOn.distance < 0 ? 'subtract' : 'new') : effective }
+}
+
+/** Väljer vad skissen blir (se sketchModeOf). */
+export function setSketchMode(mode: ChosenSketchMode) {
+  const t = useToolStore.getState()
+  const chosen = sketchModeOf(t.op, useDocumentStore.getState().doc)
+  if (chosen) t.setOp({ ...chosen.op, mode })
+}
+
+/** Som förra: samma djup som förra gången. Med en vald sida startar det dragningen av den först. */
+export function repeatLast() {
+  if (measureModel().ready) startReadyPushPull()
+  repeatLastPushPull()
 }

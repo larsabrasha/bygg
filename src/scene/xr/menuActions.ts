@@ -2,7 +2,14 @@ import type { Object3D } from 'three'
 import { create } from 'zustand'
 import { numberFormat } from '../../model/numberFormat'
 import { rulerResult } from '../../model/ruler'
-import { measureModel, submitMeasure, typeMeasure } from '../../panel/measureModel'
+import {
+  measureModel,
+  repeatLast,
+  setSketchMode,
+  sketchModeOf,
+  submitMeasure,
+  typeMeasure,
+} from '../../panel/measureModel'
 import { nameAt } from '../../panel/numpadEdit'
 import { useDocumentStore } from '../../store/documentStore'
 import { useToolStore } from '../../store/toolStore'
@@ -68,6 +75,12 @@ export function runMenuAction(action: MenuAction) {
       t.setMeasure(1, '')
       return
     }
+    case 'mode':
+      setSketchMode(action.mode)
+      return
+    case 'repeat':
+      repeatLast()
+      return
     case 'field':
       t.setMeasureField(action.field)
       return
@@ -105,6 +118,12 @@ export function menuState(): MenuState {
           })),
           active: t.measureField,
           names: useDocumentStore.getState().doc.params.map((p) => p.name),
+          // Efter ett drag är förra djupet just det draget: inget att upprepa (som i måttrutan).
+          repeat:
+            m.pushpullBox && t.lastPushPull && (t.op || m.ready)
+              ? `Som förra ${t.lastPushPull.expr ?? `${fmt.format(t.lastPushPull.distance)} mm`}`
+              : null,
+          mode: sketchModeOf(t.op, useDocumentStore.getState().doc)?.current ?? null,
         }
       : null,
   }
