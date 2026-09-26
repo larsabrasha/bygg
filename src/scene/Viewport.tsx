@@ -13,7 +13,7 @@ import { NeutralToneMapping, Object3D, type DirectionalLight } from 'three'
 import { bodyCorners } from '../model/drawing'
 import type { Body, Vec3 } from '../model/types'
 import { Canvas, useThree } from '@react-three/fiber'
-import { useEffect, useLayoutEffect, useMemo, useRef } from 'react'
+import { memo, useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import { resolveBodies } from '../model/resolve'
 import { useDocumentStore } from '../store/documentStore'
 import { useToolStore } from '../store/toolStore'
@@ -42,6 +42,9 @@ import { ViewCapturer } from './ViewCapturer'
 import { ExplodeAnimator } from './ExplodeAnimator'
 import { ToolController } from './ToolController'
 import { useColorScheme } from './useColorScheme'
+import { XR } from '@react-three/xr'
+import { VrRig } from './xr/VrRig'
+import { useInVr, xrStore } from './xr/xrStore'
 
 function Scene() {
   // R3F 9 ber inte om en ny bild när ett objekt tas bort (removeChild nollställer
@@ -175,6 +178,7 @@ const FILL = '#ffeedd'
  * fyllnadsljuset från andra sidan likaså.
  */
 function RealisticLight({ bodies, scheme }: { bodies: readonly Body[]; scheme: 'light' | 'dark' }) {
+  const inVr = useInVr()
   // Neutral tonmappning håller trät i sin färg; ACES (standard) gör ljust trä som björk grått.
   // Renderaren hämtas med get(): den ändras här, och värden från en hook får inte ändras.
   const get = useThree((s) => s.get)
@@ -215,41 +219,7 @@ function RealisticLight({ bodies, scheme }: { bodies: readonly Body[]; scheme: '
     // Ljuset är med på modellbilderna; bara golvet och dess skuggor döljs där. Ett dolt ljus
     // ändrar antalet ljus, och då kompilerar three.js om alla shaders för bilden.
     <group>
-      {/*
-        Studion som bara syns i reflexer och ljus: en stor softbox ovanför,
-        huvudljuset från samma håll som solen (KEY), ett svagt fyllnadsljus
-        från andra sidan och smala lister bakom som ger kanterna ljus.
-        Enheterna är miljöns egna.
-      */}
-      <Environment resolution={256} environmentIntensity={0.8}>
-        <color attach="background" args={['#2e2c2a']} />
-        <Lightformer
-          form="rect"
-          color={FILL}
-          intensity={1.2}
-          position={[0, 6, 0]}
-          rotation-x={Math.PI / 2}
-          scale={[10, 10, 1]}
-        />
-        <Lightformer
-          form="rect"
-          color={WARM}
-          intensity={3}
-          position={[-3, 5, 6]}
-          scale={[6, 5, 1]}
-          target={[0, 0, 0]}
-        />
-        <Lightformer
-          form="rect"
-          color={FILL}
-          intensity={0.9}
-          position={[7, 1.5, 2]}
-          scale={[4, 3, 1]}
-          target={[0, 0, 0]}
-        />
-        <Lightformer form="rect" intensity={1.4} position={[-2, 2, -6]} scale={[8, 0.6, 1]} target={[0, 0, 0]} />
-        <Lightformer form="rect" intensity={1.4} position={[5, 2, -5]} scale={[0.6, 6, 1]} target={[0, 0, 0]} />
-      </Environment>
+      <StudioEnvironment />
       <primitive object={target} position={center} />
       {/* Solen från huvudljusets håll. Skuggkameran rymmer modellen; radius gör kanten mjuk. */}
       <directionalLight
@@ -285,19 +255,61 @@ function RealisticLight({ bodies, scheme }: { bodies: readonly Body[]; scheme: '
         Bara det som ligger under CONTACT_MM räknas. drei ritar utan djuptest, så en del längre
         upp (en bordsskiva) skulle annars skriva över benen under den. Den ser uppåt och ligger
         under golvet: av ett ben syns bara undersidan, och den ligger på golvet.
+        Inte i VR: där ritar three.js allt med headsetets kamera, också till texturer, och
+        skuggan blev fel.
       */}
-      <ContactShadows
-        userData={{ noThumb: true }}
-        position={[center[0], -1, center[2]]}
-        scale={floor}
-        far={CONTACT_MM}
-        blur={2.5}
-        resolution={384}
-        opacity={dark ? 0.6 : 0.55}
-      />
+      {!inVr && (
+        <ContactShadows
+          userData={{ noThumb: true }}
+          position={[center[0], -1, center[2]]}
+          scale={floor}
+          far={CONTACT_MM}
+          blur={2.5}
+          resolution={384}
+          opacity={dark ? 0.6 : 0.55}
+        />
+      )}
     </group>
   )
 }
+
+/**
+ * Studion som bara syns i reflexer och ljus: en stor softbox ovanför,
+ * huvudljuset från samma håll som solen (KEY), ett svagt fyllnadsljus
+ * från andra sidan och smala lister bakom som ger kanterna ljus.
+ * Enheterna är miljöns egna.
+ *
+ * En egen komponent med memo: drei ritar om miljön varje gång Environment får
+ * nya barn, och RealisticLight ritas om vid varje steg under en operation. Det
+ * var onödigt arbete, och i VR ritade three.js miljön med headsetets kamera, så
+ * att reflexerna blev fel och bilden drogs ihop i sidled medan man drog.
+ */
+const StudioEnvironment = memo(function StudioEnvironment() {
+  return (
+    <Environment resolution={256} environmentIntensity={0.8}>
+      <color attach="background" args={['#2e2c2a']} />
+      <Lightformer
+        form="rect"
+        color={FILL}
+        intensity={1.2}
+        position={[0, 6, 0]}
+        rotation-x={Math.PI / 2}
+        scale={[10, 10, 1]}
+      />
+      <Lightformer form="rect" color={WARM} intensity={3} position={[-3, 5, 6]} scale={[6, 5, 1]} target={[0, 0, 0]} />
+      <Lightformer
+        form="rect"
+        color={FILL}
+        intensity={0.9}
+        position={[7, 1.5, 2]}
+        scale={[4, 3, 1]}
+        target={[0, 0, 0]}
+      />
+      <Lightformer form="rect" intensity={1.4} position={[-2, 2, -6]} scale={[8, 0.6, 1]} target={[0, 0, 0]} />
+      <Lightformer form="rect" intensity={1.4} position={[5, 2, -5]} scale={[0.6, 6, 1]} target={[0, 0, 0]} />
+    </Environment>
+  )
+})
 
 /** Hur långt från ett hörn eller en skarv mörkret når, i mm. */
 const AO_RADIUS = 120
@@ -352,48 +364,56 @@ export function Viewport() {
   // Realistiskt: studioljuset i RealisticLight ersätter det jämna ljuset och huvudljusen,
   // och bakgrunden är studiopapper utan rutnät.
   const realistic = useViewStore((s) => s.look) === 'realistic'
-  const effects = realistic
+  // Efterbehandlingen och axelkorset ritar med egen kamera och egna buffertar, och
+  // fungerar inte i VR. Kameran styrs av headsetet, och bilderna av modellen tas inte där.
+  const inVr = useInVr()
+  const effects = realistic && !inVr
   const studio = useMemo(() => beforeNeutral(colors.studio, EXPOSURE), [colors.studio])
 
   return (
     // frameloop="demand": ritar bara om när något ändras. Sparar batteri på mobil.
     // shadows: skuggkartor finns, men bara ljuset i RealisticLight kastar skugga.
     <Canvas shadows frameloop="demand" camera={{ position: [...HOME.position], fov: 45, near: 1, far: 50000 }}>
-      {/* Realistiskt tonmappas bakgrunden med resten av bilden; färgen räknas fram så att den blir colors.studio. */}
-      <color attach="background" args={[realistic ? studio : colors.background]} />
-      <ambientLight intensity={realistic ? 0 : 0.6} />
-      <directionalLight position={[2000, 4000, 3000]} intensity={realistic ? 0 : 1.6} />
-      <directionalLight position={[-3000, 2000, -1000]} intensity={realistic ? 0 : 0.4} />
+      <XR store={xrStore}>
+        {/* Realistiskt tonmappas bakgrunden med resten av bilden; färgen räknas fram så att den blir colors.studio. */}
+        <color attach="background" args={[realistic ? studio : colors.background]} />
+        <ambientLight intensity={realistic ? 0 : 0.6} />
+        <directionalLight position={[2000, 4000, 3000]} intensity={realistic ? 0 : 1.6} />
+        <directionalLight position={[-3000, 2000, -1000]} intensity={realistic ? 0 : 0.4} />
 
-      {/* Lite under y=0 så att delarnas undersida inte flimrar mot linjerna. Inte med på modellbilderna. */}
-      <group userData={{ noThumb: true }} visible={!realistic}>
-        <Grid
-          position={[0, -0.5, 0]}
-          cellSize={100}
-          cellThickness={0.6}
-          cellColor={colors.gridCell}
-          sectionSize={1000}
-          sectionThickness={1.2}
-          sectionColor={colors.gridSection}
-          fadeDistance={15000}
-          fadeStrength={1.5}
-          infiniteGrid
-        />
-      </group>
+        {/* Lite under y=0 så att delarnas undersida inte flimrar mot linjerna. Inte med på modellbilderna. */}
+        <group userData={{ noThumb: true }} visible={!realistic}>
+          <Grid
+            position={[0, -0.5, 0]}
+            cellSize={100}
+            cellThickness={0.6}
+            cellColor={colors.gridCell}
+            sectionSize={1000}
+            sectionThickness={1.2}
+            sectionColor={colors.gridSection}
+            fadeDistance={15000}
+            fadeStrength={1.5}
+            infiniteGrid
+          />
+        </group>
 
-      <Scene />
-      <ToolController />
-      <ThumbnailCapturer />
-      <ViewCapturer />
-      <ExplodeAnimator />
-      <OpenWatcher />
+        <Scene />
+        <ToolController />
+        {!inVr && <ThumbnailCapturer />}
+        {!inVr && <ViewCapturer />}
+        <ExplodeAnimator />
+        <OpenWatcher />
+        <VrRig />
 
-      <CameraRig />
-      {effects && <RealisticEffects />}
-      {/* Axelkorset ritas ovanpå, efter efterbehandlingen när den finns (den ritar med prioritet 1). */}
-      <GizmoHelper alignment="bottom-left" margin={[70, 70]} renderPriority={effects ? 2 : 1}>
-        <GizmoViewport axisColors={AXIS_COLORS} labelColor="white" />
-      </GizmoHelper>
+        {!inVr && <CameraRig />}
+        {effects && <RealisticEffects />}
+        {/* Axelkorset ritas ovanpå, efter efterbehandlingen när den finns (den ritar med prioritet 1). */}
+        {!inVr && (
+          <GizmoHelper alignment="bottom-left" margin={[70, 70]} renderPriority={effects ? 2 : 1}>
+            <GizmoViewport axisColors={AXIS_COLORS} labelColor="white" />
+          </GizmoHelper>
+        )}
+      </XR>
     </Canvas>
   )
 }

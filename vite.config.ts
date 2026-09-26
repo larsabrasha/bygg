@@ -1,11 +1,42 @@
 import tailwindcss from '@tailwindcss/vite'
+import basicSsl from '@vitejs/plugin-basic-ssl'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
-import { defineConfig } from 'vitest/config'
+import { defineConfig, type Plugin } from 'vitest/config'
 import { byggApi } from './server/devPlugin'
 
-export default defineConfig({
+/**
+ * @pmndrs/xr laddar sin emulator med import('./emulate.js') även när den är avslagen
+ * (emulate: false i xrStore). Den drar med sig rum på flera MB, som service workern
+ * annars förcachar. Appen har en egen emulator i dev (src/scene/xr/emulator.ts).
+ */
+function noXrEmulator(): Plugin {
+  const stub = '\0no-xr-emulator'
+  return {
+    name: 'no-xr-emulator',
+    enforce: 'pre',
+    resolveId(source, importer) {
+      if (source === './emulate.js' && importer?.replaceAll('\\', '/').includes('/@pmndrs/xr/')) return stub
+    },
+    load(id) {
+      if (id === stub) return "export function emulate() { throw new Error('XR-emulatorn är inte med') }"
+    },
+  }
+}
+
+// npm run dev:vr (mode vr): https med ett självsignerat certifikat. WebXR kräver https
+// utom på localhost, och headsetet sitter på en annan dator. Webbläsaren varnar för
+// certifikatet första gången. Övriga lägen är http, också förhandsvisningen i dev.
+export default defineConfig(({ mode }) => ({
+  // Egen cache för förbyggda beroenden: läget ingår i dess nyckel, och med samma katalog
+  // byggde dev:vr och dev om dem åt varandra (öppna sidor fick "Outdated Optimize Dep").
+  cacheDir: mode === 'vr' ? 'node_modules/.vite-vr' : undefined,
+  // En enda three.js: VR-emulatorn i dev (@iwer/devui) har en egen, äldre kopia, och två
+  // kopior i samma sida ger fel när den ena ritar den andras material.
+  resolve: { dedupe: ['three'] },
   plugins: [
+    mode === 'vr' && basicSsl({ name: 'bygg-dev' }),
+    noXrEmulator(),
     react(),
     tailwindcss(),
     byggApi(),
@@ -38,7 +69,15 @@ export default defineConfig({
         // Appens sidor får index.html från cachen; API:t går alltid till nätet.
         navigateFallback: '/index.html',
         navigateFallbackDenylist: [/^\/api\//],
-        runtimeCaching: [{ urlPattern: /^\/api\//, handler: 'NetworkOnly' }],
+        runtimeCaching: [
+          { urlPattern: /^\/api\//, handler: 'NetworkOnly' },
+          // Handkontrollernas modeller i VR (WebXR Input Profiles): hämtas första gången, sedan offline.
+          {
+            urlPattern: /^https:\/\/cdn\.jsdelivr\.net\/npm\/@webxr-input-profiles\//,
+            handler: 'CacheFirst',
+            options: { cacheName: 'xr-controllers', expiration: { maxEntries: 20 } },
+          },
+        ],
         cleanupOutdatedCaches: true,
         // Three.js gör huvudbunten större än standardgränsen på 2 MiB för förcachning.
         maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
@@ -50,4 +89,4 @@ export default defineConfig({
   test: {
     environment: 'node',
   },
-})
+}))
