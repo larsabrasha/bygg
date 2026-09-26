@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { buildCutList } from './cutlist'
-import { compactNames, cutListCsv, cutListFileName, formatMm } from './cutlistExport'
+import { compactNames, compactNumbers, cutListCsv, cutListFileName, formatMm } from './cutlistExport'
 import { testBody } from './testFixtures'
 
 const lines = (csv: string) => csv.replace(/^\uFEFF/, '').split('\r\n')
@@ -55,6 +55,16 @@ describe('cutListFileName', () => {
 
   it('faller tillbaka på bara "kaplista" utan namn', () => {
     expect(cutListFileName('  ', 'csv')).toBe('kaplista.csv')
+  })
+})
+
+describe('compactNumbers', () => {
+  it('skriver tre eller fler i följd som ett intervall', () => {
+    expect(compactNumbers([4, 2, 3, 1, 7])).toBe('1–4, 7')
+    expect(compactNumbers([10, 11])).toBe('10, 11')
+    expect(compactNumbers([1, 2, 3, 5, 6, 7, 9])).toBe('1–3, 5–7, 9')
+    expect(compactNumbers([3, 3])).toBe('3')
+    expect(compactNumbers([])).toBe('')
   })
 })
 

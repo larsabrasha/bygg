@@ -25,7 +25,7 @@ interface Props {
  * Tar bilder av modellen hopsatt med parallellprojektion, rakt framifrån,
  * från sidan och ovanifrån (huvudvyerna). En dold canvas: bilderna blir
  * data-URL:er som ritningen visar som <image>, så att de också kommer med i
- * utskriften. Tas om vid varje ny bildruta, t.ex. när hål och tappar räknats
+ * PDF:en. Tas om vid varje ny bildruta, t.ex. när hål och tappar räknats
  * klart (manifold-3d laddas efter hand).
  */
 export function OrthoRenderer(props: Props) {

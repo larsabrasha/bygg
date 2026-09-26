@@ -39,7 +39,7 @@ const ELEVATION = 30
  * En bild på ritningen (sprängskissen, eller modellen hopsatt): en egen canvas
  * med parallellprojektion (som en ritning), inte 3D-vyn. Kameran ställs så att
  * alla delar ryms, med plats för ballongerna på sidorna. preserveDrawingBuffer: bilden kan kopieras till
- * utskriften när som helst.
+ * PDF:en när som helst.
  */
 export function DrawingCanvas(props: Props) {
   return (

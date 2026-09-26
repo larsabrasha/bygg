@@ -268,13 +268,14 @@ describe('detaljer', () => {
   })
 
   it('hoppar över en detalj som inte ryms någonstans', () => {
-    // Ett hål 10 × 10 genom en skiva 1800 × 900: 1 mm på papperet i 1:10, men vyerna tar nästan hela bladet.
+    // Ett hål 10 × 10 genom en skiva 1800 × 800: 1 mm på papperet i 1:10, men vyerna tar nästan hela bladet.
     const big = testBody({
-      profile: { x0: 0, y0: 0, x1: 1800, y1: 900 },
+      profile: { x0: 0, y0: 0, x1: 1800, y1: 800 },
       tools: [tool('subtract', 100, 100, 0, 110, 110, 22)],
     })
     const g = partGeometry(big)
     const layout = layoutPartSheet(g)
+    expect(layout.scale).toBe(10)
     expect(wantedDetails(g, layout.scale)).toHaveLength(2)
     expect(layout.details).toEqual([])
   })

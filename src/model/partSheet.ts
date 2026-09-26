@@ -5,8 +5,8 @@ import { widthAxis } from './partAxes'
 import type { Axis, Body } from './types'
 
 /**
- * Detaljblad: en del ritad i tre vyer med mått, på ett liggande A4 (255 × 177 mm,
- * utskriftens yta). Allt här är i millimeter på papperet, med y nedåt som i SVG.
+ * Detaljblad: en del ritad i tre vyer med mått, på ett liggande A4 (245 × 170 mm,
+ * mitt på sidan i PDF:en). Allt här är i millimeter på papperet, med y nedåt som i SVG.
  */
 
 /** Riktning i delens egna mått: 0 = L (längs fibern), 1 = B, 2 = T. */
@@ -163,11 +163,11 @@ export function drawingPositions(bodies: readonly Body[]): CutListRow[] {
 }
 
 /**
- * Bladet och ytan för vyerna: ovanför titelrutan, innanför ramen. Så stort att det ryms
- * på A4 också med Safaris marginaler på iPhone och iPad, där sidhuvud och sidfot tar
- * plats och bladet vrids (ca 261 × 184 mm). Samma storlek i Drawing.tsx (Sheet).
+ * Bladet och ytan för vyerna: ovanför titelrutan, innanför ramen. Står i verklig storlek
+ * mitt på en liggande A4 i PDF:en (drawingPdf.tsx), så att skalan stämmer på papperet.
+ * Samma form i Drawing.tsx (Sheet).
  */
-export const SHEET = { width: 255, height: 177, frame: 5, title: { width: 125, height: 30 } } as const
+export const SHEET = { width: 245, height: 170, frame: 5, title: { width: 125, height: 30 } } as const
 
 export const AREA = {
   x: SHEET.frame,
@@ -612,8 +612,8 @@ function centerLines(e: SheetShape): SheetLine[] {
   ]
 }
 
-/** Textens bredd på papperet, ungefär, med 2,5 mm text. */
-const textWidth = (text: string) => text.length * 1.45
+/** Textens bredd på papperet, ungefär, med 2,8 mm text (TEXT i PartSheet.tsx). */
+const textWidth = (text: string) => text.length * 1.65
 
 /**
  * Måtten längs en kant av en vy: kedjan närmast (om den behövs) och totalmåttet

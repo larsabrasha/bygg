@@ -20,10 +20,11 @@ const capitalize = (s: string) => s.charAt(0).toLocaleUpperCase('sv') + s.slice(
 
 /** Linjebredder i mm, som på en ritning: grova för synliga kanter, fina för mått. */
 const THICK = 0.5
-const THIN = 0.18
+const THIN = 0.25
 const HIDDEN = 0.3
 const ARROW = 2.5
-const TEXT = 2.5
+/** Måttens text, 2,8 mm (8 pt); dimRows i partSheet.ts räknar med samma storlek. */
+const TEXT = 2.8
 
 interface Props {
   pos: number
@@ -37,7 +38,7 @@ interface Props {
 
 /**
  * Detaljblad för en position: tre vyer med mått, i en SVG med millimeter som
- * enhet. Skrivs bladet ut 255 mm brett stämmer skalan på papperet.
+ * enhet. Skrivs bladet ut 245 mm brett stämmer skalan på papperet.
  */
 export function PartSheet({ pos, row, geometry, modelName, date, sheet, sheets }: Props) {
   const layout = useMemo(() => layoutPartSheet(geometry), [geometry])
@@ -62,7 +63,7 @@ export function PartSheet({ pos, row, geometry, modelName, date, sheet, sheets }
           value: `${num.format(L)} × ${num.format(B)} × ${num.format(T)}`,
         },
         { dx: 0, dy: 21, w: 50, h: 9, label: 'Modell', value: modelName },
-        { dx: 50, dy: 21, w: 25, h: 9, label: 'Datum', value: date, size: 2.5 },
+        { dx: 50, dy: 21, w: 25, h: 9, label: 'Datum', value: date, size: 3 },
         { dx: 75, dy: 21, w: 20, h: 9, label: 'Skala', value: scaleLabel(layout.scale) },
         { dx: 95, dy: 21, w: 30, h: 9, label: 'Blad', value: `${sheet} (${sheets})` },
       ]}
@@ -100,7 +101,7 @@ export interface TitleCell {
 
 /**
  * Ett blad som SVG med millimeter som enhet: ram, en rad anteckningar nere
- * till vänster och titelrutan nere till höger. Skrivs bladet ut 255 mm brett
+ * till vänster och titelrutan nere till höger. Skrivs bladet ut 245 mm brett
  * stämmer skalan på papperet.
  */
 export function SheetSvg({
@@ -134,7 +135,7 @@ export function SheetSvg({
         strokeWidth={0.7}
       />
       {children}
-      <text x={SHEET.frame + 4} y={SHEET.height - SHEET.frame - 3} fontSize={2.2} fill="#555" stroke="none">
+      <text x={SHEET.frame + 4} y={SHEET.height - SHEET.frame - 3} fontSize={2.5} fill="#333" stroke="none">
         {note}
       </text>
       {cells.map((c) => (
@@ -247,6 +248,7 @@ export function Dim({ dim: d }: { dim: SheetDim }) {
         x={d.tx}
         y={d.ty}
         fontSize={TEXT}
+        fontWeight={500}
         textAnchor="middle"
         fill="black"
         stroke="none"
@@ -264,11 +266,11 @@ const fit = (text: string, width: number, size: number) => {
   return text.length > max ? `${text.slice(0, Math.max(1, max - 1))}…` : text
 }
 
-function Cell({ x, y, w, h, label, value, size = 2.8, bold = false }: TitleCell & { x: number; y: number }) {
+function Cell({ x, y, w, h, label, value, size = 3.2, bold = false }: TitleCell & { x: number; y: number }) {
   return (
     <g>
       <rect x={x} y={y} width={w} height={h} strokeWidth={0.35} />
-      <text x={x + 1.2} y={y + 2.6} fontSize={1.8} fill="#666" stroke="none" letterSpacing={0.15}>
+      <text x={x + 1.2} y={y + 2.9} fontSize={2.1} fill="#333" stroke="none" letterSpacing={0.12}>
         {label.toLocaleUpperCase('sv')}
       </text>
       <text x={x + 1.2} y={y + h - 1.8} fontSize={size} fontWeight={bold ? 600 : 400} fill="black" stroke="none">
