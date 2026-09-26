@@ -8,13 +8,6 @@ export interface Crop {
   h: number
 }
 
-/** Största utsnittet med given form mitt i en yta. */
-export function centerCrop(width: number, height: number, aspect = THUMB.width / THUMB.height): Crop {
-  const w = Math.min(width, height * aspect)
-  const h = w / aspect
-  return { x: (width - w) / 2, y: (height - h) / 2, w, h }
-}
-
 /**
  * Hur långt från sfärens mitt kameran ska stå för att sfären ska rymmas i
  * utsnittet, med lite luft. Kameran har vertikal synvinkel vfovDeg över hela

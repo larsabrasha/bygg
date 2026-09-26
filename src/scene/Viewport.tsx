@@ -37,6 +37,7 @@ import { HoverMarker, OpOverlay } from './OpPreview'
 import { PushPullHandle } from './PushPullHandle'
 import { RulerOverlay } from './RulerOverlay'
 import { SketchMesh } from './SketchMesh'
+import { ShadedLights } from './ShadedLights'
 import { ThumbnailCapturer } from './ThumbnailCapturer'
 import { ViewCapturer } from './ViewCapturer'
 import { ExplodeAnimator } from './ExplodeAnimator'
@@ -390,9 +391,7 @@ export function Viewport() {
       <XR store={xrStore}>
         {/* Realistiskt tonmappas bakgrunden med resten av bilden; färgen räknas fram så att den blir colors.studio. */}
         <color attach="background" args={[realistic ? studio : colors.background]} />
-        <ambientLight intensity={realistic ? 0 : 0.6} />
-        <directionalLight position={[2000, 4000, 3000]} intensity={realistic ? 0 : 1.6} />
-        <directionalLight position={[-3000, 2000, -1000]} intensity={realistic ? 0 : 0.4} />
+        <ShadedLights on={!realistic} />
 
         {/* Lite under y=0 så att delarnas undersida inte flimrar mot linjerna. Inte med på modellbilderna. */}
         <group userData={{ noThumb: true }} visible={!realistic}>

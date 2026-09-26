@@ -7,8 +7,8 @@ const v = new Vector3()
 
 /**
  * Tar en bild av 3D-vyn med kameran som den står, till utskrift (sprängskissen).
- * Som ThumbnailCapturer: utan rutnät och pilar (userData.noThumb) och med
- * genomskinlig bakgrund, så att den blir vit på papper.
+ * Utan rutnät och pilar (userData.noThumb) och med genomskinlig bakgrund,
+ * så att den blir vit på papper.
  */
 export function ViewCapturer() {
   const { gl, scene, camera, invalidate } = useThree()
