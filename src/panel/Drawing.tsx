@@ -335,7 +335,7 @@ function Waiting({
           </>
         ) : (
           <p className="flex items-center gap-2">
-            <Loader2 size={18} className="animate-spin" aria-hidden /> Skapar ritningen…
+            <Loader2 size={18} className="animate-spin" aria-hidden /> Laddar…
           </p>
         )}
       </div>

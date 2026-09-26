@@ -15,7 +15,8 @@ import { DrawingBar } from './DrawingBar'
  * Zoom: nyp med två fingrar (kring punkten mellan fingrarna), dubbeltryck eller
  * knapparna. Appen stänger av webbläsarens egen nypzoom (usePreventPageZoom), så
  * visaren läser fingrarna själv: under nypet skalas sidorna med CSS, och när man
- * släpper ritas de om i den nya storleken.
+ * släpper ritas de om i den nya storleken. Inzoomat går det att panorera med
+ * musen genom att dra i vyn (handen som pekare); finger och penna skrollar själva.
  */
 
 /** Zoom, där 1 = sidorna så breda som skärmen (högst MAX_WIDTH). */
@@ -62,6 +63,13 @@ export default function PdfViewer({ file, onClose, onPrint, share }: Props) {
   const content = useRef<HTMLDivElement>(null)
   /** Punkten som ska stå still när sidorna ritats i den nya storleken. */
   const scrollTo = useRef<Anchor | null>(null)
+  /** Var musen och skrollen var när man började dra i vyn. */
+  const pan = useRef<{ x: number; y: number; left: number; top: number } | null>(null)
+  const [panning, setPanning] = useState(false)
+  const endPan = () => {
+    pan.current = null
+    setPanning(false)
+  }
 
   /**
    * Punkten på sidorna under (cx, cy) i visarens ruta: vilken sida och var på den.
@@ -200,11 +208,16 @@ export default function PdfViewer({ file, onClose, onPrint, share }: Props) {
     return () => ro.disconnect()
   }, [])
 
-  // Esc stänger visaren (inte ritningen bakom); ⌘P skriver ut. Fångas före ritningens lyssnare.
+  // Esc stänger visaren (inte ritningen bakom); ⌘P skriver ut; ⇧Z visar hela sidan (samma tangent som Visa allt i 3D-vyn).
+  // Fångas före ritningens lyssnare.
   const onKey = useEffectEvent((e: KeyboardEvent) => {
     if (e.key === 'Escape') {
       e.stopPropagation()
       onClose()
+    } else if (e.shiftKey && !e.metaKey && !e.ctrlKey && !e.altKey && e.key.toLowerCase() === 'z') {
+      e.preventDefault()
+      e.stopPropagation()
+      zoomCentered(MIN_ZOOM)
     } else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'p') {
       e.preventDefault()
       e.stopPropagation()
@@ -227,12 +240,37 @@ export default function PdfViewer({ file, onClose, onPrint, share }: Props) {
         onClose={onClose}
         onZoomOut={zoom > MIN_ZOOM ? () => zoomCentered(zoom / STEP) : undefined}
         onZoomIn={zoom < MAX_ZOOM ? () => zoomCentered(zoom * STEP) : undefined}
+        zoom={zoom}
+        onZoomReset={zoom > MIN_ZOOM ? () => zoomCentered(MIN_ZOOM) : undefined}
         share={share}
         onPrint={onPrint}
       />
       <div
         ref={scroller}
-        className="min-h-0 flex-1 overflow-auto overscroll-contain"
+        className={`min-h-0 flex-1 overflow-auto overscroll-contain ${
+          zoom > MIN_ZOOM ? `select-none ${panning ? 'cursor-grabbing' : 'cursor-grab'}` : ''
+        }`}
+        // Musen: dra i vyn för att panorera när man zoomat in. Inte på rullningslisterna,
+        // som ska gå att dra i som vanligt.
+        onPointerDown={(e) => {
+          const el = e.currentTarget
+          const r = el.getBoundingClientRect()
+          const onBar = e.clientX - r.left >= el.clientWidth || e.clientY - r.top >= el.clientHeight
+          if (e.pointerType !== 'mouse' || e.button !== 0 || zoom <= MIN_ZOOM || onBar) return
+          e.preventDefault()
+          el.setPointerCapture(e.pointerId)
+          pan.current = { x: e.clientX, y: e.clientY, left: el.scrollLeft, top: el.scrollTop }
+          setPanning(true)
+        }}
+        onPointerMove={(e) => {
+          const p = pan.current
+          if (!p) return
+          e.currentTarget.scrollLeft = p.left - (e.clientX - p.x)
+          e.currentTarget.scrollTop = p.top - (e.clientY - p.y)
+        }}
+        onPointerUp={endPan}
+        onPointerCancel={endPan}
+        onLostPointerCapture={endPan}
         // Dubbeltryck (dubbelklick): närmare där man tryckte, eller tillbaka till hela sidan.
         onDoubleClick={(e) => {
           const r = e.currentTarget.getBoundingClientRect()
@@ -244,7 +282,7 @@ export default function PdfViewer({ file, onClose, onPrint, share }: Props) {
         ) : !doc ? (
           // Samma text som medan PDF:en skapas (Drawing): för den som tittar är det ett och samma steg.
           <p className="flex h-full items-center justify-center gap-2 p-6 text-sm text-ink/70">
-            <Loader2 size={18} className="animate-spin" aria-hidden /> Skapar ritningen…
+            <Loader2 size={18} className="animate-spin" aria-hidden /> Laddar…
           </p>
         ) : (
           <div ref={content} className="flex w-max min-w-full flex-col items-center" style={{ gap: GAP, padding: GAP }}>
