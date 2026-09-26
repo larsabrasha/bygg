@@ -1,12 +1,13 @@
-import { Box, Copy, Ellipsis, LoaderCircle, Pencil, Plus, Trash2 } from 'lucide-react'
+import { Box, Copy, Ellipsis, FolderOpen, LoaderCircle, Pencil, Plus, Trash2 } from 'lucide-react'
 import { useCallback, useRef, useState } from 'react'
 import { useLibraryStore, type ModelListItem } from '../store/libraryStore'
-import { deleteWithUndo, duplicateModel, openFromGallery, renameModel } from '../sync/session'
+import { nameFromFileName, readModelFile } from '../persist/modelFile'
+import { deleteWithUndo, duplicateModel, importModel, openFromGallery, renameModel } from '../sync/session'
 import { MenuItem } from './MenuItem'
 import { splitConflict } from './modelName'
 import { Notices } from './Notices'
 import { SyncBadge } from './SyncBadge'
-import { field, primaryButton } from './ui'
+import { field, primaryButton, secondaryButton } from './ui'
 import { useDismiss } from './useDismiss'
 import { shortWhen } from './when'
 import { Tip } from './Tip'
@@ -152,6 +153,43 @@ function ModelTile({ model, thumb, isCurrent }: { model: ModelListItem; thumb?: 
   )
 }
 
+/** Läser en modellfil (från Exportera → Modellfil), lägger till den och öppnar den. */
+async function importFile(file: File) {
+  const r = readModelFile(await file.text(), nameFromFileName(file.name))
+  if (!r.ok) {
+    useLibraryStore.getState().notify(`${file.name} gick inte att öppna: ${r.reason}.`)
+    return
+  }
+  await openFromGallery(await importModel(r.name, r.doc))
+}
+
+/** Knapp som öppnar en modellfil. På smal skärm bara ikonen. */
+function ImportButton() {
+  const input = useRef<HTMLInputElement>(null)
+  return (
+    <>
+      <Tip label="Öppna en modellfil">
+        <button className={secondaryButton} aria-label="Importera" onClick={() => input.current?.click()}>
+          <FolderOpen size={18} aria-hidden />
+          <span className="narrow:hidden">Importera</span>
+        </button>
+      </Tip>
+      <input
+        ref={input}
+        type="file"
+        accept=".json,application/json"
+        className="hidden"
+        onChange={(e) => {
+          const file = e.currentTarget.files?.[0]
+          // Tomt, så att samma fil går att välja igen.
+          e.currentTarget.value = ''
+          if (file) void importFile(file)
+        }}
+      />
+    </>
+  )
+}
+
 /**
  * Startvyn: alla modeller som bilder, senast ändrade först, som i Shapr3D
  * eller Pages. Ligger ovanpå 3D-vyn, som hålls kvar i bakgrunden så att det
@@ -171,6 +209,7 @@ export function Gallery() {
         <div className="min-w-0 flex-1">
           <SyncBadge />
         </div>
+        <ImportButton />
         <button className={primaryButton} onClick={() => void openFromGallery('new')}>
           <Plus size={18} aria-hidden />
           Ny modell

@@ -65,11 +65,15 @@ export function cutListCsv(list: CutList): string {
   return '\uFEFF' + lines.map((fields) => fields.map(csvField).join(';')).join('\r\n') + '\r\n'
 }
 
-/** Filnamn utan tecken som Windows, macOS eller iOS inte tillåter. */
-export function cutListFileName(modelName: string, ext: string): string {
-  const safe = modelName
+/** Namnet utan tecken som Windows, macOS eller iOS inte tillåter i ett filnamn. */
+export function safeFileName(name: string): string {
+  return name
     .replace(/[\\/:*?"<>|]/g, '')
     .replace(/\s+/g, ' ')
     .trim()
+}
+
+export function cutListFileName(modelName: string, ext: string): string {
+  const safe = safeFileName(modelName)
   return `${safe ? `${safe} – ` : ''}kaplista.${ext}`
 }

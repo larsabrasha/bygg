@@ -11,6 +11,7 @@ import { useManifold } from '../scene/csg'
 import { DrawingCanvas, type DrawingLayout } from '../scene/DrawingCanvas'
 import { OrthoRenderer, type OrthoShot } from '../scene/OrthoRenderer'
 import { useBodies } from '../store/documentStore'
+import { downloadFile, TOUCH } from './fileOut'
 import { useLibraryStore } from '../store/libraryStore'
 import { useViewStore } from '../store/viewStore'
 import { MainViewsSheet } from './MainViewsSheet'
@@ -41,23 +42,8 @@ const SETTLE_MS = 400
 /** Den hopsatta modellen: inget flyttat. */
 const ASSEMBLED = new Map<string, Vec3>()
 
-/**
- * Pekskärm: PDF:en delas (dela-menyn har Skriv ut och Spara i Filer). Utan pekskärm
- * skrivs den ut direkt och laddas ner.
- */
-const TOUCH = typeof matchMedia !== 'undefined' && matchMedia('(pointer: coarse)').matches
-
 /** Visaren (och pdf.js) laddas först när ritningen öppnas. */
 const PdfViewer = lazy(() => import('./PdfViewer'))
-
-function downloadFile(file: File) {
-  const url = URL.createObjectURL(file)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = file.name
-  a.click()
-  setTimeout(() => URL.revokeObjectURL(url), 60_000)
-}
 
 /**
  * PDF:en i webbläsarens egen PDF-visare i en ny flik, där den går att dela och skriva ut.
@@ -247,6 +233,7 @@ function DrawingView() {
     }
   }, [ready, file, layout, mainImages, manifold, attempt])
 
+  // Pekskärm: PDF:en delas (dela-menyn har Skriv ut och Spara i Filer). Annars skrivs den ut direkt och laddas ner.
   const print = (f: File) => (TOUCH ? void shareFile(f) : printFile(f))
   const share = (f: File) => (TOUCH ? void shareFile(f) : downloadFile(f))
   const ShareIcon = TOUCH ? Share : FileDown

@@ -45,6 +45,11 @@ describe('buildArScene', () => {
     expect(new Set(meshes.map((m) => m.material)).size).toBe(2)
   })
 
+  it('tar inte med verktygen: ett hål blev annars en massiv låda i hålet', () => {
+    const hole = testBody({ id: 't', tool: { op: 'subtract', host: 'a' } })
+    expect(meshesOf(buildArScene([testBody({ id: 'a', name: 'Skiva' }), hole])).map((m) => m.name)).toEqual(['Skiva'])
+  })
+
   it('klarar en tom modell', () => {
     expect(() => buildArScene([])).not.toThrow()
   })

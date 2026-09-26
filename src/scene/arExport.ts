@@ -83,18 +83,20 @@ function arTexture(texture: Texture): Texture {
 }
 
 /**
- * Bara delarna (inget rutnät, inga skisser), i meter. Mitt på golvytan i origo och
- * undersidan på y = 0, så att AR-visaren ställer möbeln på golvet.
+ * Bara delarna (inget rutnät, inga skisser, inga verktyg), i meter om inget annat sägs
+ * (unitsPerMm). Mitt på golvytan i origo och undersidan på y = 0, så att AR-visaren
+ * ställer möbeln på golvet. En mesh per del, med delens namn, direkt under modellen.
  * Med trätexturer som i det realistiska utseendet: ådring längs fibern, en egen
  * ton per del och mörkare ändträ. Årsringarna på ändarna, plywoodens skikt och de
  * rundade kanterna görs i 3D-vyns shader och kommer inte med.
  */
-export function buildArScene(bodies: readonly Body[], { manifold, woods }: ArAssets = {}): Scene {
+export function buildArScene(bodies: readonly Body[], { manifold, woods }: ArAssets = {}, unitsPerMm = MM_TO_M): Scene {
   const model = new Group()
   const flat = new Map<string, MeshStandardMaterial>()
   const textures = new Map<string, { map: Texture; normalMap: Texture; repeat: number }>()
 
-  for (const b of bodies) {
+  // Verktygen syns i delarna de sitter på; själva verktyget är ett spöke i 3D-vyn.
+  for (const b of bodies.filter((x) => !x.tool)) {
     const [w, h, d] = bodyExtents(b)
     const { x0, x1, y0, y1 } = b.profile
     // Med verktyg: resultatet i formens koordinater. Cachen äger den, så den kopieras innan den ändras.
@@ -118,8 +120,9 @@ export function buildArScene(bodies: readonly Body[], { manifold, woods }: ArAss
       groupEndGrain(geometry, grain)
       const tone = woodTone(b.id)
       material = [tone, tone.clone().multiplyScalar(DARKER)].map(
-        (color) =>
+        (color, i) =>
           new MeshPhysicalMaterial({
+            name: i ? `${b.material} ändträ` : b.material,
             color,
             map: t.map,
             normalMap: t.normalMap,
@@ -132,7 +135,7 @@ export function buildArScene(bodies: readonly Body[], { manifold, woods }: ArAss
     } else {
       let m = flat.get(b.material)
       if (!m) {
-        m = new MeshStandardMaterial({ color: materialColor(b.material), roughness: 0.8 })
+        m = new MeshStandardMaterial({ name: b.material, color: materialColor(b.material), roughness: 0.8 })
         flat.set(b.material, m)
       }
       material = m
@@ -140,15 +143,16 @@ export function buildArScene(bodies: readonly Body[], { manifold, woods }: ArAss
 
     const mesh = new Mesh(geometry, material)
     mesh.name = b.name
-    if (!solid) mesh.position.set((x0 + x1) / 2, (y0 + y1) / 2, (b.z0 + b.z1) / 2)
-    const part = new Group()
-    part.position.set(...b.frame.origin)
-    part.quaternion.copy(frameQuaternion(b.frame))
-    part.add(mesh)
-    model.add(part)
+    mesh.userData.material = b.material
+    // Lådan och cylindern har mitten i origo, resultatet från manifold-3d delens origo.
+    const q = frameQuaternion(b.frame)
+    const center = solid ? new Vector3() : new Vector3((x0 + x1) / 2, (y0 + y1) / 2, (b.z0 + b.z1) / 2)
+    mesh.position.copy(center.applyQuaternion(q)).add(new Vector3(...b.frame.origin))
+    mesh.quaternion.copy(q)
+    model.add(mesh)
   }
 
-  model.scale.setScalar(MM_TO_M)
+  model.scale.setScalar(unitsPerMm)
   const box = new Box3().setFromObject(model)
   if (!box.isEmpty()) {
     const center = box.getCenter(new Vector3())

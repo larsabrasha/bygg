@@ -9,9 +9,12 @@ export function MenuItem({
   disabled = false,
   danger = false,
   checked,
+  hint,
 }: {
   Icon: LucideIcon
   children: ReactNode
+  /** En rad under texten om vad det är till för. */
+  hint?: ReactNode
   onClick: () => void
   disabled?: boolean
   danger?: boolean
@@ -28,7 +31,14 @@ export function MenuItem({
       {...(checked !== undefined && { role: 'menuitemcheckbox', 'aria-checked': checked })}
     >
       <Icon size={18} strokeWidth={1.75} aria-hidden className="shrink-0" />
-      <span className="min-w-0 flex-1 truncate">{children}</span>
+      {hint ? (
+        <span className="flex min-w-0 flex-1 flex-col py-1.5">
+          <span className="truncate">{children}</span>
+          <span className="truncate text-xs text-muted">{hint}</span>
+        </span>
+      ) : (
+        <span className="min-w-0 flex-1 truncate">{children}</span>
+      )}
       {checked && <Check size={16} strokeWidth={2} aria-hidden className="shrink-0 text-accent" />}
     </button>
   )

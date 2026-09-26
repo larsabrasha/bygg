@@ -425,6 +425,25 @@ export async function duplicateModel(id: string) {
   scheduleSync(SYNC_DELAY_MS)
 }
 
+/** Lägger till en modell från en fil. Finns namnet redan får den en siffra efter. Returnerar dess id. */
+export async function importModel(name: string, doc: ModelDocument): Promise<string> {
+  const names = new Set(lib().models.map((x) => x.name))
+  let unique = name
+  for (let n = 2; names.has(unique); n++) unique = `${name} ${n}`
+  const m: LocalModel = {
+    id: newId(),
+    name: unique,
+    file: serialize(doc),
+    updatedAt: new Date().toISOString(),
+    baseRevision: null,
+    dirty: true,
+  }
+  await repo.put(m)
+  await refreshList()
+  scheduleSync(SYNC_DELAY_MS)
+  return m.id
+}
+
 /** Går till startvyn. Tar först en bild utan markering, så att bilden blir ren. */
 export async function showGallery() {
   useToolStore.getState().setTool('select')
