@@ -5,7 +5,7 @@ import { dimensionEdges, type DimensionEdge } from '../model/dimensions'
 import { bodyCenter } from '../model/geometry'
 import type { Body, Vec3 } from '../model/types'
 import { add, scale } from '../model/vec'
-import { arrowOnScreen, coverBoxes, coversMoved, labelElements, labelSizes, setDimensionWake } from './dimensionLabels'
+import { arrowsOnScreen, coverBoxes, coversMoved, labelElements, labelSizes, setDimensionWake } from './dimensionLabels'
 import { placeLabel, type Placement } from './labelPlacement'
 
 /** Ungefärlig halv bredd och höjd på en etikett och luften mot kanten, i px. */
@@ -73,7 +73,7 @@ export function DimensionGuides({ body }: { body: Body }) {
       lastView = [view.width, view.height]
     }
     const covers = coverBoxes(view.left, view.top)
-    // Etiketterna placeras en i taget; krockar en med en som redan står, eller med pilen, flyttas den (placeLabel).
+    // Etiketterna placeras en i taget; krockar en med en som redan står, eller med en pil, flyttas den (placeLabel).
     const placed: { pos: [number, number]; size: [number, number] }[] = []
     for (const edge of current) {
       const el = labelElements.get(edge.axis)
@@ -84,7 +84,7 @@ export function DimensionGuides({ body }: { body: Body }) {
       const size = labelSizes.get(edge.axis) ?? [2 * HALF_W, 2 * HALF_H]
       const pos = placeLabel(p, size, {
         placed,
-        arrow: arrowOnScreen(),
+        arrows: arrowsOnScreen(),
         covers,
         view: [view.width, view.height],
         margin: EDGE_MARGIN,

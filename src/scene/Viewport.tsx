@@ -21,7 +21,7 @@ import { isShown, useViewStore } from '../store/viewStore'
 import { explodeOffsets } from '../model/explode'
 import { PartNames } from './PartNames'
 import { bodyCenter } from '../model/geometry'
-import { pushPullAnchor, pushPullTargetOf } from '../tools/actions'
+import { pushPullAnchor, pushPullTargetOf, sideHandleFaces } from '../tools/actions'
 import { toolTargets } from '../model/combine'
 import { previewDoc } from '../tools/preview'
 import { BodyMesh } from './BodyMesh'
@@ -85,6 +85,14 @@ function Scene() {
     !op && (tool === 'select' || tool === 'rect' || tool === 'circle') && selection ? pushPullTargetOf(selection) : null
   const handle = !exploded && handleTarget && pushPullAnchor(handleTarget, doc)
   const selectedFace = handleTarget?.kind === 'body' ? handleTarget : null
+  // I Välj får den valda delens andra sidor mindre pilar; PushPullHandle visar bara dem som vetter mot en.
+  const sideHandles =
+    op || exploded || !selectedBody
+      ? []
+      : sideHandleFaces(selection, tool).flatMap((face) => {
+          const at = pushPullAnchor({ kind: 'body', id: selectedBody.id, face }, doc)
+          return at ? [{ face, ...at }] : []
+        })
   // I Flytta-läget får den valda delen tre färgade pilar i stället.
   const gizmoAt = !op && !exploded && tool === 'move' && selectedBody ? bodyCenter(selectedBody) : null
   // I Välj visas den valda delens mått vid kanterna (etiketterna i panel/DimensionLabels).
@@ -141,6 +149,9 @@ function Scene() {
             }
           />
         ))}
+      {sideHandles.map((h) => (
+        <PushPullHandle key={h.face} face={h.face} anchor={h.anchor} normal={h.normal} />
+      ))}
       {handle && <PushPullHandle anchor={handle.anchor} normal={handle.normal} />}
       {gizmoAt && <MoveGizmo center={gizmoAt} />}
       {dims && <DimensionGuides key={dims.body.id} body={dims.body} />}

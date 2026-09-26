@@ -61,8 +61,8 @@ export function overlapsSegment(box: LabelBox, { a, b, r }: Segment): boolean {
 export interface Obstacles {
   /** Etiketter som redan står. */
   placed: readonly LabelBox[]
-  /** Pilen för push/pull, om den syns. */
-  arrow: Segment | null
+  /** Pilarna för push/pull som syns. */
+  arrows: readonly Segment[]
   /** Knappar och rutor ovanpå vyn (raden för det valda, kameraknapparna, måttrutan). */
   covers: readonly LabelBox[]
   /** Vyns storlek; etiketten hålls inom den, margin px från kanten. */
@@ -87,7 +87,7 @@ export function placeLabel(p: Placement, size: Px, o: Obstacles): Px {
     clamp(y, size[1] / 2 + o.margin, o.view[1] - size[1] / 2 - o.margin),
   ]
   const hard = (box: LabelBox) =>
-    o.covers.some((q) => overlapsBox(box, q)) || (!!o.arrow && overlapsSegment(box, o.arrow))
+    o.covers.some((q) => overlapsBox(box, q)) || o.arrows.some((a) => overlapsSegment(box, a))
   const free = (pos: Px) => {
     const box = { pos, size }
     return !o.placed.some((q) => overlapsBox(box, q)) && !hard(box)

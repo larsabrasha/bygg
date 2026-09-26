@@ -145,11 +145,20 @@ export interface HoverPoint {
   guides: [Vec3, Vec3][]
 }
 
-/** En pil eller båge att dra i (pilen på det valda, flyttpilarna, vridbågarna). */
-export type HandleHover = { kind: 'handle' } | { kind: 'axis'; axis: Axis } | { kind: 'rotate'; axis: Axis }
+/**
+ * En pil eller båge att dra i (pilen på det valda, flyttpilarna, vridbågarna).
+ * face = en av de mindre pilarna på den valda delens andra sidor.
+ */
+export type HandleHover =
+  { kind: 'handle'; face?: Face } | { kind: 'axis'; axis: Axis } | { kind: 'rotate'; axis: Axis }
 
 const sameHandle = (a: HandleHover | null, b: HandleHover | null) =>
-  a === b || (!!a && !!b && a.kind === b.kind && (a.kind === 'handle' || a.axis === (b as { axis: Axis }).axis))
+  a === b ||
+  (!!a &&
+    !!b &&
+    (a.kind === 'handle'
+      ? b.kind === 'handle' && a.face === b.face
+      : a.kind === b.kind && a.axis === (b as { axis: Axis }).axis))
 
 interface ToolSnapshot {
   tool: Tool

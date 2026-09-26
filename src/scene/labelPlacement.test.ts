@@ -4,7 +4,7 @@ import { overlapsSegment, placeLabel, type Placement, type Px } from './labelPla
 const size: Px = [60, 28]
 /** En etikett till vänster om en lodrät kant vid x = 200, y = 300. */
 const left: Placement = { m: [200, 300], n: [-1, 0], d: 36 }
-const none = { placed: [], arrow: null, covers: [], view: [800, 600] as Px, margin: 8 }
+const none = { placed: [], arrows: [], covers: [], view: [800, 600] as Px, margin: 8 }
 
 describe('placeLabel', () => {
   it('står vid kanten när inget är i vägen', () => {
@@ -20,7 +20,7 @@ describe('placeLabel', () => {
   it('ställer sig bredvid pilen i stället för under den', () => {
     // Pilen pekar åt vänster rakt genom etikettens första läge.
     const arrow = { a: [200, 300] as Px, b: [134, 300] as Px, r: 10 }
-    const pos = placeLabel(left, size, { ...none, arrow })
+    const pos = placeLabel(left, size, { ...none, arrows: [arrow] })
     expect(overlapsSegment({ pos, size }, arrow)).toBe(false)
     // Kvar vid sin kant: bara flyttad åt sidan, längs kanten.
     expect(pos[0]).toBe(164)

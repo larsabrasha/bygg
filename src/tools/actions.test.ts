@@ -28,6 +28,7 @@ import {
   repeatLastPushPull,
   setCopy,
   setExploded,
+  sideHandleFaces,
   startReadyPushPull,
   tap,
   typedPushPull,
@@ -816,6 +817,56 @@ describe('pilen på det valda', () => {
     tools().setTool('select')
     tap(handle, 0)
     expect(tools().op).toBeNull()
+  })
+})
+
+describe('pilarna på de andra sidorna', () => {
+  it('en smal kant dras ut direkt från sin pil, och blir den valda sidan', () => {
+    const b = extrude(drawGroundRect(), '22')
+    tools().setTool('select')
+    tap({ point: [300, 22, -200], target: { kind: 'body', id: b.id, face: 'n+' } }, 0)
+    tap({ point: [650, 11, -200], target: { kind: 'handle', face: 'u+' } }, 0)
+    expect(docs().selection).toEqual({ kind: 'body', id: b.id, face: 'u+' })
+    expect(tools().op).toMatchObject({ kind: 'pushpull', anchor: [600, 11, -200], normal: [1, 0, 0] })
+    tools().setMeasure(0, '650')
+    applyMeasure()
+    expect(bodies()[0]!.profile.x1).toBe(650)
+    expect(bodies()[0]).toMatchObject({ z0: 0, z1: 22 })
+  })
+
+  it('går också när delen är vald utan yta', () => {
+    const b = extrude(drawGroundRect(), '22')
+    docs().select({ kind: 'body', id: b.id })
+    tools().setTool('select')
+    tap({ point: [300, 72, -200], target: { kind: 'handle', face: 'n+' } }, 0)
+    expect(tools().op).toMatchObject({ kind: 'pushpull', target: { kind: 'body', id: b.id, face: 'n+' } })
+  })
+
+  it('pekar den rakt mot kameran händer inget', () => {
+    const b = extrude(drawGroundRect(), '22')
+    tools().setTool('select')
+    tap({ point: [300, 22, -200], target: { kind: 'body', id: b.id, face: 'n+' } }, 0)
+    tap({ point: [650, 11, -200], target: { kind: 'handle', face: 'u+', headOn: true } }, 0)
+    expect(tools().op).toBeNull()
+    expect(docs().selection).toEqual({ kind: 'body', id: b.id, face: 'n+' })
+  })
+
+  it('finns bara i Välj, på en del, och inte på den valda sidan', () => {
+    expect(sideHandleFaces({ kind: 'body', id: 'a', face: 'n+' }, 'select')).toEqual(['u+', 'u-', 'v+', 'v-', 'n-'])
+    expect(sideHandleFaces({ kind: 'body', id: 'a' }, 'select')).toHaveLength(6)
+    expect(sideHandleFaces({ kind: 'body', id: 'a', face: 'n+' }, 'rect')).toEqual([])
+    expect(sideHandleFaces({ kind: 'body', id: 'a', face: 'n+' }, 'move')).toEqual([])
+    expect(sideHandleFaces({ kind: 'sketch', id: 's' }, 'select')).toEqual([])
+    expect(sideHandleFaces(null, 'select')).toEqual([])
+  })
+
+  it('lyser upp en i taget', () => {
+    expect(handleOf({ kind: 'handle', face: 'u+' })).toEqual({ kind: 'handle', face: 'u+' })
+    tools().setHoverHandle({ kind: 'handle', face: 'u+' })
+    tools().setHoverHandle({ kind: 'handle', face: 'v-' })
+    expect(tools().hoverHandle).toEqual({ kind: 'handle', face: 'v-' })
+    tools().setHoverHandle({ kind: 'handle' })
+    expect(tools().hoverHandle).toEqual({ kind: 'handle' })
   })
 })
 

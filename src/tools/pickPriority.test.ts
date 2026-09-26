@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { pickScore } from './pickPriority'
 
-const winner = (hits: [{ kind: string; tool?: unknown; headOn?: boolean }, number][]) =>
+const winner = (hits: [{ kind: string; tool?: unknown; headOn?: boolean; face?: string }, number][]) =>
   hits.reduce((a, b) => (pickScore(b[0], b[1]) < pickScore(a[0], a[1]) ? b : a))[0]
 
 describe('pickScore', () => {
@@ -21,6 +21,15 @@ describe('pickScore', () => {
         [{ kind: 'rotate' }, 300],
       ]).kind,
     ).toBe('rotate')
+  })
+
+  it('låter den stora pilen vinna över en mindre på en annan sida, också när den är närmare', () => {
+    expect(
+      winner([
+        [{ kind: 'handle', face: 'u+' }, 100],
+        [{ kind: 'handle' }, 300],
+      ]),
+    ).toEqual({ kind: 'handle' })
   })
 
   it('låter pilar och bågar vinna över en del framför dem', () => {
