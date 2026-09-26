@@ -3,10 +3,11 @@ import {
   Boxes,
   Cuboid,
   Eye,
-  House,
+  Glasses,
   Maximize2,
   Minimize2,
   RulerDimensionLine,
+  Scan,
   Sparkles,
   type LucideIcon,
 } from 'lucide-react'
@@ -17,11 +18,20 @@ import { LOOKS, useViewStore, type Look } from '../store/viewStore'
 import { setExploded } from '../tools/actions'
 import { Tip } from './Tip'
 import { useCoversView } from './useCoversView'
+import { VrButton } from './VrButton'
+import { enterVr, useVrAvailable } from './vr'
+
+/** En grupp knappar i en gemensam ruta, som i raden för det valda (SelectionBar). */
+const group = 'flex gap-0.5 rounded-lg border border-line bg-panel/95 p-0.5 shadow-md'
+const groupButton =
+  'grid size-8 cursor-pointer place-items-center rounded-md hover:bg-hover aria-pressed:bg-accent-soft aria-pressed:text-accent aria-expanded:bg-accent-soft aria-expanded:text-accent'
 
 /**
  * Knappar ovanpå 3D-vyn för kameran. Uppe till höger, så att de inte krockar med måttfältet på mobil.
- * Visa allt har text på desktop, så att den inte ser ut som fullskärm; på smal skärm bara huset.
- * Till höger om den: utseendet (V), måtten (D), sprängskissen (E) och fokusläget (Tab), bara 3D-vyn.
+ * Visa allt har text på desktop, så att den inte ser ut som fullskärm; på smal skärm bara ikonen (hörnen).
+ * I tre grupper med luft emellan: kameran (Visa allt), det som visas (utseendet V, måtten D,
+ * sprängskissen E) och lägena som byter hela vyn (VR, bara där webbläsaren kan visa det, och
+ * fokusläget Tab längst ut).
  * Knapparna behövs där det inte finns något tangentbord. På smal skärm ligger de i menyn Vy under Visa allt (ViewMenu).
  */
 export function ViewButtons() {
@@ -34,27 +44,22 @@ export function ViewButtons() {
   const FocusIcon = focusMode ? Minimize2 : Maximize2
   const cover = useCoversView<HTMLDivElement>()
   return (
-    <div ref={cover} className="absolute top-3 right-3 flex gap-1 narrow:flex-col">
+    <div ref={cover} className="absolute top-3 right-3 flex gap-2 narrow:flex-col narrow:gap-1">
       <Tip label="Visa hela modellen" keys="⇧Z">
         <button
           aria-label="Visa allt"
           onClick={() => requestFit('all')}
-          className="flex h-9 cursor-pointer items-center gap-1.5 rounded-lg bg-panel/95 px-2.5 text-[13px] font-medium shadow-md hover:bg-hover narrow:size-11 narrow:justify-center narrow:px-0"
+          className="flex h-9.5 cursor-pointer items-center gap-1.5 rounded-lg border border-line bg-panel/95 px-2.5 text-[13px] font-medium shadow-md hover:bg-hover narrow:size-11 narrow:justify-center narrow:border-0 narrow:px-0"
         >
-          <House size={18} strokeWidth={1.75} aria-hidden />
+          <Scan size={18} strokeWidth={1.75} aria-hidden />
           <span className="narrow:hidden">Visa allt</span>
         </button>
       </Tip>
       {/* På smal skärm i en meny (ViewMenu): två kolumner med knappar får inte plats när bladet är öppet. */}
-      <div className="flex gap-1 narrow:hidden">
+      <div role="group" aria-label="Det som visas" className={`${group} narrow:hidden`}>
         <LookMenu />
         <Tip label={showDims ? 'Dölj måtten' : 'Visa längd, bredd och tjocklek på det valda'} keys="D">
-          <button
-            aria-label="Mått"
-            aria-pressed={showDims}
-            onClick={toggleDims}
-            className="grid size-9 cursor-pointer place-items-center rounded-lg bg-panel/95 shadow-md hover:bg-hover aria-pressed:bg-accent-soft aria-pressed:text-accent narrow:size-11"
-          >
+          <button aria-label="Mått" aria-pressed={showDims} onClick={toggleDims} className={groupButton}>
             <RulerDimensionLine size={18} strokeWidth={1.75} aria-hidden />
           </button>
         </Tip>
@@ -63,17 +68,20 @@ export function ViewButtons() {
             aria-label="Sprängskiss"
             aria-pressed={exploded}
             onClick={() => setExploded(!exploded)}
-            className="grid size-9 cursor-pointer place-items-center rounded-lg bg-panel/95 shadow-md hover:bg-hover aria-pressed:bg-accent-soft aria-pressed:text-accent narrow:size-11"
+            className={groupButton}
           >
             <Boxes size={18} strokeWidth={1.75} aria-hidden />
           </button>
         </Tip>
+      </div>
+      <div role="group" aria-label="Lägen" className={`${group} narrow:hidden`}>
+        <VrButton />
         <Tip label={focusMode ? 'Visa panelerna igen' : 'Fokusläge: bara 3D-vyn'} keys="Tab">
           <button
             aria-label={focusMode ? 'Avsluta fokusläge' : 'Fokusläge'}
             aria-pressed={focusMode}
             onClick={toggleFocusMode}
-            className="grid size-9 cursor-pointer place-items-center rounded-lg bg-panel/95 shadow-md hover:bg-hover aria-pressed:bg-accent-soft aria-pressed:text-accent narrow:size-11"
+            className={groupButton}
           >
             <FocusIcon size={18} strokeWidth={1.75} aria-hidden />
           </button>
@@ -103,12 +111,7 @@ function LookMenu() {
   return (
     <div ref={ref} className="relative">
       <Tip label={`Utseende: ${label}`} keys="V">
-        <button
-          aria-label="Utseende"
-          aria-expanded={open}
-          onClick={() => setOpen((o) => !o)}
-          className="grid size-9 cursor-pointer place-items-center rounded-lg bg-panel/95 shadow-md hover:bg-hover aria-expanded:bg-accent-soft aria-expanded:text-accent"
-        >
+        <button aria-label="Utseende" aria-expanded={open} onClick={() => setOpen((o) => !o)} className={groupButton}>
           <Icon size={18} strokeWidth={1.75} aria-hidden />
         </button>
       </Tip>
@@ -134,7 +137,7 @@ function LookMenu() {
 }
 
 /**
- * Mått, sprängskiss, fokusläge och utseende på smal skärm: en knapp med en meny, så att
+ * Mått, sprängskiss, fokusläge, utseende och VR på smal skärm: en knapp med en meny, så att
  * kameraknapparna och verktygslisten får plats ovanför varandra vid högerkanten
  * också när vyn är låg (bladet öppet).
  */
@@ -150,6 +153,7 @@ function ViewMenu() {
   const toggleDims = useViewStore((s) => s.toggleDims)
   const look = useViewStore((s) => s.look)
   const setLook = useViewStore((s) => s.setLook)
+  const vr = useVrAvailable()
   const pick = (fn: () => void) => () => {
     close()
     fn()
@@ -181,6 +185,14 @@ function ViewMenu() {
               {LOOK_INFO[l].label}
             </MenuItem>
           ))}
+          {vr && (
+            <>
+              <div role="separator" className="mx-2 my-1 h-px bg-line" />
+              <MenuItem Icon={Glasses} hint="I verklig storlek" onClick={pick(() => void enterVr())}>
+                Visa i VR
+              </MenuItem>
+            </>
+          )}
         </div>
       )}
     </div>

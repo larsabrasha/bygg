@@ -1,7 +1,7 @@
-import { DraftingCompass, PanelRightClose, PanelRightOpen, Redo2, Undo2 } from 'lucide-react'
-import { useBodies, useDocumentStore } from '../store/documentStore'
-import { useToolStore } from '../store/toolStore'
+import { DraftingCompass, PanelRightClose, PanelRightOpen } from 'lucide-react'
+import { useBodies } from '../store/documentStore'
 import { useViewStore } from '../store/viewStore'
+import { RedoButton, UndoButton } from './HistoryButtons'
 import { ModelTitle } from './ModelTitle'
 import { ShareMenu } from './ShareMenu'
 import { SyncBadge } from './SyncBadge'
@@ -10,10 +10,6 @@ import { ToolButtons } from './ToolButtons'
 import { ICON, iconButton } from './ui'
 
 export function Toolbar() {
-  const canUndo = useDocumentStore((s) => s.past.length > 0)
-  const canRedo = useDocumentStore((s) => s.future.length > 0)
-  const undo = useDocumentStore((s) => s.undo)
-  const redo = useDocumentStore((s) => s.redo)
   const panelOpen = useViewStore((s) => s.panelOpen)
   const togglePanel = useViewStore((s) => s.togglePanel)
   const focusMode = useViewStore((s) => s.focusMode)
@@ -31,29 +27,18 @@ export function Toolbar() {
       <div className="flex gap-1 narrow:hidden" role="toolbar" aria-label="Verktyg">
         <ToolButtons />
       </div>
-      {/* Synkstatus (bara när något är fel), ångra och gör om i en egen grupp, Ritning och Dela, och detaljpanelen längst till höger, med luft emellan. */}
+      {/*
+        Ångra och gör om hör till arbetet med modellen, så de står efter verktygen. På smal skärm
+        står de sist i verktygslisten i 3D-vyn (ToolRail).
+      */}
+      <span aria-hidden className="mx-2 h-6 w-px shrink-0 bg-line narrow:hidden" />
+      <div className="flex gap-1 narrow:hidden" role="group" aria-label="Historik">
+        <UndoButton />
+        <RedoButton />
+      </div>
+      {/* Synkstatus (bara när något är fel), Ritning och Dela, och detaljpanelen längst till höger, med luft emellan. */}
       <div className="ml-auto flex shrink-0 items-center gap-4 narrow:gap-2">
         <SyncBadge withLabel={false} />
-        <div className="flex gap-1" role="group" aria-label="Historik">
-          <Tip label="Ångra" keys="⌘Z">
-            <button
-              className={iconButton}
-              disabled={!canUndo}
-              aria-label="Ångra"
-              onClick={() => {
-                useToolStore.getState().setOp(null)
-                undo()
-              }}
-            >
-              <Undo2 {...ICON} />
-            </button>
-          </Tip>
-          <Tip label="Gör om" keys="⇧⌘Z">
-            <button className={iconButton} disabled={!canRedo} aria-label="Gör om" onClick={redo}>
-              <Redo2 {...ICON} />
-            </button>
-          </Tip>
-        </div>
         <div className="flex items-center gap-1">
           <DrawingButton />
           <ShareMenu buttonClass={iconButton} />
@@ -80,20 +65,19 @@ export function Toolbar() {
 
 /**
  * Ritningen (med kaplistan som sista blad). Fylld men dämpad knapp med text, så att den
- * syns utan att ta över. På smal skärm bara ikonen.
+ * syns utan att ta över. Texten står kvar också på smal skärm: passaren ensam säger inte vad knappen gör.
  */
 function DrawingButton() {
   const empty = useBodies().length === 0
   return (
     <Tip label="Ritning" keys="⌘P">
       <button
-        className="inline-flex h-9 shrink-0 cursor-pointer items-center gap-1.5 rounded-lg bg-button px-3 text-[13px] font-medium text-ink hover:bg-hover disabled:cursor-default disabled:text-disabled disabled:hover:bg-button narrow:size-11 narrow:justify-center narrow:bg-transparent narrow:px-0"
+        className="inline-flex h-9 shrink-0 cursor-pointer items-center gap-1.5 rounded-lg bg-button px-3 text-[13px] font-medium text-ink hover:bg-hover disabled:cursor-default disabled:text-disabled disabled:hover:bg-button narrow:h-11"
         disabled={empty}
-        aria-label="Ritning"
         onClick={() => useViewStore.getState().setDrawing(true)}
       >
         <DraftingCompass size={18} strokeWidth={1.75} aria-hidden />
-        <span className="narrow:hidden">Ritning</span>
+        Ritning
       </button>
     </Tip>
   )

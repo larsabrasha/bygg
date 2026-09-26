@@ -10,14 +10,10 @@ import { useStore } from 'zustand'
  * prova utan headset.
  */
 function create(): XRStore {
-  if (import.meta.env.DEV)
-    void vrSupported().then(async (ok) => {
-      if (!ok) (await import('./emulator')).installEmulator()
-    })
   return createXRStore({
     // Bibliotekets egen emulator hoppar över sig själv när webbläsaren har WebXR utan headset.
     emulate: false,
-    // Ingen fråga från webbläsaren om att gå in i VR; det gör knappen i menyn (VrButton).
+    // Ingen fråga från webbläsaren om att gå in i VR; det gör VR-knappen i vyn (VrButton).
     offerSession: false,
     // Kontrollerna ritas, så att man ser var händerna är, men utan bibliotekets strålar och grepp.
     // Modellerna kommer från WebXR Input Profiles (MIT) på nätet och cachas av service workern.
@@ -35,6 +31,20 @@ function create(): XRStore {
 export const xrStore: XRStore = import.meta.hot?.data.xrStore ?? create()
 if (import.meta.hot) import.meta.hot.data.xrStore = xrStore
 
+/**
+ * Sant om VR går att starta. Kollas en gång, när appen startar. I dev installeras
+ * emulatorn först om webbläsaren saknar VR, så att svaret då alltid är sant.
+ */
+export const vrAvailable: Promise<boolean> = import.meta.hot?.data.vrAvailable ?? checkVr()
+if (import.meta.hot) import.meta.hot.data.vrAvailable = vrAvailable
+
+async function checkVr(): Promise<boolean> {
+  if (await vrSupported()) return true
+  if (!import.meta.env.DEV) return false
+  ;(await import('./emulator')).installEmulator()
+  return true
+}
+
 declare global {
   interface Window {
     __xr?: XRStore
@@ -49,7 +59,7 @@ export function useInVr(): boolean {
 }
 
 /** Sant om webbläsaren kan visa VR (eller emulatorn körs). */
-export async function vrSupported(): Promise<boolean> {
+async function vrSupported(): Promise<boolean> {
   try {
     return (await navigator.xr?.isSessionSupported('immersive-vr')) ?? false
   } catch {
