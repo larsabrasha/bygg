@@ -6,6 +6,7 @@ import { deleteWithUndo, duplicateModel, importModel, openFromGallery, renameMod
 import { MenuItem } from './MenuItem'
 import { splitConflict } from './modelName'
 import { Notices } from './Notices'
+import { Logo } from './Logo'
 import { SyncBadge } from './SyncBadge'
 import { field, primaryButton, secondaryButton } from './ui'
 import { useDismiss } from './useDismiss'
@@ -205,9 +206,8 @@ export function Gallery() {
   return (
     <div className="fixed inset-0 z-40 flex flex-col bg-canvas print:hidden">
       <header className="flex items-center gap-3 border-b border-line bg-panel px-4 py-2 pt-[max(8px,env(safe-area-inset-top))]">
-        <h1 className="flex items-center gap-2 text-lg font-semibold">
-          <img src="/icon.svg" alt="" className="size-7 rounded-lg" />
-          Bygg
+        <h1 className="flex items-center">
+          <Logo height={30} />
         </h1>
         <div className="min-w-0 flex-1">
           <SyncBadge />

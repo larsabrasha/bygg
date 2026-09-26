@@ -1,5 +1,6 @@
 import {
   ArrowUpFromLine,
+  ChevronDown,
   Copy,
   Ellipsis,
   Eye,
@@ -40,11 +41,15 @@ const barIcon =
 /** Knappar som på telefon ligger under Mer i stället. */
 const wideOnly = 'narrow:hidden'
 
-function BarLabel({ Icon, short }: { Icon: LucideIcon; short: string }) {
+/** menu: knappen öppnar en meny, och en liten pil nedåt står efter ordet. */
+function BarLabel({ Icon, short, menu = false }: { Icon: LucideIcon; short: string; menu?: boolean }) {
   return (
     <>
       <Icon {...ICON} />
-      <span className="text-[11px] leading-none">{short}</span>
+      <span className="flex items-center gap-0.5 text-[11px] leading-none">
+        {short}
+        {menu && <ChevronDown size={10} strokeWidth={2.25} aria-hidden className="opacity-60" />}
+      </span>
     </>
   )
 }
@@ -94,7 +99,7 @@ function ShapeMenu({ hostId, name }: { hostId: string; name: string }) {
     <div ref={ref} className={`relative shrink-0 ${wideOnly}`}>
       <Tip label="Forma">
         <button aria-label="Forma" aria-expanded={open} onClick={() => setOpen((o) => !o)} className={barIcon}>
-          <BarLabel Icon={SquaresUnite} short="Forma" />
+          <BarLabel Icon={SquaresUnite} short="Forma" menu />
         </button>
       </Tip>
       {open && (
@@ -126,7 +131,7 @@ function VisibilityMenu({ id }: { id: string }) {
     <div ref={ref} className={`relative shrink-0 ${wideOnly}`}>
       <Tip label="Visa">
         <button aria-label="Visa" aria-expanded={open} onClick={() => setOpen((o) => !o)} className={barIcon}>
-          <BarLabel Icon={Eye} short="Visa" />
+          <BarLabel Icon={Eye} short="Visa" menu />
         </button>
       </Tip>
       {open && (
@@ -204,8 +209,16 @@ function MoreMenu({ id, name, onZoom, onCopy }: { id: string; name: string; onZo
 }
 
 /**
+ * Är 3D-vyn för smal för raden och vyknapparna (Visa allt m.fl.) bredvid varandra står raden
+ * under dem i stället. Bara på bred skärm: på smal står vyknapparna i en smal kolumn vid kanten.
+ * 45rem ≈ raden (360 px) + vyknapparna med VR (325 px) + marginaler. VisibilityBar har samma gräns.
+ */
+const BELOW_VIEW_BUTTONS = 'min-[721px]:@max-[45rem]/view:top-[3.75rem]'
+
+/**
  * Det man oftast gör med det valda, direkt i 3D-vyn: på mobil slipper man
  * öppna bladet. Uppe till vänster; uppe till höger ligger "Visa allt".
+ * Utan delens namn, så att raden har samma bredd vad man än väljer: namnet står i Egenskaper.
  */
 export function SelectionBar() {
   const selection = useDocumentStore((s) => s.selection)
@@ -231,11 +244,8 @@ export function SelectionBar() {
       ref={cover}
       role="toolbar"
       aria-label="Det valda"
-      className="absolute top-3 left-3 flex max-w-[calc(100%-190px)] narrow:max-w-[calc(100%-80px)] items-center gap-0.5 rounded-lg border border-line bg-panel/95 p-0.5 shadow-md"
+      className={`absolute top-3 left-3 flex max-w-[calc(100%-24px)] items-center gap-0.5 rounded-lg border border-line bg-panel/95 p-0.5 shadow-md narrow:max-w-[calc(100%-80px)] ${BELOW_VIEW_BUTTONS}`}
     >
-      <span className={`truncate px-2 text-[13px] font-semibold ${body ? 'narrow:hidden' : ''}`}>
-        {body ? body.name : 'Skiss'}
-      </span>
       {body ? (
         <>
           {/* Ett verktyg har få knappar; de ryms också på telefon. */}

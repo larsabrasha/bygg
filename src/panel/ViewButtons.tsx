@@ -1,6 +1,7 @@
 import {
   Box,
   Boxes,
+  ChevronDown,
   Cuboid,
   Eye,
   Glasses,
@@ -25,6 +26,9 @@ import { enterVr, useVrAvailable } from './vr'
 const group = 'flex gap-0.5 rounded-lg border border-line bg-panel/95 p-0.5 shadow-md'
 const groupButton =
   'grid size-8 cursor-pointer place-items-center rounded-md hover:bg-hover aria-pressed:bg-accent-soft aria-pressed:text-accent aria-expanded:bg-accent-soft aria-expanded:text-accent'
+
+/** Knappar som öppnar en meny har en liten pil nedåt, så att de inte ser ut som knappar som slår av och på. */
+const MENU_CHEVRON = { size: 12, strokeWidth: 2, 'aria-hidden': true, className: 'opacity-60' } as const
 
 /**
  * Knappar ovanpå 3D-vyn för kameran. Uppe till höger, så att de inte krockar med måttfältet på mobil.
@@ -111,8 +115,14 @@ function LookMenu() {
   return (
     <div ref={ref} className="relative">
       <Tip label={`Utseende: ${label}`} keys="V">
-        <button aria-label="Utseende" aria-expanded={open} onClick={() => setOpen((o) => !o)} className={groupButton}>
+        <button
+          aria-label="Utseende"
+          aria-expanded={open}
+          onClick={() => setOpen((o) => !o)}
+          className="flex h-8 cursor-pointer items-center gap-0.5 rounded-md pr-1 pl-1.5 hover:bg-hover aria-expanded:bg-accent-soft aria-expanded:text-accent"
+        >
           <Icon size={18} strokeWidth={1.75} aria-hidden />
+          <ChevronDown {...MENU_CHEVRON} />
         </button>
       </Tip>
       {open && (
@@ -137,7 +147,7 @@ function LookMenu() {
 }
 
 /**
- * Mått, sprängskiss, fokusläge, utseende och VR på smal skärm: en knapp med en meny, så att
+ * Utseende, mått, sprängskiss, VR och fokusläge på smal skärm: en knapp med en meny, så att
  * kameraknapparna och verktygslisten får plats ovanför varandra vid högerkanten
  * också när vyn är låg (bladet öppet).
  */
@@ -164,35 +174,35 @@ function ViewMenu() {
         aria-label="Vy"
         aria-expanded={open}
         onClick={() => setOpen((o) => !o)}
-        className="grid size-11 cursor-pointer place-items-center rounded-lg bg-panel/95 shadow-md hover:bg-hover aria-expanded:bg-accent-soft aria-expanded:text-accent"
+        className="flex size-11 cursor-pointer items-center justify-center gap-0.5 rounded-lg bg-panel/95 shadow-md hover:bg-hover aria-expanded:bg-accent-soft aria-expanded:text-accent"
       >
         <Eye size={18} strokeWidth={1.75} aria-hidden />
+        <ChevronDown {...MENU_CHEVRON} />
       </button>
       {open && (
         <div className="absolute top-0 right-full z-50 mr-1 w-max min-w-44 rounded-lg border border-line bg-panel p-1 shadow-lg">
+          {/* Samma ordning som knapparna på desktop: utseendet, måtten och sprängskissen, sedan lägena. */}
+          {LOOKS.map((l) => (
+            <MenuItem key={l} Icon={LOOK_INFO[l].Icon} checked={l === look} onClick={pick(() => setLook(l))}>
+              {LOOK_INFO[l].label}
+            </MenuItem>
+          ))}
+          <div role="separator" className="mx-2 my-1 h-px bg-line" />
           <MenuItem Icon={RulerDimensionLine} checked={showDims} onClick={pick(toggleDims)}>
             Mått
           </MenuItem>
           <MenuItem Icon={Boxes} checked={exploded} onClick={pick(() => setExploded(!exploded))}>
             Sprängskiss
           </MenuItem>
+          <div role="separator" className="mx-2 my-1 h-px bg-line" />
+          {vr && (
+            <MenuItem Icon={Glasses} onClick={pick(() => void enterVr())}>
+              Visa i VR
+            </MenuItem>
+          )}
           <MenuItem Icon={focusMode ? Minimize2 : Maximize2} checked={focusMode} onClick={pick(toggleFocusMode)}>
             Fokusläge
           </MenuItem>
-          <div role="separator" className="mx-2 my-1 h-px bg-line" />
-          {LOOKS.map((l) => (
-            <MenuItem key={l} Icon={LOOK_INFO[l].Icon} checked={l === look} onClick={pick(() => setLook(l))}>
-              {LOOK_INFO[l].label}
-            </MenuItem>
-          ))}
-          {vr && (
-            <>
-              <div role="separator" className="mx-2 my-1 h-px bg-line" />
-              <MenuItem Icon={Glasses} hint="I verklig storlek" onClick={pick(() => void enterVr())}>
-                Visa i VR
-              </MenuItem>
-            </>
-          )}
         </div>
       )}
     </div>

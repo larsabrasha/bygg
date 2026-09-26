@@ -8,7 +8,8 @@ import { useCoversView } from './useCoversView'
 
 /**
  * Att något är dolt eller isolerat, och en knapp som visar allt igen (som
- * "Show Hidden Items" i Shapr3D). Under raden för det valda, uppe till vänster.
+ * "Show Hidden Items" i Shapr3D). Under raden för det valda, uppe till vänster; står raden
+ * under vyknapparna (BELOW_VIEW_BUTTONS i SelectionBar) flyttar den med, med samma gräns.
  */
 export function VisibilityBar() {
   const hidden = useViewStore((s) => s.hidden)
@@ -30,7 +31,7 @@ export function VisibilityBar() {
     <div
       ref={cover}
       role="status"
-      className={`absolute left-3 flex items-center gap-1 rounded-lg border border-line bg-panel/95 py-0.5 pr-0.5 pl-3 shadow-md ${hasSelection && !busy ? 'top-16 narrow:top-[4.25rem]' : 'top-3'}`}
+      className={`absolute left-3 flex items-center gap-1 rounded-lg border border-line bg-panel/95 py-0.5 pr-0.5 pl-3 shadow-md ${hasSelection && !busy ? 'top-16 narrow:top-[4.25rem] min-[721px]:@max-[45rem]/view:top-[7.75rem]' : 'top-3'}`}
     >
       <span className="text-[13px] text-muted">{text}</span>
       <Tip label="Visa alla delar igen" keys="⇧H">

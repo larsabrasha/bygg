@@ -53,7 +53,7 @@ export function App() {
         }`}
       >
         <Toolbar />
-        <main className="relative min-h-0 min-w-0 [grid-area:viewport]">
+        <main className="@container/view relative min-h-0 min-w-0 [grid-area:viewport]">
           {/* Stängd medan ritningen är öppen: det frigör hela dess grafikminne, som ritningens egna
               bilder behöver på en telefon. Kameran står kvar när den öppnas igen (CameraRig). */}
           {!drawing && <Viewport />}

@@ -9,7 +9,7 @@ import { enterVr, useVrAvailable } from './vr'
 export function VrButton() {
   if (!useVrAvailable()) return null
   return (
-    <Tip label="Visa i VR, i verklig storlek">
+    <Tip label="Visa i VR">
       <button
         aria-label="Visa i VR"
         onClick={() => void enterVr()}
