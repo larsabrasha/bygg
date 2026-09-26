@@ -22,6 +22,26 @@ const doc: ModelDocument = {
 }
 
 describe('format', () => {
+  it('läser ett verktyg och avvisar en okänd operation', () => {
+    const tool = {
+      ...doc,
+      instances: [
+        ...doc.instances,
+        { id: 't', defId: 'd', frame: GROUND_FRAME, combine: { op: 'subtract' as const, host: 'i' } },
+      ],
+    }
+    expect(migrate(JSON.parse(JSON.stringify(serialize(tool))))).toEqual({ ok: true, doc: tool })
+    const odd = { ...doc, instances: [{ ...doc.instances[0]!, combine: { op: 'glue', host: 'i' } }] }
+    expect(migrate({ version: FORMAT_VERSION, savedAt: '', doc: odd }).ok).toBe(false)
+  })
+
+  it('läser en cylinder och avvisar en okänd form', () => {
+    const round = { ...doc, defs: [{ ...doc.defs[0]!, shape: 'circle' as const }] }
+    expect(migrate(JSON.parse(JSON.stringify(serialize(round))))).toEqual({ ok: true, doc: round })
+    const odd = { ...doc, defs: [{ ...doc.defs[0]!, shape: 'hexagon' }] }
+    expect(migrate({ version: FORMAT_VERSION, savedAt: '', doc: odd }).ok).toBe(false)
+  })
+
   it('läser tillbaka det som sparats, även efter JSON (som IndexedDB-kloning)', () => {
     const saved = JSON.parse(JSON.stringify(serialize(doc, new Date('2026-09-25T12:00:00Z'))))
     expect(saved.version).toBe(FORMAT_VERSION)
@@ -45,6 +65,22 @@ describe('format', () => {
     expect(along.ok && along.doc.defs[0]).toMatchObject({ grainAxis: 'v', thicknessAxis: 'u' })
     expect(across.ok && across.doc.defs[0]).toMatchObject({ grainAxis: 'n', thicknessAxis: 'u' })
     expect(along.ok && 'grain' in along.doc.defs[0]!).toBe(false)
+  })
+
+  it('läser version 2 utan konvertering, och läge som uttryck (version 3)', () => {
+    expect(migrate({ version: 2, doc })).toEqual({ ok: true, doc })
+    const withPos = { ...doc, instances: [{ ...doc.instances[0]!, pos: { y: 't * 2' } }] }
+    expect(migrate(JSON.parse(JSON.stringify(serialize(withPos))))).toEqual({ ok: true, doc: withPos })
+    const bad = { ...doc, instances: [{ ...doc.instances[0]!, pos: { y: 5 } }] }
+    expect(migrate({ version: FORMAT_VERSION, doc: bad }).ok).toBe(false)
+  })
+
+  it('läser viloläge för vinklar (version 4) och avvisar ett trasigt', () => {
+    const rest = { u: [0, 0, -1], v: [-1, 0, 0], n: [0, 1, 0] }
+    const withRest = { ...doc, instances: [{ ...doc.instances[0]!, rest }] } as typeof doc
+    expect(migrate(JSON.parse(JSON.stringify(serialize(withRest))))).toEqual({ ok: true, doc: withRest })
+    const bad = { ...doc, instances: [{ ...doc.instances[0]!, rest: { u: [0, 0] } }] }
+    expect(migrate({ version: FORMAT_VERSION, doc: bad }).ok).toBe(false)
   })
 
   it('avvisar samma axel för fiber och tjocklek', () => {

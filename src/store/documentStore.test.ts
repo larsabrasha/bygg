@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import { GROUND_FRAME } from '../model/frame'
+import { GROUND_FRAME, toWorld } from '../model/frame'
+import { anglesOf } from '../model/orientation'
+import { minCorner } from '../model/placement'
 import { resolveBodies } from '../model/resolve'
 import { resetDocumentStore, useDocumentStore } from './documentStore'
 
@@ -58,6 +60,17 @@ describe('documentStore', () => {
     expect(s().doc.sketches).toHaveLength(1)
   })
 
+  it('ångra väljer det som var valt före steget, och gör om det som var valt efter', () => {
+    const sketch = s().addSketch(GROUND_FRAME, rect)!
+    const part = s().pushPullSketch(sketch, 22)!
+    const after = s().selection
+    expect(after).toMatchObject({ kind: 'body', id: part })
+    s().undo()
+    expect(s().selection).toEqual({ kind: 'sketch', id: sketch })
+    s().redo()
+    expect(s().selection).toEqual(after)
+  })
+
   it('ny ändring efter ångra rensar gör om', () => {
     s().addSketch(GROUND_FRAME, rect)
     s().undo()
@@ -106,7 +119,11 @@ describe('kopior (komponenter)', () => {
     s().makeUnique(b)
     s().pushPullBody(b, 'n+', 10)
     expect(bodies().map((x) => x.z1)).toEqual([22, 32])
-    expect(bodies()[1]!.name).toBe('Del 2')
+    // Namnet visar var den kommer ifrån; nästa unika kopia får nästa nummer.
+    expect(bodies()[1]!.name).toBe('Del 1 (2)')
+    const c = s().duplicateLinked(b)!
+    s().makeUnique(c)
+    expect(bodies()[2]!.name).toBe('Del 1 (3)')
   })
 
   it('formen finns kvar tills sista kopian tas bort', () => {
@@ -123,6 +140,48 @@ describe('kopior (komponenter)', () => {
     const a = newPart()
     s().moveInstance(a, [100, 0, -50])
     expect(bodies()[0]!.frame.origin).toEqual([100, 0, -50])
+  })
+
+  it('vrider en kopia runt en axel, och det går att ångra', () => {
+    const a = newPart()
+    const before = bodies()[0]!.frame
+    s().rotateInstance(a, [0, 0, 0], [0, 1, 0], 90)
+    expect(bodies()[0]!.frame.u).toEqual([0, 0, -1])
+    s().undo()
+    expect(bodies()[0]!.frame).toEqual(before)
+  })
+
+  it('vinklar från detaljpanelen vrider runt mitten och räknas från viloläget', () => {
+    const a = newPart()
+    // Del 800 × 120 × 22 på golvet: mitten (400, 11, −60).
+    expect(s().setAngle(a, 'y', '90')).toBeNull()
+    const inst = () => s().doc.instances[0]!
+    expect(inst().frame.u).toEqual([0, 0, -1])
+    expect(inst().rest).toEqual({ u: [1, 0, 0], v: [0, 0, -1], n: [0, 1, 0] })
+    const b = bodies()[0]!
+    expect(toWorld(b.frame, [400, 60, 11])).toEqual([400, 11, -60])
+    // Vrider man med bågarna efteråt räknas det från samma viloläge.
+    s().rotateInstance(a, [400, 11, -60], [0, 1, 0], -60)
+    expect(anglesOf(inst().frame, inst().rest!)).toEqual([0, 30, 0])
+    expect(s().setAngle(a, 'x', 'foo')).not.toBeNull()
+  })
+
+  it('kopior räknar vinklar från samma viloläge som originalet', () => {
+    const a = newPart()
+    s().setAngle(a, 'y', '30')
+    const copy = s().duplicateLinked(a)!
+    const c = s().doc.instances.find((i) => i.id === copy)!
+    expect(anglesOf(c.frame, c.rest!)[1]).toBeCloseTo(30)
+    const [more] = s().addCopies(a, [c.frame])
+    const m = s().doc.instances.find((i) => i.id === more)!
+    expect(anglesOf(m.frame, m.rest!)[1]).toBeCloseTo(30)
+  })
+
+  it('vridning ett helt varv sparas inte i historiken', () => {
+    const a = newPart()
+    const steps = s().past.length
+    s().rotateInstance(a, [0, 0, 0], [0, 1, 0], 360)
+    expect(s().past).toHaveLength(steps)
   })
 })
 
@@ -224,5 +283,94 @@ describe('parametrar', () => {
     expect(s().deleteParam(p)).toBe(false)
     s().setExtent(a, 'n', '22')
     expect(s().deleteParam(p)).toBe(true)
+  })
+})
+
+describe('läge', () => {
+  beforeEach(() => resetDocumentStore())
+  const corner = () => {
+    const d = s().doc
+    return minCorner(d.instances[0]!, d.defs[0]!)
+  }
+
+  it('sätter läget från ett tal, och det går att ångra', () => {
+    const id = newPart()
+    expect(s().setPosition(id, 'y', '450')).toBeNull()
+    expect(corner()).toEqual([0, 450, -120])
+    expect(s().doc.instances[0]).not.toHaveProperty('pos')
+    s().undo()
+    expect(corner()).toEqual([0, 0, -120])
+  })
+
+  it('ett uttryck följer parametern', () => {
+    const id = newPart()
+    const p = s().addParam()
+    s().updateParam(p, { name: 'hojd', expr: '722' })
+    expect(s().setPosition(id, 'y', 'hojd - 22')).toBeNull()
+    expect(corner()[1]).toBe(700)
+    s().updateParam(p, { expr: '900' })
+    expect(corner()[1]).toBe(878)
+  })
+
+  it('byter namn på parametern i läget också', () => {
+    const id = newPart()
+    const p = s().addParam()
+    s().updateParam(p, { name: 'hojd', expr: '700' })
+    s().setPosition(id, 'y', 'hojd')
+    s().updateParam(p, { name: 'h' })
+    expect(s().doc.instances[0]!.pos).toEqual({ y: 'h' })
+  })
+
+  it('avvisar uttryck som inte går att beräkna', () => {
+    const id = newPart()
+    expect(s().setPosition(id, 'x', 'okänd + 1')).toMatch(/okänd/i)
+    expect(corner()).toEqual([0, 0, -120])
+  })
+
+  it('flytt för hand tar bort uttrycket för den axeln', () => {
+    const id = newPart()
+    const p = s().addParam()
+    s().updateParam(p, { name: 'a', expr: '100' })
+    s().setPosition(id, 'x', 'a')
+    s().setPosition(id, 'y', 'a')
+    s().moveInstance(id, [50, 0, 0])
+    expect(s().doc.instances[0]!.pos).toEqual({ y: 'a' })
+    expect(corner()).toEqual([150, 100, -120])
+  })
+
+  it('kopior får inga lägesuttryck, annars drogs de tillbaka till originalet', () => {
+    const id = newPart()
+    const p = s().addParam()
+    s().updateParam(p, { name: 'a', expr: '100' })
+    s().setPosition(id, 'x', 'a')
+    const frame = s().doc.instances[0]!.frame
+    const [copy] = s().addCopies(id, [{ ...frame, origin: [frame.origin[0] + 1000, 0, 0] }])
+    const inst = s().doc.instances.find((i) => i.id === copy)!
+    expect(inst).not.toHaveProperty('pos')
+    expect(inst.frame.origin[0]).toBe(frame.origin[0] + 1000)
+  })
+
+  it('vridning tar bort uttrycket bara för axlar där hörnet flyttas', () => {
+    const id = newPart()
+    const p = s().addParam()
+    s().updateParam(p, { name: 'a', expr: '100' })
+    for (const axis of ['x', 'y', 'z'] as const) s().setPosition(id, axis, 'a')
+    // 90° runt Y genom delens mitt (800 × 22 × 120): x och z byter utsträckning, höjden står still.
+    s().rotateInstance(id, [400, 11, -60], [0, 1, 0], 90)
+    expect(s().doc.instances[0]!.pos).toEqual({ y: 'a' })
+  })
+
+  it('push/pull på sidan närmast origo tar bort uttrycket, annars flyttar delen tillbaka', () => {
+    const id = newPart()
+    const p = s().addParam()
+    s().updateParam(p, { name: 'a', expr: '100' })
+    s().setPosition(id, 'x', 'a')
+    s().pushPullBody(id, 'u-', 30)
+    expect(s().doc.instances[0]).not.toHaveProperty('pos')
+    expect(corner()[0]).toBe(70)
+    // Sidan bort från origo påverkar inte hörnet; uttrycket får ligga kvar.
+    s().setPosition(id, 'x', 'a')
+    s().pushPullBody(id, 'u+', 30)
+    expect(s().doc.instances[0]!.pos).toEqual({ x: 'a' })
   })
 })

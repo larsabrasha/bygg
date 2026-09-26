@@ -35,6 +35,11 @@ describe('evaluate', () => {
 })
 
 describe('identifiers och renameIdentifier', () => {
+  it('läser det typografiska minustecknet (U+2212) som minus', () => {
+    expect(evaluate('\u2212120', () => undefined)).toEqual({ ok: true, value: -120 })
+    expect(evaluate('10 \u2212 2,5', () => undefined)).toEqual({ ok: true, value: 7.5 })
+  })
+
   it('hittar namn men inte enheten mm', () => {
     expect(identifiers('bredd - 2 * tjocklek + 5 mm')).toEqual(['bredd', 'tjocklek'])
     expect(isConstant('12,5 mm')).toBe(true)

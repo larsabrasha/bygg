@@ -1,5 +1,5 @@
 import type { Body, Face, Frame, Rect, Vec2, Vec3 } from './types'
-import { add, dot, neg, scale, sub } from './vec'
+import { add, cross, dot, neg, scale, sub } from './vec'
 
 /** Golvplanet y = 0. u = +X, v = −Z, så att n = +Y (uppåt). */
 export const GROUND_FRAME: Frame = { origin: [0, 0, 0], u: [1, 0, 0], v: [0, 0, -1], n: [0, 1, 0] }
@@ -58,4 +58,26 @@ export function faceBounds(body: Body, face: Face): Rect {
   const xs = pts.map((p) => p[0])
   const ys = pts.map((p) => p[1])
   return { x0: Math.min(...xs), y0: Math.min(...ys), x1: Math.max(...xs), y1: Math.max(...ys) }
+}
+
+/** Tar bort flyttalsbrus, så att en vridning 90° ger exakt 0 och 1 och inte 6e-17. */
+const clean = (x: number, step: number) => {
+  const r = Math.round(x / step) * step
+  return (Math.abs(x - r) < 1e-9 ? r : x) + 0 // + 0 gör −0 till 0
+}
+
+/** Vektorn v vriden degrees grader runt enhetsvektorn k (högerhandsregeln). */
+function rotateVec(v: Vec3, k: Vec3, degrees: number): Vec3 {
+  const a = (degrees * Math.PI) / 180
+  const c = Math.cos(a)
+  const s = Math.sin(a)
+  // Rodrigues formel.
+  return add(add(scale(v, c), scale(cross(k, v), s)), scale(k, dot(k, v) * (1 - c)))
+}
+
+/** Framen vriden degrees grader runt en axel genom center. axis är en enhetsvektor. */
+export function rotateFrame(f: Frame, center: Vec3, axis: Vec3, degrees: number): Frame {
+  const dir = (v: Vec3) => rotateVec(v, axis, degrees).map((x) => clean(x, 1)) as Vec3
+  const origin = add(center, rotateVec(sub(f.origin, center), axis, degrees)).map((x) => clean(x, 1e-6)) as Vec3
+  return { origin, u: dir(f.u), v: dir(f.v), n: dir(f.n) }
 }

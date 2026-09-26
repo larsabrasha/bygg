@@ -1,14 +1,53 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <!-- Bakgrund i appens accentfärg över hela ytan, så att ikonen fungerar som maskable. -->
-  <rect width="512" height="512" fill="#1e6fd9"/>
-  <!-- Snickarhammare, snett uppåt höger. Håller sig inom maskable-ikonens säkra cirkel. -->
-  <g transform="rotate(35 256 256)" stroke-linejoin="round">
-    <!-- Skaft i trä med mörkare grepp nertill. -->
-    <rect x="234" y="200" width="44" height="222" rx="14" fill="#e3c28f" stroke="#5a4632" stroke-width="8"/>
-    <rect x="229" y="330" width="54" height="98" rx="18" fill="#8b5a2b" stroke="#5a4632" stroke-width="8"/>
-    <!-- Huvud i stål: slagyta till vänster, klo till höger. -->
-    <path d="M168 136 H300 C 334 136 364 152 384 184 L 356 200 C 344 180 326 172 300 172 V 212 H168 Z"
-          fill="#d3d8df" stroke="#2b2f36" stroke-width="8"/>
-    <rect x="124" y="126" width="52" height="96" rx="10" fill="#a4acb7" stroke="#2b2f36" stroke-width="8"/>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#34302b"/>
+      <stop offset="1" stop-color="#1c1a17"/>
+    </linearGradient>
+    <radialGradient id="shadow" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#000" stop-opacity="0.35"/>
+      <stop offset="1" stop-color="#000" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="top" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#f4d7a6"/>
+      <stop offset="1" stop-color="#e5bb7e"/>
+    </linearGradient>
+    <linearGradient id="left" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#d49c5c"/>
+      <stop offset="1" stop-color="#c28a4c"/>
+    </linearGradient>
+    <linearGradient id="right" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#a86d38"/>
+      <stop offset="1" stop-color="#93602f"/>
+    </linearGradient>
+    <clipPath id="cTop"><path d="M256 100 L394 180 L256 260 L118 180 Z"/></clipPath>
+    <clipPath id="cLeft"><path d="M118 180 L256 260 L256 420 L118 340 Z"/></clipPath>
+    <clipPath id="cRight"><path d="M394 180 L256 260 L256 420 L394 340 Z"/></clipPath>
+  </defs>
+  <!-- Mörk bakgrund över hela ytan, så att ikonen fungerar som maskable. -->
+  <rect width="512" height="512" fill="url(#bg)"/>
+  <!-- Träkloss i isometri: årsringar på toppen, ådring på sidorna. Håller sig inom maskable-ikonens säkra cirkel (r ≈ 205). -->
+  <ellipse cx="256" cy="424" rx="150" ry="26" fill="url(#shadow)"/>
+  <path d="M256 100 L394 180 L256 260 L118 180 Z" fill="url(#top)"/>
+  <path d="M118 180 L256 260 L256 420 L118 340 Z" fill="url(#left)"/>
+  <path d="M394 180 L256 260 L256 420 L394 340 Z" fill="url(#right)"/>
+  <g clip-path="url(#cTop)" fill="none" stroke="#b9823f" stroke-opacity="0.4" stroke-width="2.5">
+    <g transform="translate(300 150) scale(1 0.577)">
+      <circle r="22"/><circle r="52"/><circle r="90"/><circle r="136"/><circle r="190"/>
+    </g>
+  </g>
+  <g clip-path="url(#cLeft)" fill="none" stroke="#9c6a34" stroke-opacity="0.22" stroke-width="2.5">
+    <path d="M150 190 C 154 250, 146 300, 152 360"/>
+    <path d="M186 210 C 182 270, 192 320, 186 380"/>
+    <path d="M222 232 C 226 290, 218 340, 224 400"/>
+  </g>
+  <g clip-path="url(#cRight)" fill="none" stroke="#6e4520" stroke-opacity="0.22" stroke-width="2.5">
+    <path d="M290 240 C 286 300, 294 350, 290 400"/>
+    <path d="M326 220 C 330 280, 322 330, 326 380"/>
+    <path d="M362 198 C 358 256, 366 306, 362 360"/>
+  </g>
+  <g fill="none" stroke-linejoin="round" stroke-linecap="round">
+    <path d="M118 180 L256 260 L394 180" stroke="#fff4e0" stroke-opacity="0.7" stroke-width="3"/>
+    <path d="M256 260 L256 420" stroke="#fff4e0" stroke-opacity="0.25" stroke-width="3"/>
   </g>
 </svg>

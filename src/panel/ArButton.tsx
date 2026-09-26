@@ -1,7 +1,8 @@
+import { Rotate3d } from 'lucide-react'
 import { useState } from 'react'
 import { arQuickLookSupported, openInAr } from '../scene/arExport'
 import { useBodies } from '../store/documentStore'
-import { secondaryButton } from './ui'
+import { MenuItem } from './MenuItem'
 
 const supported = arQuickLookSupported()
 
@@ -27,14 +28,10 @@ export function ArButton({ onOpened }: { onOpened: () => void }) {
 
   return (
     <>
-      <button
-        className={`${secondaryButton} disabled:cursor-default disabled:opacity-50`}
-        disabled={busy || bodies.length === 0}
-        onClick={() => void open()}
-      >
+      <MenuItem Icon={Rotate3d} disabled={busy || bodies.length === 0} onClick={() => void open()}>
         {busy ? 'Förbereder AR…' : 'Visa i AR'}
-      </button>
-      {error && <p className="text-xs text-danger">Kunde inte öppna AR: {error}</p>}
+      </MenuItem>
+      {error && <p className="px-3 text-xs text-danger">Kunde inte öppna AR: {error}</p>}
     </>
   )
 }

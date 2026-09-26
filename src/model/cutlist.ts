@@ -1,3 +1,4 @@
+import { bodyExtents } from './box'
 import { partDims } from './partAxes'
 import type { Body } from './types'
 
@@ -8,8 +9,15 @@ export interface CutListRow {
   length: number
   width: number
   thickness: number
+  /**
+   * Rund del (cylinder): diametern och längden längs cylindern. L×B×T är
+   * ändå ämnet man kapar till, där två av måtten är diametern.
+   */
+  round?: { diameter: number; length: number }
   material: string
   bodyIds: string[]
+  /** Volymen för alla delar på raden, i kubikmeter. */
+  volumeM3: number
 }
 
 export interface CutList {
@@ -20,7 +28,7 @@ export interface CutList {
 }
 
 /** Mått avrundas till 0,1 mm så att flyttalsbrus inte delar upp lika delar. */
-const round = (n: number) => Math.round(n * 10) / 10
+const round01 = (n: number) => Math.round(n * 10) / 10
 
 /**
  * Kaplista: L×B×T mäts i varje dels egen riktning (L längs fibern, T tjockleken),
@@ -32,18 +40,26 @@ export function buildCutList(bodies: readonly Body[]): CutList {
   let totalVolumeM3 = 0
 
   for (const b of bodies) {
-    const d = partDims(b)
-    const length = round(d.length)
-    const width = round(d.width)
-    const thickness = round(d.thickness)
-    totalVolumeM3 += (d.length * d.width * d.thickness) / 1e9
+    // Ett verktyg är ingen egen bit: det skärs ut ur eller sitter på en annan del.
+    if (b.tool) continue
+    // Med något tillagt (en tapp) kapas ämnet större än formens låda.
+    const d = partDims({ ...(b.blank ?? b), grainAxis: b.grainAxis, thicknessAxis: b.thicknessAxis })
+    const length = round01(d.length)
+    const width = round01(d.width)
+    const thickness = round01(d.thickness)
+    const [du, , dn] = bodyExtents(b)
+    const round = b.shape === 'circle' && !b.blank ? { diameter: round01(du), length: round01(dn) } : undefined
+    // En cylinder fyller π/4 av sin fyrkant.
+    const volumeM3 = ((round ? Math.PI / 4 : 1) * d.length * d.width * d.thickness) / 1e9
+    totalVolumeM3 += volumeM3
 
-    const key = `${b.material}|${length}|${width}|${thickness}`
+    const key = `${b.material}|${length}|${width}|${thickness}|${round ? 'rund' : ''}`
     const row = groups.get(key)
     if (row) {
       row.count++
       if (!row.names.includes(b.name)) row.names.push(b.name)
       row.bodyIds.push(b.id)
+      row.volumeM3 += volumeM3
     } else {
       groups.set(key, {
         key,
@@ -52,8 +68,10 @@ export function buildCutList(bodies: readonly Body[]): CutList {
         length,
         width,
         thickness,
+        ...(round && { round }),
         material: b.material,
         bodyIds: [b.id],
+        volumeM3,
       })
     }
   }
@@ -66,5 +84,28 @@ export function buildCutList(bodies: readonly Body[]): CutList {
       b.width - a.width,
   )
 
-  return { rows, totalCount: bodies.length, totalVolumeM3 }
+  return { rows, totalCount: bodies.filter((b) => !b.tool).length, totalVolumeM3 }
+}
+
+export interface MaterialGroup {
+  material: string
+  rows: CutListRow[]
+  count: number
+  volumeM3: number
+}
+
+/** Raderna per material, i kaplistans ordning (raderna är redan sorterade på material). */
+export function groupByMaterial(rows: readonly CutListRow[]): MaterialGroup[] {
+  const groups: MaterialGroup[] = []
+  for (const row of rows) {
+    let group = groups.at(-1)
+    if (group?.material !== row.material) {
+      group = { material: row.material, rows: [], count: 0, volumeM3: 0 }
+      groups.push(group)
+    }
+    group.rows.push(row)
+    group.count += row.count
+    group.volumeM3 += row.volumeM3
+  }
+  return groups
 }

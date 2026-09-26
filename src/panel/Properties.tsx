@@ -1,13 +1,24 @@
-import { useState } from 'react'
+import { ArrowUpFromLine, Copy, RotateCw, Trash2, Unlink } from 'lucide-react'
+import { useState, type ReactNode } from 'react'
 import { rectSize } from '../model/geometry'
 import { AXES, extent, widthAxis } from '../model/partAxes'
+import { anglesOf, restOf } from '../model/orientation'
+import { minCorner, WORLD_AXES } from '../model/placement'
 import { instanceCounts, resolveBodies } from '../model/resolve'
-import { MATERIALS, type Axis, type Body, type PartDef } from '../model/types'
+import { MATERIALS, type Axis, type Body, type Instance, type PartDef } from '../model/types'
+import { AXIS_COLORS } from '../scene/colors'
 import { useDocumentStore } from '../store/documentStore'
-import { dangerButton, field, fieldLabel, secondaryButton, sectionTitle } from './ui'
+import { beginPushPull } from '../tools/actions'
+import { ExprInput } from './ExprInput'
+import { Group } from './Group'
+import { dangerButton, field, fieldLabel, primaryButton, secondaryButton, sectionTitle } from './ui'
 import { useDraft } from './useDraft'
+import { useSelectAll } from './useSelectAll'
+import { NothingSelected } from './NothingSelected'
+import { Tip } from './Tip'
+import { numberFormat } from '../model/numberFormat'
 
-const fmt = new Intl.NumberFormat('sv-SE', { maximumFractionDigits: 1, useGrouping: false })
+const fmt = numberFormat(1)
 
 /** Fält som sparar vid Enter eller när fokus lämnar, så att varje tangent inte blir ett ångra-steg. */
 function CommitField({
@@ -15,41 +26,108 @@ function CommitField({
   onCommit,
   className = field,
   inputMode,
+  prefix,
+  suffix,
+  label,
+  expr = false,
 }: {
   value: string
   /** Returnerar felmeddelande, eller null om värdet sparades. */
   onCommit: (text: string) => string | null
   className?: string
   inputMode?: 'text' | 'decimal'
+  /** Visas inne i fältet före värdet, t.ex. axelns bokstav. */
+  prefix?: ReactNode
+  /** Enheten inne i fältet, t.ex. mm. */
+  suffix?: string
+  /** Namn för skärmläsare när fältet saknar synlig etikett. */
+  label?: string
+  /** Fältet tar uttryck: föreslå parametrar och visa dem som badges. */
+  expr?: boolean
 }) {
   const [text, setText] = useDraft(value)
   const [error, setError] = useState<string | null>(null)
+  const selectAll = useSelectAll()
   const save = () => {
     if (text === value) return setError(null)
     const e = onCommit(text)
     setError(e)
   }
+  const boxed = !!(prefix || suffix)
+  const inputClass = boxed
+    ? // w-full: fältet ligger i ExprInputs omslag, där flex-1 inte når; utan det sticker det ut ur rutan
+      // och panelen kan skjutas åt sidan när det får fokus.
+      'w-full min-w-0 flex-1 bg-transparent text-ink tabular-nums outline-none'
+    : `${className} ${error ? 'border-danger' : ''}`
+  const common = {
+    'aria-label': label,
+    'aria-invalid': !!error,
+    inputMode,
+    onBlur: save,
+    onKeyDown: (e: React.KeyboardEvent<HTMLInputElement>) => {
+      if (e.key === 'Enter') e.currentTarget.blur()
+      if (e.key === 'Escape') {
+        setText(value)
+        setError(null)
+      }
+    },
+  }
+  const input = expr ? (
+    <ExprInput
+      {...common}
+      value={text}
+      onChange={setText}
+      // Ett steg med piltangenterna sparas direkt, så att delen ändras medan man stegar.
+      onStep={(t) => setError(onCommit(t))}
+      badges
+      className={inputClass}
+      // Utan ram räknas kanten (1 px) med i fältets utfyllnad.
+      padX={boxed ? 'px-0' : 'px-[11px]'}
+      wrapperClass={boxed ? 'block min-w-0 flex-1' : 'block w-full'}
+    />
+  ) : (
+    <input
+      {...common}
+      {...selectAll}
+      onBlur={() => {
+        selectAll.onBlur()
+        save()
+      }}
+      className={inputClass}
+      value={text}
+      onChange={(e) => setText(e.target.value)}
+    />
+  )
   return (
     <>
-      <input
-        className={`${className} ${error ? 'border-danger' : ''}`}
-        value={text}
-        inputMode={inputMode}
-        aria-invalid={!!error}
-        onChange={(e) => setText(e.target.value)}
-        onBlur={save}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter') e.currentTarget.blur()
-          if (e.key === 'Escape') {
-            setText(value)
-            setError(null)
-          }
-        }}
-      />
-      {error && <span className="text-danger">{error}</span>}
+      {prefix || suffix ? (
+        <span
+          data-field-box
+          className={`flex h-10 items-center gap-1.5 rounded-lg border bg-field px-2.5 focus-within:border-accent focus-within:ring-2 focus-within:ring-accent-soft narrow:h-11 ${error ? 'border-danger' : 'border-line'}`}
+        >
+          {prefix}
+          {input}
+          {suffix && <span className="text-[13px] text-unit">{suffix}</span>}
+        </span>
+      ) : (
+        input
+      )}
+      {error && <span className="text-xs text-danger">{error}</span>}
     </>
   )
 }
+
+/** Axelns bokstav i samma färg som axelkorset och flyttpilarna. */
+function AxisTag({ index }: { index: 0 | 1 | 2 }) {
+  return (
+    <span aria-hidden className="text-xs font-bold" style={{ color: AXIS_COLORS[index] }}>
+      {'XYZ'[index]}
+    </span>
+  )
+}
+
+/** Beräknat värde under ett fält som innehåller ett uttryck. */
+const Computed = ({ value }: { value: number }) => <span className="text-xs text-accent">= {fmt.format(value)}</span>
 
 /**
  * Längd, bredd och tjocklek enligt snickarkonventionen: L längs fibern, T tjockleken,
@@ -58,27 +136,91 @@ function CommitField({
  */
 function ExtentFields({ body, def }: { body: Body; def: PartDef }) {
   const setExtent = useDocumentStore((s) => s.setExtent)
-  const fields: [string, Axis][] = [
-    ['Längd (L)', def.grainAxis],
-    ['Bredd (B)', widthAxis(def)],
-    ['Tjocklek (T)', def.thicknessAxis],
-  ]
+  const name = (axis: Axis) => (axis === def.grainAxis ? 'Längd' : axis === def.thicknessAxis ? 'Tjocklek' : 'Bredd')
+  // En cylinder har två mått: diametern (u och v är samma) och måttet längs den.
+  const fields: [string, Axis][] =
+    def.shape === 'circle'
+      ? [
+          ['Diameter', 'u'],
+          [name('n'), 'n'],
+        ]
+      : [
+          ['Längd', def.grainAxis],
+          ['Bredd', widthAxis(def)],
+          ['Tjocklek', def.thicknessAxis],
+        ]
   return (
-    <>
+    <div className={`grid gap-2 ${fields.length === 2 ? 'grid-cols-2' : 'grid-cols-3'}`}>
       {fields.map(([label, axis]) => {
         const expr = def.dims?.[axis]?.expr
         const size = extent(body, axis)
-        const value = expr ?? fmt.format(size)
         return (
           <label key={label} className={fieldLabel}>
-            <span>
-              {label} {expr && <span className="text-accent">= {fmt.format(size)}</span>}
-            </span>
-            <CommitField key={`${body.id}:${axis}`} value={value} onCommit={(t) => setExtent(body.id, axis, t)} />
+            {label}
+            <CommitField
+              key={`${body.id}:${axis}`}
+              expr
+              value={expr ?? fmt.format(size)}
+              onCommit={(t) => setExtent(body.id, axis, t)}
+            />
+            {expr && <Computed value={size} />}
           </label>
         )
       })}
-    </>
+    </div>
+  )
+}
+
+/**
+ * Läget för delens hörn närmast origo, per världsaxel (som axelkorset).
+ * Ett uttryck med parametrar sparas och följer parametern; ett tal flyttar bara delen.
+ */
+function PositionFields({ inst, def }: { inst: Instance; def: PartDef }) {
+  const setPosition = useDocumentStore((s) => s.setPosition)
+  const corner = minCorner(inst, def)
+  return (
+    <div className="grid grid-cols-3 gap-2">
+      {WORLD_AXES.map((axis, i) => {
+        const expr = inst.pos?.[axis]
+        return (
+          <div key={axis} className="flex min-w-0 flex-col gap-1">
+            <CommitField
+              key={`${inst.id}:${axis}`}
+              label={`Placering ${axis.toUpperCase()}`}
+              prefix={<AxisTag index={i as 0 | 1 | 2} />}
+              expr
+              value={expr ?? fmt.format(corner[i]!)}
+              onCommit={(t) => setPosition(inst.id, axis, t)}
+            />
+            {expr && <Computed value={corner[i]!} />}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+/**
+ * Vinklar runt världens X, Y och Z i grader, räknat från hur delen låg innan
+ * den vreds första gången. Delen vrids runt sin mitt. Uttryck beräknas men sparas inte.
+ */
+function AngleFields({ inst }: { inst: Instance }) {
+  const setAngle = useDocumentStore((s) => s.setAngle)
+  const angles = anglesOf(inst.frame, restOf(inst))
+  return (
+    <div className="grid grid-cols-3 gap-2">
+      {WORLD_AXES.map((axis, i) => (
+        <CommitField
+          key={`${inst.id}:${axis}`}
+          label={`Vinkel runt ${axis.toUpperCase()}`}
+          prefix={<AxisTag index={i as 0 | 1 | 2} />}
+          suffix="°"
+          expr
+          value={fmt.format(angles[i]!)}
+          onCommit={(t) => setAngle(inst.id, axis, t)}
+        />
+      ))}
+    </div>
   )
 }
 
@@ -94,7 +236,7 @@ function GrainControls({ body, def }: { body: Body; def: PartDef }) {
     updatePart(body.id, { thicknessAxis: axis, grainAxis })
   }
   return (
-    <>
+    <div className="grid grid-cols-2 items-end gap-2">
       <label className={fieldLabel}>
         Tjockleken är
         <select className={field} value={def.thicknessAxis} onChange={(e) => setThickness(e.target.value as Axis)}>
@@ -105,17 +247,84 @@ function GrainControls({ body, def }: { body: Body; def: PartDef }) {
           ))}
         </select>
       </label>
-      <div className={fieldLabel}>
-        Fiberriktning
-        <button
-          className={secondaryButton}
-          title="Byt längd och bredd: fibern går längs det andra måttet"
-          onClick={() => updatePart(body.id, { grainAxis: widthAxis(def) })}
-        >
+      <Tip label="Byt längd och bredd: fibern går längs det andra måttet">
+        <button className={secondaryButton} onClick={() => updatePart(body.id, { grainAxis: widthAxis(def) })}>
+          <RotateCw size={16} strokeWidth={1.75} aria-hidden />
           Vrid fibern 90°
         </button>
-      </div>
-    </>
+      </Tip>
+    </div>
+  )
+}
+
+const ICON_SM = { size: 16, strokeWidth: 1.75, 'aria-hidden': true } as const
+
+/**
+ * Verktyg: vilken del det läggs till på eller skärs ut ur, och Lossa.
+ * Värd: dess verktyg (tryck för att välja ett), och att det gäller alla länkade kopior.
+ */
+function CombineGroup({ body }: { body: Body }) {
+  const doc = useDocumentStore((s) => s.doc)
+  const select = useDocumentStore((s) => s.select)
+  const detach = useDocumentStore((s) => s.detach)
+  const bodies = resolveBodies(doc)
+  const link = (id: string) => (
+    <button className="cursor-pointer font-semibold text-accent" onClick={() => select({ kind: 'body', id })}>
+      {bodies.find((b) => b.id === id)?.name}
+    </button>
+  )
+  if (body.tool) {
+    const { op, host, into } = body.tool
+    return (
+      <Group title={{ subtract: 'Skärs ut', add: 'Läggs till', joint: 'Tapp' }[op]}>
+        <p className="text-[13px] text-muted">
+          {op === 'joint' && into ? (
+            <>
+              Tapp på {link(host)}, med tapphål i {link(into)}. Tapphålet har samma form som tappen, så de passar alltid
+              ihop. Tappen finns på alla länkade kopior av {link(host)}, men tapphålet bara i den här {link(into)}, inte
+              i dess länkade kopior.
+            </>
+          ) : (
+            <>
+              {op === 'subtract' ? 'Skärs ut ur' : 'Läggs till på'} {link(host)}. Det gäller alla länkade kopior.
+            </>
+          )}{' '}
+          Flytta eller ändra den här delen så följer resultatet med.
+        </p>
+        <button className={secondaryButton} onClick={() => detach(body.id)}>
+          <Unlink {...ICON_SM} />
+          Lossa
+        </button>
+      </Group>
+    )
+  }
+  // Verktyg på delen, och tappar från andra delar som går in i den (tapphål).
+  const tools = bodies.filter((b) => b.tool?.host === body.id || b.tool?.into === body.id)
+  if (tools.length === 0) return null
+  const label = (t: Body) =>
+    t.tool!.op === 'joint'
+      ? t.tool!.into === body.id
+        ? 'tapphål'
+        : 'tapp'
+      : t.tool!.op === 'subtract'
+        ? 'skärs ut'
+        : 'läggs till'
+  return (
+    <Group title="Urskärningar och tillägg">
+      <ul className="flex flex-col">
+        {tools.map((t) => (
+          <li key={t.id}>
+            <button
+              className="flex h-9 w-full cursor-pointer items-center justify-between gap-2 rounded-md px-2 text-left text-[13px] hover:bg-hover narrow:h-11"
+              onClick={() => select({ kind: 'body', id: t.id })}
+            >
+              <span className="font-semibold">{t.name}</span>
+              <span className="text-muted">{label(t)}</span>
+            </button>
+          </li>
+        ))}
+      </ul>
+    </Group>
   )
 }
 
@@ -126,23 +335,24 @@ export function Properties() {
   const deleteSelection = useDocumentStore((s) => s.deleteSelection)
   const duplicateLinked = useDocumentStore((s) => s.duplicateLinked)
   const makeUnique = useDocumentStore((s) => s.makeUnique)
-  const clearDocument = useDocumentStore((s) => s.clearDocument)
 
   const body = selection?.kind === 'body' ? resolveBodies(doc).find((b) => b.id === selection.id) : undefined
   const def = body && doc.defs.find((d) => d.id === body.defId)
+  const inst = body && doc.instances.find((i) => i.id === body.id)
   const copies = def ? (instanceCounts(doc).get(def.id) ?? 0) : 0
   const sketch = selection?.kind === 'sketch' ? doc.sketches.find((s) => s.id === selection.id) : undefined
   const isEmpty = doc.instances.length === 0 && doc.sketches.length === 0 && doc.params.length === 0
 
   return (
-    <section className="narrow:group-data-[tab=cutlist]/sheet:hidden narrow:group-data-[tab=params]/sheet:hidden">
+    <section className="flex flex-1 flex-col group-data-[tab=cutlist]/sheet:hidden group-data-[tab=params]/sheet:hidden">
       <h2 className={sectionTitle}>Egenskaper</h2>
       {body && def ? (
-        <div className="grid grid-cols-2 gap-2">
-          <label className={`${fieldLabel} col-span-2`}>
-            Namn
+        <div className="flex flex-col gap-4">
+          <Group title="Del">
             <CommitField
               key={def.id}
+              label="Namn"
+              className={`${field} text-base font-semibold`}
               value={def.name}
               onCommit={(t) => {
                 if (!t.trim()) return 'Namnet får inte vara tomt'
@@ -150,62 +360,89 @@ export function Properties() {
                 return null
               }}
             />
-          </label>
-          <label className={`${fieldLabel} col-span-2`}>
-            Material
-            <select
-              className={field}
-              value={def.material}
-              onChange={(e) => updatePart(body.id, { material: e.target.value })}
-            >
-              {MATERIALS.map((m) => (
-                <option key={m} value={m}>
-                  {m}
-                </option>
-              ))}
-            </select>
-          </label>
-          <ExtentFields body={body} def={def} />
-          <span />
-          <GrainControls body={body} def={def} />
-          <p className="col-span-2 text-xs text-faint">
-            Mått i mm. L går längs fibern (pilen på delen). Skriv ett parameternamn, t.ex. <code>tjocklek</code>, så
-            följer måttet parametern.
-          </p>
-          {copies > 1 && <p className="col-span-2 text-accent">{copies} länkade kopior – ändringar gäller alla.</p>}
-          <button className={secondaryButton} onClick={() => duplicateLinked(body.id)}>
-            Länkad kopia
-          </button>
-          {copies > 1 ? (
-            <button className={secondaryButton} onClick={() => makeUnique(body.id)}>
-              Gör unik
-            </button>
-          ) : (
-            <span />
+            <label className={fieldLabel}>
+              Material
+              <select
+                className={field}
+                value={def.material}
+                onChange={(e) => updatePart(body.id, { material: e.target.value })}
+              >
+                {MATERIALS.map((m) => (
+                  <option key={m} value={m}>
+                    {m}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </Group>
+
+          <Group title="Mått" note="mm · L går längs fibern">
+            <ExtentFields body={body} def={def} />
+            <GrainControls body={body} def={def} />
+            <p className="text-xs text-faint">
+              Skriv ett parameternamn, t.ex. <code>tjocklek</code>, så följer måttet parametern.
+            </p>
+          </Group>
+
+          {inst && (
+            <>
+              <Group title="Placering" note="mm · hörnet närmast origo">
+                <PositionFields inst={inst} def={def} />
+              </Group>
+              <Group title="Vinkel" note="runt delens mitt">
+                <AngleFields inst={inst} />
+              </Group>
+            </>
           )}
-          <button className={`${dangerButton} col-span-2`} onClick={deleteSelection}>
+
+          <CombineGroup body={body} />
+
+          <Group title="Kopior" note={copies > 1 && <span className="text-accent">{copies} länkade</span>}>
+            {copies > 1 && <p className="text-[13px] text-muted">De delar form: ändrar du måtten här ändras alla.</p>}
+            <div className="grid grid-cols-2 gap-2">
+              <button className={secondaryButton} onClick={() => duplicateLinked(body.id)}>
+                <Copy {...ICON_SM} />
+                Länkad kopia
+              </button>
+              {copies > 1 && (
+                <Tip label="Ge den här kopian en egen form">
+                  <button className={secondaryButton} onClick={() => makeUnique(body.id)}>
+                    <Unlink {...ICON_SM} />
+                    Gör unik
+                  </button>
+                </Tip>
+              )}
+            </div>
+          </Group>
+
+          <button className={`${dangerButton} w-full`} onClick={deleteSelection}>
+            <Trash2 {...ICON_SM} />
             Ta bort del
           </button>
         </div>
       ) : sketch ? (
-        <div className="grid grid-cols-2 gap-2">
-          <p className="col-span-2 tabular-nums">
-            Skiss {(([w, h]) => `${fmt.format(w)} × ${fmt.format(h)} mm`)(rectSize(sketch.rect))}
-          </p>
-          <p className="col-span-2 text-faint">Välj Push/pull och tryck på skissen för att göra en del av den.</p>
-          <button className={`${dangerButton} col-span-2`} onClick={deleteSelection}>
-            Ta bort skiss
-          </button>
+        <div className="flex flex-col gap-4">
+          <Group title="Skiss">
+            <p className="text-base font-semibold tabular-nums">
+              {(([w, h]) =>
+                sketch.shape === 'circle' ? `Ø ${fmt.format(w)} mm` : `${fmt.format(w)} × ${fmt.format(h)} mm`)(
+                rectSize(sketch.rect),
+              )}
+            </p>
+            <div className="grid grid-cols-2 gap-2">
+              <button className={primaryButton} onClick={() => beginPushPull({ kind: 'sketch', id: sketch.id })}>
+                <ArrowUpFromLine {...ICON_SM} />
+                Dra ut till en del
+              </button>
+              <button className={dangerButton} onClick={deleteSelection}>
+                <Trash2 {...ICON_SM} />
+                Ta bort skiss
+              </button>
+            </div>
+          </Group>
         </div>
       ) : (
-        <div className="flex flex-col gap-3">
-          <p className="text-faint">Inget valt. Välj en del med verktyget Välj.</p>
-          {!isEmpty && (
-            <button className={`${dangerButton} self-start`} onClick={clearDocument}>
-              Rensa modellen
-            </button>
-          )}
-        </div>
+        <NothingSelected isEmpty={isEmpty} />
       )}
     </section>
   )

@@ -42,8 +42,9 @@ function tokenize(text: string): Token[] | string {
       i = j
       continue
     }
-    if ('+-*/()'.includes(c)) {
-      tokens.push({ kind: 'op', op: c, start: i, end: i + 1 })
+    // − (U+2212) är minustecknet som svenska talformatet skriver ut, t.ex. i lägesfälten.
+    if ('+-−*/()'.includes(c)) {
+      tokens.push({ kind: 'op', op: c === '−' ? '-' : c, start: i, end: i + 1 })
       i++
       continue
     }

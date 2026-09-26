@@ -1,11 +1,18 @@
-import { type Box } from './box'
+import { type Box, bodyExtents, keepRound } from './box'
 import { defaultAxes } from './partAxes'
 
-export { bodyExtents, type Box } from './box'
-import type { Axis, Face, Instance, PartDef, Rect, Sketch, Vec2 } from './types'
+export { bodyExtents, keepRound, linkedAxes, type Box } from './box'
+import { toWorld } from './frame'
+import type { Axis, Body, Face, Instance, PartDef, Rect, Sketch, Vec2, Vec3 } from './types'
 
 /** Axeln som en sida sitter vinkelrätt mot. */
 export const faceAxis = (face: Face): Axis => face[0] as Axis
+
+/** Mitten av en del i världskoordinater; där flyttpilarna sitter och det den vrids runt. */
+export function bodyCenter(b: Body): Vec3 {
+  const { x0, x1, y0, y1 } = b.profile
+  return toWorld(b.frame, [(x0 + x1) / 2, (y0 + y1) / 2, (b.z0 + b.z1) / 2])
+}
 
 /** Minsta mått en skiss eller kropp får ha, i mm. */
 export const MIN_SIZE = 1
@@ -16,6 +23,53 @@ export function rectFromCorners(a: Vec2, b: Vec2): Rect {
 
 export function rectSize(r: Rect): Vec2 {
   return [r.x1 - r.x0, r.y1 - r.y0]
+}
+
+/** Kvadraten som en cirkel med mitten center och en punkt på kanten at ligger inskriven i. */
+export function circleRect(center: Vec2, at: Vec2): Rect {
+  const r = Math.hypot(at[0] - center[0], at[1] - center[1])
+  return { x0: center[0] - r, y0: center[1] - r, x1: center[0] + r, y1: center[1] + r }
+}
+
+/**
+ * Vilken sida en träff på en cylinder räknas som, från ytans normal i delens
+ * egna koordinater (u, v, n). Ändarna är n+ och n−. På den runda sidan: den
+ * av delens fyra sidor som normalen pekar mest mot, så att push/pull där
+ * ändrar diametern åt det hållet.
+ */
+export function circleFace([x, y, z]: Vec3): Face {
+  if (Math.abs(z) >= Math.max(Math.abs(x), Math.abs(y))) return z >= 0 ? 'n+' : 'n-'
+  if (Math.abs(x) >= Math.abs(y)) return x >= 0 ? 'u+' : 'u-'
+  return y >= 0 ? 'v+' : 'v-'
+}
+
+/** Hur nära en yta en träff måste ligga för att räknas till den, i mm. */
+const ON_FACE = 0.5
+
+/**
+ * Vilken av formens egna sidor en träff på en form med verktyg ligger på,
+ * från punkten och normalen i formens koordinater. Undefined om träffen
+ * ligger inne i något som skurits ut, eller på något som lagts till: där
+ * finns ingen sida att dra i eller rita på.
+ */
+export function faceOnBox(box: Box, [x, y, z]: Vec3, normal: Vec3): Face | undefined {
+  const { x0, y0, x1, y1 } = box.profile
+  const near = (a: number, b: number) => Math.abs(a - b) <= ON_FACE
+  const face = box.shape === 'circle' ? circleFace(normal) : undefined
+  if (box.shape === 'circle' && face && faceAxis(face) !== 'n') {
+    const r = (x1 - x0) / 2
+    return near(Math.hypot(x - (x0 + x1) / 2, y - (y0 + y1) / 2), r) ? face : undefined
+  }
+  const [nx, ny, nz] = normal
+  const sides: [Face, boolean][] = [
+    ['u+', nx > 0.99 && near(x, x1)],
+    ['u-', nx < -0.99 && near(x, x0)],
+    ['v+', ny > 0.99 && near(y, y1)],
+    ['v-', ny < -0.99 && near(y, y0)],
+    ['n+', nz > 0.99 && near(z, box.z1)],
+    ['n-', nz < -0.99 && near(z, box.z0)],
+  ]
+  return sides.find(([, hit]) => hit)?.[0]
 }
 
 export function isValidRect(r: Rect): boolean {
@@ -38,7 +92,12 @@ export function sketchToPart(
   if (Math.abs(distance) < MIN_SIZE || !isValidRect(sketch.rect)) return null
   const dims = { ...sketch.dims }
   if (depthExpr) dims.n = { expr: depthExpr, anchor: distance >= 0 ? 'min' : 'max' }
-  const box = { profile: sketch.rect, z0: Math.min(0, distance), z1: Math.max(0, distance) }
+  const box = {
+    profile: sketch.rect,
+    ...(sketch.shape && { shape: sketch.shape }),
+    z0: Math.min(0, distance),
+    z1: Math.max(0, distance),
+  }
   const def: PartDef = {
     id: props.defId,
     name: props.name,
@@ -52,6 +111,7 @@ export function sketchToPart(
 
 /**
  * Flyttar en av kroppens sidor längs sidans normal. Positivt avstånd = utåt.
+ * På en cylinders runda sida ändras diametern (se keepRound).
  * Null om något mått skulle bli mindre än MIN_SIZE.
  */
 export function pushPullBody<T extends Box>(body: T, face: Face, distance: number): T | null {
@@ -78,13 +138,34 @@ export function pushPullBody<T extends Box>(body: T, face: Face, distance: numbe
       break
   }
   if (!isValidRect(p) || z1 - z0 < MIN_SIZE) return null
-  return { ...body, profile: p, z0, z1 }
+  return keepRound({ ...body, profile: p, z0, z1 }, faceAxis(face))
 }
 
-/** Första lediga namnet "Del N". */
-export function nextPartName(defs: readonly Pick<PartDef, 'name'>[]): string {
+/**
+ * Minsta avstånd för push/pull på en yta (negativt: inåt). Längre in än så
+ * går ytan förbi motsatta sidan, eller delen blir tunnare än MIN_SIZE.
+ */
+export function pushPullMin(body: Box, face: Face): number {
+  const [u, v, n] = bodyExtents(body)
+  return MIN_SIZE - { u, v, n }[faceAxis(face)]
+}
+
+/** Första lediga namnet "Del N" (eller med ett annat ord, t.ex. "Urtag N"). */
+export function nextPartName(defs: readonly Pick<PartDef, 'name'>[], word = 'Del'): string {
   const used = new Set(defs.map((b) => b.name))
   let n = 1
-  while (used.has(`Del ${n}`)) n++
-  return `Del ${n}`
+  while (used.has(`${word} ${n}`)) n++
+  return `${word} ${n}`
+}
+
+/**
+ * Namn på en form som gjorts unik ur name: samma namn med ett nummer, "Ben (2)",
+ * så att man ser var den kommer ifrån. Ett nummer som redan finns tas bort först.
+ */
+export function uniqueCopyName(defs: readonly Pick<PartDef, 'name'>[], name: string): string {
+  const base = name.replace(/ \(\d+\)$/, '')
+  const used = new Set(defs.map((b) => b.name))
+  let n = 2
+  while (used.has(`${base} (${n})`)) n++
+  return `${base} (${n})`
 }

@@ -15,7 +15,7 @@ export function Notices() {
         <div key={n.id} className="flex items-start gap-2 rounded-lg border border-line bg-panel px-3 py-2 shadow-md">
           <p className="flex-1 self-center text-[13px]">{n.text}</p>
           {n.action && (
-            <button className={`${primaryButton} py-1 text-[13px]`} onClick={() => void n.action!.run()}>
+            <button className={`${primaryButton} h-8`} onClick={() => void n.action!.run()}>
               {n.action.label}
             </button>
           )}

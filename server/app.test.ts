@@ -109,3 +109,36 @@ describe('API', () => {
     expect(results.map((r) => r.status).sort()).toEqual([200, 409, 409])
   })
 })
+
+describe('bilden av en modell', () => {
+  // En PNG börjar med de här åtta byten; resten spelar ingen roll för servern.
+  const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3]) as Uint8Array<ArrayBuffer>
+  const putThumb = (body: Uint8Array<ArrayBuffer>, id = ID) =>
+    app.request(`/api/models/${id}/thumb`, { method: 'PUT', body, headers: { 'content-type': 'image/png' } })
+
+  it('sparas och hämtas som PNG', async () => {
+    await put({ name: 'Bord', baseRevision: null, file })
+    expect((await putThumb(png)).status).toBe(204)
+    const r = await app.request(`/api/models/${ID}/thumb`)
+    expect(r.status).toBe(200)
+    expect(r.headers.get('content-type')).toBe('image/png')
+    expect(new Uint8Array(await r.arrayBuffer())).toEqual(png)
+  })
+
+  it('bara för en modell som finns, och bara PNG', async () => {
+    expect((await putThumb(png)).status).toBe(404)
+    expect((await app.request(`/api/models/${ID}/thumb`)).status).toBe(404)
+    await put({ name: 'Bord', baseRevision: null, file })
+    expect((await putThumb(new Uint8Array([1, 2, 3, 4, 5, 6, 7, 8, 9]))).status).toBe(400)
+    expect((await putThumb(png, '../../etc')).status).toBe(404)
+    expect((await app.request('/api/models/inte-ett-id/thumb')).status).toBe(400)
+  })
+
+  it('följer med modellen till papperskorgen', async () => {
+    await put({ name: 'Bord', baseRevision: null, file })
+    await putThumb(png)
+    await app.request(`/api/models/${ID}?baseRevision=1`, { method: 'DELETE' })
+    expect((await app.request(`/api/models/${ID}/thumb`)).status).toBe(404)
+    expect((await readdir(path.join(dir, 'trash'))).some((f) => f.endsWith('.png'))).toBe(true)
+  })
+})

@@ -1,7 +1,8 @@
 @import 'tailwindcss';
 
-/* Smal skärm (mobil i stående läge). Liggande mobil får desktop-layouten. */
-@custom-variant narrow (@media (max-width: 720px));
+/* Smal skärm (mobil i stående läge). Liggande mobil får desktop-layouten. Bara på skärmen:
+   en stående A4 är också under 720 px bred, och ritningen ska skrivas ut som på bred skärm. */
+@custom-variant narrow (@media screen and (max-width: 720px));
 
 @theme {
   --font-sans: system-ui, -apple-system, 'Segoe UI', sans-serif;
@@ -18,6 +19,8 @@
   /* Text på accentfärgad bakgrund (primärknappen). */
   --color-on-accent: #ffffff;
   --color-danger: #b3261e;
+  /* Bakgrund i knappen Ta bort. */
+  --color-danger-soft: #f8e1df;
   /* Bakgrund i inmatningsfält. */
   --color-field: #ffffff;
   /* Sekundärknappens bakgrund. */
@@ -25,6 +28,20 @@
   --color-disabled: #b5afa5;
   /* Enhetstext ("mm") inne i ett fält. */
   --color-unit: #9a9489;
+  /* Varning: offline, konfliktkopia. */
+  --color-warn: #a15c07;
+  --color-warn-soft: #fbeed3;
+
+  /* Rutan "Öppnar …" (panel/OpeningOverlay.tsx): syns först om det tar en stund. */
+  --animate-appear-late: appear 150ms ease-out 400ms both;
+  @keyframes appear {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
 }
 
 /* Mörkt tema följer systemets inställning. Samma namn, andra värden, så att
@@ -44,10 +61,13 @@
     --color-accent-line: #34588a;
     --color-on-accent: #0c1a2e;
     --color-danger: #f28b82;
+    --color-danger-soft: #3d2422;
     --color-field: #1b1a18;
     --color-button: #36332e;
     --color-disabled: #5d5850;
     --color-unit: #857e74;
+    --color-warn: #f0b453;
+    --color-warn-soft: #3b2e14;
   }
 }
 
@@ -58,9 +78,28 @@
     height: 100%;
   }
 
+  html {
+    touch-action: pan-x pan-y;
+  }
+
   body {
     @apply bg-canvas font-sans text-sm text-ink;
     overscroll-behavior: none;
+    /* Scrolla, men inte zooma sidan (nyp eller dubbeltryck); 3D-vyn har egen touch-action från kameran.
+       Se också usePreventPageZoom, för Safari. */
+    touch-action: pan-x pan-y;
+    /* En app, inte en webbsida: text markeras inte när man drar eller dubbelklickar,
+       och iOS visar ingen meny vid långt tryck. */
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
+  }
+
+  /* Fälten måste gå att markera i; i iOS Safari går det annars inte att skriva i dem. */
+  input,
+  textarea {
+    user-select: text;
+    -webkit-user-select: text;
   }
 
   /* 16 px hindrar iOS från att zooma in när ett fält får fokus. */

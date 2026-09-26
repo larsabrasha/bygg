@@ -1,66 +1,84 @@
-import { ArrowUpFromLine, MousePointer2, Move, Redo2, Square, Undo2, type LucideIcon } from 'lucide-react'
-import { useDocumentStore } from '../store/documentStore'
-import { useToolStore, type Tool } from '../store/toolStore'
-import { ModelMenu } from './ModelMenu'
-
-const TOOLS: { tool: Tool; label: string; key: string; Icon: LucideIcon }[] = [
-  { tool: 'select', label: 'Välj', key: 'Mellanslag', Icon: MousePointer2 },
-  { tool: 'rect', label: 'Rektangel', key: 'R', Icon: Square },
-  { tool: 'pushpull', label: 'Push/pull', key: 'P', Icon: ArrowUpFromLine },
-  { tool: 'move', label: 'Flytta', key: 'M', Icon: Move },
-]
-
-/** Kvadratisk ikonknapp: 36 px på desktop, 44 px (touchyta) på smal skärm. */
-const button =
-  'grid size-9 shrink-0 cursor-pointer place-items-center rounded-md border border-transparent hover:bg-hover narrow:size-11 disabled:cursor-default disabled:text-disabled disabled:hover:bg-transparent'
-
-const ICON = { size: 20, strokeWidth: 1.75, 'aria-hidden': true } as const
+import { DraftingCompass, PanelRightClose, PanelRightOpen } from 'lucide-react'
+import { useBodies } from '../store/documentStore'
+import { useViewStore } from '../store/viewStore'
+import { RedoButton, UndoButton } from './HistoryButtons'
+import { ModelTitle } from './ModelTitle'
+import { ShareMenu } from './ShareMenu'
+import { SyncBadge } from './SyncBadge'
+import { Tip } from './Tip'
+import { ToolButtons } from './ToolButtons'
+import { ICON, iconButton } from './ui'
 
 export function Toolbar() {
-  const tool = useToolStore((s) => s.tool)
-  const setTool = useToolStore((s) => s.setTool)
-  const canUndo = useDocumentStore((s) => s.past.length > 0)
-  const canRedo = useDocumentStore((s) => s.future.length > 0)
-  const undo = useDocumentStore((s) => s.undo)
-  const redo = useDocumentStore((s) => s.redo)
+  const panelOpen = useViewStore((s) => s.panelOpen)
+  const togglePanel = useViewStore((s) => s.togglePanel)
+  const focusMode = useViewStore((s) => s.focusMode)
 
   return (
-    // Knapparna visar bara ikoner; namnet finns i aria-label (skärmläsare) och title (tooltip med kortkommando).
-    <header className="flex items-center gap-2 border-b border-line bg-panel px-2 py-1.5 pt-[max(6px,env(safe-area-inset-top))] [grid-area:toolbar] narrow:gap-1">
-      <div className="max-w-64 min-w-0 narrow:flex-1">
-        <ModelMenu />
+    <header
+      className={`flex items-center ${focusMode ? 'hidden' : ''} gap-2 border-b border-line bg-panel px-2 py-1.5 pt-[max(6px,env(safe-area-inset-top))] [grid-area:toolbar] narrow:gap-1 narrow:pl-1`}
+    >
+      <div className="max-w-72 min-w-0 narrow:max-w-none narrow:flex-1">
+        <ModelTitle />
       </div>
-      <div className="flex gap-1" role="toolbar" aria-label="Verktyg">
-        {TOOLS.map(({ tool: t, label, key, Icon }) => (
+      {/* Modellen och verktygen är olika grupper: luft och en linje emellan, som i knappraderna i vyn. */}
+      <span aria-hidden className="mx-2 h-6 w-px shrink-0 bg-line narrow:hidden" />
+      {/* På smal skärm ligger verktygen i en list i 3D-vyn (ToolRail). */}
+      <div className="flex gap-1 narrow:hidden" role="toolbar" aria-label="Verktyg">
+        <ToolButtons />
+      </div>
+      {/*
+        Ångra och gör om hör till arbetet med modellen, så de står efter verktygen. På smal skärm
+        står de sist i verktygslisten i 3D-vyn (ToolRail).
+      */}
+      <span aria-hidden className="mx-2 h-6 w-px shrink-0 bg-line narrow:hidden" />
+      <div className="flex gap-1 narrow:hidden" role="group" aria-label="Historik">
+        <UndoButton />
+        <RedoButton />
+      </div>
+      {/* Synkstatus (bara när något är fel), Ritning och Dela, och detaljpanelen längst till höger, med luft emellan. */}
+      <div className="ml-auto flex shrink-0 items-center gap-4 narrow:gap-2">
+        <SyncBadge withLabel={false} />
+        <div className="flex items-center gap-1">
+          <DrawingButton />
+          <ShareMenu buttonClass={iconButton} />
+        </div>
+        {/*
+          Detaljpanelen i en egen grupp längst till höger, rakt ovanför panelen
+          (som i Xcode och VS Code). Bara på bred skärm; på smal är den ett blad längst ner.
+        */}
+        <span aria-hidden className="h-6 w-px shrink-0 bg-line narrow:hidden" />
+        <Tip label={panelOpen ? 'Dölj detaljpanelen' : 'Visa detaljpanelen'}>
           <button
-            key={t}
-            aria-pressed={tool === t}
-            aria-label={label}
-            title={`${label} (${key})`}
-            onClick={() => setTool(t)}
-            className={`${button} aria-pressed:border-accent-line aria-pressed:bg-accent-soft aria-pressed:text-accent`}
+            className={`${iconButton} narrow:hidden`}
+            aria-expanded={panelOpen}
+            aria-label="Detaljpanel"
+            onClick={togglePanel}
           >
-            <Icon {...ICON} />
+            {panelOpen ? <PanelRightClose {...ICON} /> : <PanelRightOpen {...ICON} />}
           </button>
-        ))}
-      </div>
-      <div className="ml-auto flex gap-1">
-        <button
-          className={button}
-          disabled={!canUndo}
-          aria-label="Ångra"
-          title="Ångra (⌘Z)"
-          onClick={() => {
-            useToolStore.getState().setOp(null)
-            undo()
-          }}
-        >
-          <Undo2 {...ICON} />
-        </button>
-        <button className={button} disabled={!canRedo} aria-label="Gör om" title="Gör om (⇧⌘Z)" onClick={redo}>
-          <Redo2 {...ICON} />
-        </button>
+        </Tip>
       </div>
     </header>
+  )
+}
+
+/**
+ * Ritningen (med kaplistan som sista blad). Fylld men dämpad knapp med text, så att den
+ * syns utan att ta över. Texten står kvar också på smal skärm: passaren ensam säger inte vad knappen gör.
+ */
+function DrawingButton() {
+  const empty = useBodies().length === 0
+  return (
+    <Tip label="Ritning" keys="⌘P">
+      <button
+        className="inline-flex h-9 shrink-0 cursor-pointer items-center gap-1.5 rounded-lg bg-button px-3 text-[13px] font-medium text-ink hover:bg-hover disabled:cursor-default disabled:text-disabled disabled:hover:bg-button narrow:h-11"
+        disabled={empty}
+        onClick={() => useViewStore.getState().setDrawing(true)}
+      >
+        <DraftingCompass size={18} strokeWidth={1.75} aria-hidden />
+        Ritning
+      </button>
+    </Tip>
   )
 }

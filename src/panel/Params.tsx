@@ -1,18 +1,37 @@
+import { Plus, X } from 'lucide-react'
 import { useState } from 'react'
 import { evaluateParams, isNameUsed } from '../model/params'
 import type { Param } from '../model/types'
 import { useDocumentStore } from '../store/documentStore'
-import { field, secondaryButton, sectionTitle } from './ui'
+import { EmptyState } from './EmptyState'
+import { ParamPicture } from './pictures'
+import { field, primaryButton, secondaryButton, sectionTitle } from './ui'
+import { ExprInput } from './ExprInput'
 import { useDraft } from './useDraft'
+import { useSelectAll } from './useSelectAll'
+import { Tip } from './Tip'
+import { numberFormat } from '../model/numberFormat'
 
-const fmt = new Intl.NumberFormat('sv-SE', { maximumFractionDigits: 2, useGrouping: false })
+const fmt = numberFormat(2)
 
-function ParamRow({ param, error, used }: { param: Param; error?: string; used: boolean }) {
+function ParamRow({
+  param,
+  error,
+  used,
+  autoFocus,
+}: {
+  param: Param
+  error?: string
+  used: boolean
+  /** En ny parameter: namnet får fokus och är markerat, så att man kan skriva sitt eget direkt. */
+  autoFocus: boolean
+}) {
   const updateParam = useDocumentStore((s) => s.updateParam)
   const deleteParam = useDocumentStore((s) => s.deleteParam)
   const [name, setName] = useDraft(param.name)
   const [expr, setExpr] = useDraft(param.expr)
   const [message, setMessage] = useState<string | null>(null)
+  const selectAll = useSelectAll()
 
   const save = (patch: { name?: string; expr?: string }) => {
     const e = updateParam(param.id, patch)
@@ -29,37 +48,55 @@ function ParamRow({ param, error, used }: { param: Param; error?: string; used: 
   }
 
   const shownError = message ?? error
+  const computed = param.expr.trim() === fmt.format(param.value) ? null : `= ${fmt.format(param.value)} mm`
   return (
-    <li className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] items-center gap-1.5">
+    <li className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] items-start gap-2">
       <input
-        className={field}
+        className={`${field} font-medium`}
         aria-label="Namn"
         value={name}
+        autoFocus={autoFocus}
+        {...selectAll}
         onChange={(e) => setName(e.target.value)}
-        onBlur={() => name !== param.name && save({ name })}
+        onBlur={() => {
+          selectAll.onBlur()
+          if (name !== param.name) save({ name })
+        }}
         onKeyDown={onKey(() => setName(param.name))}
       />
-      <input
-        className={`${field} ${shownError ? 'border-danger' : ''}`}
-        aria-label="Värde eller uttryck"
-        value={expr}
-        inputMode="decimal"
-        onChange={(e) => setExpr(e.target.value)}
-        onBlur={() => expr !== param.expr && save({ expr })}
-        onKeyDown={onKey(() => setExpr(param.expr))}
-      />
-      <button
-        className="min-h-8 cursor-pointer rounded px-2 text-muted disabled:cursor-default disabled:opacity-40 narrow:min-h-11"
-        title={used ? 'Används – ta bort användningen först' : 'Ta bort'}
-        aria-label={`Ta bort ${param.name}`}
-        disabled={used}
-        onClick={() => deleteParam(param.id)}
-      >
-        ✕
-      </button>
-      <span className={`col-span-3 -mt-1 text-xs ${shownError ? 'text-danger' : 'text-faint'}`}>
-        {shownError ?? (param.expr.trim() === fmt.format(param.value) ? '' : `= ${fmt.format(param.value)} mm`)}
-      </span>
+      <div className="flex min-w-0 flex-col gap-1">
+        <ExprInput
+          className={`${field} tabular-nums ${shownError ? 'border-danger' : ''}`}
+          aria-label="Värde eller uttryck"
+          value={expr}
+          inputMode="decimal"
+          badges
+          padX="px-[11px]"
+          exclude={param.name}
+          onChange={setExpr}
+          onStep={(t) => save({ expr: t })}
+          onBlur={() => expr !== param.expr && save({ expr })}
+          onKeyDown={onKey(() => setExpr(param.expr))}
+        />
+        {shownError ? (
+          <span className="text-xs text-danger">{shownError}</span>
+        ) : (
+          computed && <span className="text-xs text-accent">{computed}</span>
+        )}
+      </div>
+      {/* En avstängd knapp får inga pekarhändelser; spannet runt tar emot hovringen så att förklaringen syns. */}
+      <Tip label={used ? 'Används – ta bort användningen först' : 'Ta bort'}>
+        <span className="shrink-0">
+          <button
+            className="grid size-10 cursor-pointer place-items-center rounded-lg text-muted hover:bg-hover disabled:cursor-default disabled:opacity-40 disabled:hover:bg-transparent narrow:size-11"
+            aria-label={`Ta bort ${param.name}`}
+            disabled={used}
+            onClick={() => deleteParam(param.id)}
+          >
+            <X size={16} strokeWidth={2} aria-hidden />
+          </button>
+        </span>
+      </Tip>
     </li>
   )
 }
@@ -68,34 +105,54 @@ export function Params() {
   const doc = useDocumentStore((s) => s.doc)
   const addParam = useDocumentStore((s) => s.addParam)
   const results = evaluateParams(doc.params)
+  // Den som just lades till med knappen; inte de som fanns när panelen ritades första gången.
+  const [added, setAdded] = useState<string | null>(null)
 
   return (
-    <section className="narrow:group-data-[tab=cutlist]/sheet:hidden narrow:group-data-[tab=properties]/sheet:hidden">
+    <section className="group-data-[tab=cutlist]/sheet:hidden group-data-[tab=properties]/sheet:hidden">
       <h2 className={sectionTitle}>Parametrar</h2>
       {doc.params.length === 0 ? (
-        <p className="mb-2 text-faint">
-          Namngivna mått, t.ex. <code>tjocklek = 22</code>. Skriv namnet i ett mått, så följer det med när du ändrar
-          värdet här.
-        </p>
+        <div className="flex flex-col items-center gap-4">
+          <EmptyState picture={<ParamPicture />} title="Inga parametrar än">
+            Ge ett mått ett namn, som <code>bredd = 450</code>. Skriv namnet i en dels mått, så följer delen med när du
+            ändrar värdet här.
+          </EmptyState>
+          <button className={primaryButton} onClick={() => setAdded(addParam())}>
+            <Plus size={16} strokeWidth={1.75} aria-hidden />
+            Ny parameter
+          </button>
+        </div>
       ) : (
-        <ul className="mb-2 flex flex-col gap-2">
-          {doc.params.map((p) => {
-            const r = results.get(p.id)
-            const others = { ...doc, params: doc.params.filter((x) => x.id !== p.id) }
-            return (
-              <ParamRow
-                key={p.id}
-                param={p}
-                error={r && !r.ok ? r.error : undefined}
-                used={isNameUsed(others, p.name)}
-              />
-            )
-          })}
-        </ul>
+        <div className="flex flex-col gap-2.5">
+          <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_2.5rem] gap-2 text-xs text-muted narrow:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_2.75rem]">
+            <span>Namn</span>
+            <span>Värde (mm)</span>
+          </div>
+          <ul className="flex flex-col gap-2">
+            {doc.params.map((p) => {
+              const r = results.get(p.id)
+              const others = { ...doc, params: doc.params.filter((x) => x.id !== p.id) }
+              return (
+                <ParamRow
+                  key={p.id}
+                  param={p}
+                  error={r && !r.ok ? r.error : undefined}
+                  used={isNameUsed(others, p.name)}
+                  autoFocus={p.id === added}
+                />
+              )
+            })}
+          </ul>
+          <button className={`${secondaryButton} self-start`} onClick={() => setAdded(addParam())}>
+            <Plus size={16} strokeWidth={1.75} aria-hidden />
+            Ny parameter
+          </button>
+          <p className="text-[13px] text-faint">
+            Skriv namnet i en dels mått, så följer delen med när du ändrar värdet. Ett värde kan också räkna med andra
+            namn, som <code>bredd - 2 * tjocklek</code>.
+          </p>
+        </div>
       )}
-      <button className={secondaryButton} onClick={addParam}>
-        + Ny parameter
-      </button>
     </section>
   )
 }

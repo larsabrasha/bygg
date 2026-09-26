@@ -2,7 +2,7 @@ import { axesFromLegacyGrain } from '../model/partAxes'
 import type { ModelDocument } from '../model/types'
 
 /** Höj när formatet ändras, och lägg till en konvertering i migrate. */
-export const FORMAT_VERSION = 2
+export const FORMAT_VERSION = 7
 
 export interface SavedFile {
   version: number
@@ -17,9 +17,11 @@ export function serialize(doc: ModelDocument, now = new Date()): SavedFile {
 const isObj = (x: unknown): x is Record<string, unknown> => typeof x === 'object' && x !== null
 const isNum = (x: unknown): x is number => typeof x === 'number' && Number.isFinite(x)
 const isVec3 = (x: unknown) => Array.isArray(x) && x.length === 3 && x.every(isNum)
-const isFrame = (x: unknown) => isObj(x) && isVec3(x.origin) && isVec3(x.u) && isVec3(x.v) && isVec3(x.n)
+const isOrientation = (x: unknown) => isObj(x) && isVec3(x.u) && isVec3(x.v) && isVec3(x.n)
+const isFrame = (x: unknown) => isOrientation(x) && isVec3((x as Record<string, unknown>).origin)
 const isAxis = (x: unknown) => x === 'u' || x === 'v' || x === 'n'
 const isRect = (x: unknown) => isObj(x) && isNum(x.x0) && isNum(x.y0) && isNum(x.x1) && isNum(x.y1)
+const isShape = (x: unknown) => x === undefined || x === 'circle'
 
 /** Grundlig nog formkontroll för att inte krascha på en trasig eller främmande fil. */
 function isModelDocument(x: unknown): x is ModelDocument {
@@ -27,7 +29,15 @@ function isModelDocument(x: unknown): x is ModelDocument {
   const { sketches, defs, instances, params } = x
   return (
     Array.isArray(sketches) &&
-    sketches.every((s) => isObj(s) && typeof s.id === 'string' && isFrame(s.frame) && isRect(s.rect)) &&
+    sketches.every(
+      (s) =>
+        isObj(s) &&
+        typeof s.id === 'string' &&
+        isFrame(s.frame) &&
+        isRect(s.rect) &&
+        isShape(s.shape) &&
+        (s.on === undefined || typeof s.on === 'string'),
+    ) &&
     Array.isArray(defs) &&
     defs.every(
       (d) =>
@@ -35,6 +45,7 @@ function isModelDocument(x: unknown): x is ModelDocument {
         typeof d.id === 'string' &&
         typeof d.name === 'string' &&
         isRect(d.profile) &&
+        isShape(d.shape) &&
         isNum(d.z0) &&
         isNum(d.z1) &&
         isAxis(d.grainAxis) &&
@@ -42,7 +53,20 @@ function isModelDocument(x: unknown): x is ModelDocument {
         d.grainAxis !== d.thicknessAxis,
     ) &&
     Array.isArray(instances) &&
-    instances.every((i) => isObj(i) && typeof i.id === 'string' && typeof i.defId === 'string' && isFrame(i.frame)) &&
+    instances.every(
+      (i) =>
+        isObj(i) &&
+        typeof i.id === 'string' &&
+        typeof i.defId === 'string' &&
+        isFrame(i.frame) &&
+        (i.rest === undefined || isOrientation(i.rest)) &&
+        (i.pos === undefined || (isObj(i.pos) && Object.values(i.pos).every((e) => typeof e === 'string'))) &&
+        (i.combine === undefined ||
+          (isObj(i.combine) &&
+            (i.combine.op === 'add' || i.combine.op === 'subtract' || i.combine.op === 'joint') &&
+            typeof i.combine.host === 'string' &&
+            (i.combine.into === undefined || typeof i.combine.into === 'string'))),
+    ) &&
     Array.isArray(params) &&
     params.every(
       (p) => isObj(p) && typeof p.id === 'string' && typeof p.name === 'string' && typeof p.expr === 'string',
@@ -75,6 +99,13 @@ export function migrate(raw: unknown): LoadResult {
   // En konvertering per versionssteg, i ordning.
   let doc = raw.doc
   if (raw.version < 2) doc = upgradeV1Doc(doc)
+  // 2 → 3: kopior kan ha pos (läge som uttryck). Frivilligt fält, så inget att konvertera.
+  // 3 → 4: kopior kan ha rest (viloläge för vinklarna) och stå snett. Frivilligt fält.
+  // 4 → 5: skisser och former kan ha shape ('circle'). Frivilligt fält.
+  // (Versionen höjs ändå, så att en äldre app inte läser cylindrar som lådor.)
+  // 5 → 6: kopior kan ha combine (verktyg som läggs till eller skärs ut), och skisser on
+  // (delen de ritades på). Frivilliga fält.
+  // 6 → 7: combine kan vara en tapp (op 'joint', into). Äldre appar skulle avvisa den.
   if (!isModelDocument(doc)) return { ok: false, reason: 'Trasigt dokument' }
   return { ok: true, doc }
 }

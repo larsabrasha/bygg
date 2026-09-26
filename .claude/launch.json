@@ -1,0 +1,14 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "bygg",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "run",
+        "dev:lan"
+      ],
+      "port": 5173
+    }
+  ]
+}
