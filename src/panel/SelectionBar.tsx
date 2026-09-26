@@ -41,6 +41,11 @@ const barIcon =
 /** Knappar som på telefon ligger under Mer i stället. */
 const wideOnly = 'narrow:hidden'
 
+/** Delens namn i en menytext: halvfet, som i Egenskaper, så att det skiljer sig från orden runt. */
+function PartName({ name }: { name: string }) {
+  return <span className="font-semibold">{name}</span>
+}
+
 /** menu: knappen öppnar en meny, och en liten pil nedåt står efter ordet. */
 function BarLabel({ Icon, short, menu = false }: { Icon: LucideIcon; short: string; menu?: boolean }) {
   return (
@@ -106,10 +111,10 @@ function ShapeMenu({ hostId, name }: { hostId: string; name: string }) {
         // Åt höger från knappen: raden står vid vänsterkanten.
         <div className="absolute top-full left-0 z-50 mt-1 w-max min-w-40 rounded-lg border border-line bg-panel p-1 shadow-lg">
           <MenuItem Icon={SquaresSubtract} onClick={() => choose('subtract')}>
-            Skär ut en del ur {name}
+            Skär ut en del ur <PartName name={name} />
           </MenuItem>
           <MenuItem Icon={SquaresUnite} onClick={() => choose('add')}>
-            Lägg ihop en del med {name}
+            Lägg ihop en del med <PartName name={name} />
           </MenuItem>
         </div>
       )}
@@ -190,10 +195,10 @@ function MoreMenu({ id, name, onZoom, onCopy }: { id: string; name: string; onZo
           </MenuItem>
           <div role="separator" className="mx-2 my-1 h-px bg-line" />
           <MenuItem Icon={SquaresSubtract} onClick={run(() => setCombining({ op: 'subtract', host: id }))}>
-            Skär ut en del ur {name}
+            Skär ut en del ur <PartName name={name} />
           </MenuItem>
           <MenuItem Icon={SquaresUnite} onClick={run(() => setCombining({ op: 'add', host: id }))}>
-            Lägg ihop en del med {name}
+            Lägg ihop en del med <PartName name={name} />
           </MenuItem>
           <div role="separator" className="mx-2 my-1 h-px bg-line" />
           <MenuItem Icon={ScanEye} onClick={run(() => isolateSelection(id))}>
