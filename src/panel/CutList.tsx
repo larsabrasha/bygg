@@ -1,4 +1,4 @@
-import { DraftingCompass, Download } from 'lucide-react'
+import { Download } from 'lucide-react'
 import { useMemo } from 'react'
 import { buildCutList, groupByMaterial, type CutListRow } from '../model/cutlist'
 import { compactNames } from '../model/cutlistExport'
@@ -6,11 +6,10 @@ import { numberFormat } from '../model/numberFormat'
 import { materialColor } from '../scene/colors'
 import { useBodies, useDocumentStore } from '../store/documentStore'
 import { useLibraryStore } from '../store/libraryStore'
-import { useViewStore } from '../store/viewStore'
 import { downloadCutListCsv } from './cutlistActions'
 import { EmptyState } from './EmptyState'
 import { CutListPicture } from './pictures'
-import { groupTitle, primaryButton, secondaryButton, sectionTitle } from './ui'
+import { groupTitle, secondaryButton, sectionTitle } from './ui'
 
 const num = numberFormat(1, true)
 const volume = numberFormat(4, true)
@@ -77,10 +76,6 @@ export function CutList() {
           <div className="flex flex-col gap-3">
             <p className="text-xs text-faint">Mått i mm. L längs fibern, T tjocklek.</p>
             <div className="flex flex-wrap gap-2">
-              <button className={primaryButton} onClick={() => useViewStore.getState().setDrawing(true)}>
-                <DraftingCompass size={16} strokeWidth={1.75} aria-hidden />
-                Ritning
-              </button>
               <button className={secondaryButton} onClick={() => downloadCutListCsv(cutList, modelName)}>
                 <Download size={16} strokeWidth={1.75} aria-hidden />
                 Ladda ner CSV

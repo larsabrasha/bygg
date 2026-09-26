@@ -1,5 +1,5 @@
-import { PanelRightClose, PanelRightOpen, Redo2, Undo2 } from 'lucide-react'
-import { useDocumentStore } from '../store/documentStore'
+import { DraftingCompass, PanelRightClose, PanelRightOpen, Redo2, Undo2 } from 'lucide-react'
+import { useBodies, useDocumentStore } from '../store/documentStore'
 import { useToolStore } from '../store/toolStore'
 import { useViewStore } from '../store/viewStore'
 import { ModelTitle } from './ModelTitle'
@@ -31,7 +31,7 @@ export function Toolbar() {
       <div className="flex gap-1 narrow:hidden" role="toolbar" aria-label="Verktyg">
         <ToolButtons />
       </div>
-      {/* Synkstatus (bara när något är fel), ångra och gör om i en egen grupp, Dela, och detaljpanelen längst till höger, med luft emellan. */}
+      {/* Synkstatus (bara när något är fel), ångra och gör om i en egen grupp, Ritning och Dela, och detaljpanelen längst till höger, med luft emellan. */}
       <div className="ml-auto flex shrink-0 items-center gap-4 narrow:gap-2">
         <SyncBadge withLabel={false} />
         <div className="flex gap-1" role="group" aria-label="Historik">
@@ -54,7 +54,10 @@ export function Toolbar() {
             </button>
           </Tip>
         </div>
-        <ShareMenu buttonClass={iconButton} />
+        <div className="flex items-center gap-1">
+          <DrawingButton />
+          <ShareMenu buttonClass={iconButton} />
+        </div>
         {/*
           Detaljpanelen i en egen grupp längst till höger, rakt ovanför panelen
           (som i Xcode och VS Code). Bara på bred skärm; på smal är den ett blad längst ner.
@@ -72,5 +75,26 @@ export function Toolbar() {
         </Tip>
       </div>
     </header>
+  )
+}
+
+/**
+ * Ritningen (med kaplistan som sista blad). Fylld men dämpad knapp med text, så att den
+ * syns utan att ta över. På smal skärm bara ikonen.
+ */
+function DrawingButton() {
+  const empty = useBodies().length === 0
+  return (
+    <Tip label="Ritning" keys="⌘P">
+      <button
+        className="inline-flex h-9 shrink-0 cursor-pointer items-center gap-1.5 rounded-lg bg-button px-3 text-[13px] font-medium text-ink hover:bg-hover disabled:cursor-default disabled:text-disabled disabled:hover:bg-button narrow:size-11 narrow:justify-center narrow:bg-transparent narrow:px-0"
+        disabled={empty}
+        aria-label="Ritning"
+        onClick={() => useViewStore.getState().setDrawing(true)}
+      >
+        <DraftingCompass size={18} strokeWidth={1.75} aria-hidden />
+        <span className="narrow:hidden">Ritning</span>
+      </button>
+    </Tip>
   )
 }

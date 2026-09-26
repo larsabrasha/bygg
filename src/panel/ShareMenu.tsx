@@ -1,36 +1,48 @@
-import { ChevronLeft, ChevronRight, DraftingCompass, FileBox, FileDown, Printer, Share } from 'lucide-react'
-import { useCallback, useMemo, useRef, useState } from 'react'
-import { buildCutList } from '../model/cutlist'
-import type { Body } from '../model/types'
+import { FileBox, FileHeart, Printer, Share } from 'lucide-react'
+import { Fragment, useCallback, useRef, useState } from 'react'
 import { useBodies, useDocumentStore } from '../store/documentStore'
 import { useLibraryStore } from '../store/libraryStore'
-import { useViewStore } from '../store/viewStore'
 import { ArButton } from './ArButton'
 import { VrButton } from './VrButton'
-import { downloadCutListCsv } from './cutlistActions'
 import { buildExportFile, EXPORT_FORMATS, type ExportFormat } from './exportActions'
 import { deliverFile } from './fileOut'
 import { MenuItem } from './MenuItem'
 import { useDismiss } from './useDismiss'
 import { Tip } from './Tip'
+import { groupTitle } from './ui'
 
 /**
- * Sätt att visa eller ta ut modellen: AR, ritningen (kaplistan är sista bladet), kaplistan
- * som CSV, och Exportera, som byter menyn mot listan med filformat.
+ * Skicka modellen som fil: filformaten direkt, med en rad om var varje format går att öppna.
+ * AR och VR ligger sist, under ett streck: de visar modellen i stället för att skicka den.
  */
 export function ShareMenu({ buttonClass }: { buttonClass: string }) {
   const [open, setOpen] = useState(false)
-  const [page, setPage] = useState<'main' | 'export'>('main')
+  const [busy, setBusy] = useState<ExportFormat | null>(null)
+  const [error, setError] = useState<string | null>(null)
   const ref = useRef<HTMLDivElement>(null)
   const close = useCallback(() => {
     setOpen(false)
-    setPage('main')
+    setError(null)
   }, [])
   useDismiss(ref, open, close)
   const bodies = useBodies()
-  const cutList = useMemo(() => buildCutList(bodies), [bodies])
-  const modelName = useLibraryStore((s) => s.currentName)
-  const empty = cutList.rows.length === 0
+  const empty = bodies.length === 0
+
+  const run = async (format: ExportFormat) => {
+    setBusy(format)
+    setError(null)
+    try {
+      const { doc } = useDocumentStore.getState()
+      const { currentName } = useLibraryStore.getState()
+      const file = await buildExportFile(format, currentName, doc, bodies)
+      close()
+      await deliverFile(file)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setBusy(null)
+    }
+  }
 
   return (
     <div ref={ref} className="relative">
@@ -45,96 +57,36 @@ export function ShareMenu({ buttonClass }: { buttonClass: string }) {
         </button>
       </Tip>
       {open && (
-        <div className="absolute top-full right-0 z-50 mt-1 w-64 rounded-lg border border-line bg-panel py-1 shadow-lg">
-          {page === 'main' ? (
-            <>
-              <ArButton onOpened={close} />
-              <VrButton onOpened={close} />
+        <div className="absolute top-full right-0 z-50 mt-1 w-72 rounded-lg border border-line bg-panel py-1 shadow-lg">
+          {EXPORT_FORMATS.map(({ format, label, hint }, i) => (
+            <Fragment key={format}>
+              {/* Bygg-filen står först och för sig: den tar med allt. */}
+              {i === 1 && <p className={`${groupTitle} mt-1 border-t border-line px-3 pt-2.5 pb-1`}>Andra program</p>}
               <MenuItem
-                Icon={DraftingCompass}
-                disabled={empty}
-                onClick={() => {
-                  close()
-                  useViewStore.getState().setDrawing(true)
-                }}
+                Icon={format === 'bygg' ? FileHeart : format === 'stl' || format === '3mf' ? Printer : FileBox}
+                accent={format === 'bygg'}
+                disabled={busy !== null || (empty && format !== 'bygg')}
+                hint={busy === format ? 'Gör filen …' : hint}
+                onClick={() => void run(format)}
               >
-                Ritning
+                {label}
               </MenuItem>
-              <MenuItem
-                Icon={FileDown}
-                disabled={empty}
-                onClick={() => {
-                  close()
-                  downloadCutListCsv(cutList, modelName)
-                }}
-              >
-                Ladda ner kaplista (CSV)
-              </MenuItem>
-              <MenuItem Icon={FileBox} onClick={() => setPage('export')}>
-                <span className="flex items-center justify-between">
-                  Exportera
-                  <ChevronRight size={16} strokeWidth={1.75} aria-hidden className="text-muted" />
-                </span>
-              </MenuItem>
-            </>
-          ) : (
-            <ExportList bodies={bodies} empty={empty} onBack={() => setPage('main')} onDone={close} />
-          )}
+            </Fragment>
+          ))}
+          {error && <p className="px-3 py-1 text-xs text-danger">Kunde inte exportera: {error}</p>}
+          <XrItems onOpened={close} />
         </div>
       )}
     </div>
   )
 }
 
-/** Filformaten. Filen görs när man väljer ett format, och delas eller laddas ner när den är klar. */
-function ExportList({
-  bodies,
-  empty,
-  onBack,
-  onDone,
-}: {
-  bodies: readonly Body[]
-  empty: boolean
-  onBack: () => void
-  onDone: () => void
-}) {
-  const [busy, setBusy] = useState<ExportFormat | null>(null)
-  const [error, setError] = useState<string | null>(null)
-
-  const run = async (format: ExportFormat) => {
-    setBusy(format)
-    setError(null)
-    try {
-      const { doc } = useDocumentStore.getState()
-      const { currentName } = useLibraryStore.getState()
-      const file = await buildExportFile(format, currentName, doc, bodies)
-      onDone()
-      await deliverFile(file)
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e))
-    } finally {
-      setBusy(null)
-    }
-  }
-
+/** AR och VR under ett streck. Strecket syns bara när minst en av dem finns på enheten. */
+function XrItems({ onOpened }: { onOpened: () => void }) {
   return (
-    <>
-      <MenuItem Icon={ChevronLeft} onClick={onBack}>
-        <span className="font-medium">Exportera</span>
-      </MenuItem>
-      <div className="my-1 border-t border-line" />
-      {EXPORT_FORMATS.map(({ format, label, hint }) => (
-        <MenuItem
-          key={format}
-          Icon={format === 'stl' || format === '3mf' ? Printer : FileBox}
-          disabled={busy !== null || (empty && format !== 'bygg')}
-          hint={busy === format ? 'Gör filen …' : hint}
-          onClick={() => void run(format)}
-        >
-          {label}
-        </MenuItem>
-      ))}
-      {error && <p className="px-3 py-1 text-xs text-danger">Kunde inte exportera: {error}</p>}
-    </>
+    <div className="mt-1 border-t border-line pt-1 empty:hidden">
+      <ArButton onOpened={onOpened} />
+      <VrButton onOpened={onOpened} />
+    </div>
   )
 }

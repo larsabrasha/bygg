@@ -8,6 +8,7 @@ export function MenuItem({
   onClick,
   disabled = false,
   danger = false,
+  accent = false,
   checked,
   hint,
 }: {
@@ -18,13 +19,15 @@ export function MenuItem({
   onClick: () => void
   disabled?: boolean
   danger?: boolean
+  /** Det rekommenderade valet: ikonen och texten i accentfärg. */
+  accent?: boolean
   /** Ett läge som är av eller på: en bock visar att det är på. */
   checked?: boolean
 }) {
   return (
     <button
       className={`flex min-h-9 w-full cursor-pointer items-center gap-3 rounded-md px-3 text-left hover:bg-hover disabled:cursor-default disabled:text-disabled disabled:hover:bg-transparent narrow:min-h-11 ${
-        danger ? 'text-danger' : ''
+        danger ? 'text-danger' : accent ? 'text-accent' : ''
       }`}
       disabled={disabled}
       onClick={onClick}

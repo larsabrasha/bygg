@@ -153,7 +153,7 @@ function ModelTile({ model, thumb, isCurrent }: { model: ModelListItem; thumb?: 
   )
 }
 
-/** Läser en modellfil (från Exportera → Modellfil), lägger till den och öppnar den. */
+/** Läser en modellfil (från Dela → Bygg-fil), lägger till den och öppnar den. */
 async function importFile(file: File) {
   const r = readModelFile(await file.text(), nameFromFileName(file.name))
   if (!r.ok) {
