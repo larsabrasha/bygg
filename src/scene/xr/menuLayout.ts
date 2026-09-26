@@ -20,6 +20,7 @@ export type MenuAction =
   | { kind: 'field'; field: 0 | 1 }
   | { kind: 'noticeAction'; id: string }
   | { kind: 'dismiss'; id: string }
+  | { kind: 'realSize' }
 
 export type Tone =
   'tool' | 'toolActive' | 'digit' | 'op' | 'fn' | 'ok' | 'name' | 'field' | 'fieldActive' | 'hint' | 'panel' | 'notice'
@@ -62,6 +63,8 @@ export interface MenuState {
   note: string | null
   /** Det senaste meddelandet (som Notices i 3D-vyn: synken, ångra borttagning), och hur många som finns. */
   notice?: { id: string; text: string; action: string | null; count: number } | null
+  /** Skalan när den inte är verklig storlek ("1:5", se scaleLabel); då finns en knapp tillbaka. */
+  scale?: string | null
 }
 
 const TOOLS: { tool: Tool; label: string; icon: MenuIcon }[] = [
@@ -135,6 +138,11 @@ export function menuLayout(state: MenuState): MenuItem[] {
     })),
   )
 
+  // Zoomat med båda händerna: tillbaka till verklig storlek, precis ovanför verktygen.
+  if (state.scale)
+    row(TOOL_H, [
+      { id: 'real-size', label: `Verklig storlek (nu ${state.scale})`, tone: 'tool', action: { kind: 'realSize' } },
+    ])
   if (state.note) row(HINT_H * 1.5, [{ id: 'note', label: state.note, tone: 'hint' }])
 
   const m = state.measure

@@ -12,6 +12,7 @@
     "preview": "vite preview",
     "dev:lan": "vite --host",
     "dev:vr": "vite --host --mode vr",
+    "preview:vr": "vite build --mode vr && vite preview --host --mode vr",
     "start": "tsx server/index.ts",
     "format": "prettier --write src server",
     "icons": "pwa-assets-generator",

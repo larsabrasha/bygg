@@ -1,13 +1,13 @@
-import { useEffect, useMemo, useState, type RefObject } from 'react'
+import { memo, useEffect, useLayoutEffect, useMemo, useState, type RefObject } from 'react'
 import { DoubleSide, type Group } from 'three'
 import { useDocumentStore } from '../../store/documentStore'
 import { useLibraryStore } from '../../store/libraryStore'
 import { useToolStore } from '../../store/toolStore'
 import { useViewStore } from '../../store/viewStore'
-import { menuState, useVrHover, type VrUi } from './menuActions'
+import { menuState, useVrHover, useVrScale, type VrUi } from './menuActions'
 import { iconImage } from './menuIcons'
 import { menuLayout, type MenuItem, type Tone } from './menuLayout'
-import { textTexture } from './textTexture'
+import { canvasTexture, drawText, textTexture } from './textTexture'
 
 /**
  * Appens färger i mörkt läge (index.css), som sifferblocket i 3D-vyn (Numpad):
@@ -31,7 +31,37 @@ const COLORS: Record<Tone, { bg: string; color: string; hover: string }> = {
   notice: { bg: '#1f3552', color: '#ebe7e0', hover: '#1f3552' },
 }
 
-function MenuMesh({ item, hovered }: { item: MenuItem; hovered: boolean }) {
+/** Bakgrunden är bara en färgad yta: den behöver inte knapparnas skärpa. */
+const PANEL_PX_PER_M = 1000
+
+interface MenuMeshProps {
+  item: MenuItem
+  hovered: boolean
+}
+
+/**
+ * Menyn ritas om varje bildruta medan man drar (måttet ändras), och varje gång
+ * strålen byter knapp. En knapp ritar bara om sin textur när det den visar ändras:
+ * en ny canvas för varje knapp i varje bildruta tappade många bildrutor.
+ */
+function sameMesh(a: MenuMeshProps, b: MenuMeshProps): boolean {
+  const x = a.item
+  const y = b.item
+  return (
+    a.hovered === b.hovered &&
+    x.id === y.id &&
+    x.label === y.label &&
+    x.x === y.x &&
+    x.y === y.y &&
+    x.w === y.w &&
+    x.h === y.h &&
+    x.tone === y.tone &&
+    x.icon === y.icon &&
+    JSON.stringify(x.action) === JSON.stringify(y.action)
+  )
+}
+
+const MenuMesh = memo(function MenuMesh({ item, hovered }: MenuMeshProps) {
   const c = COLORS[item.tone]
   // Fälten har namn, värde och enhet på en rad, två bredvid varandra i en rektangel.
   // Som i sifferblocket i 3D-vyn: räknesätten något större än siffrorna.
@@ -62,12 +92,17 @@ function MenuMesh({ item, hovered }: { item: MenuItem; hovered: boolean }) {
     () => (image && image.key === iconKey ? { image: image.img, size: item.h * 0.62 } : null),
     [image, iconKey, item.h],
   )
-  const texture = useMemo(
+  const pressable = item.action != null
+  // En textur per knapp och storlek; texten ritas om i den när den ändras (se drawText).
+  const pxPerM = item.tone === 'panel' ? PANEL_PX_PER_M : undefined
+  const texture = useMemo(() => canvasTexture(item.w, item.h, pxPerM), [item.w, item.h, pxPerM])
+  useEffect(() => () => texture.dispose(), [texture])
+  useLayoutEffect(
     () =>
-      textTexture(item.label, {
+      drawText(texture, item.label, {
         width: item.w,
         height: item.h,
-        bg: hovered && item.action ? c.hover : c.bg,
+        bg: hovered && pressable ? c.hover : c.bg,
         color: c.color,
         size,
         bold: item.tone !== 'hint',
@@ -76,9 +111,8 @@ function MenuMesh({ item, hovered }: { item: MenuItem; hovered: boolean }) {
           item.tone === 'field' || item.tone === 'fieldActive' ? 'right' : item.tone === 'notice' ? 'left' : 'center',
         icon,
       }),
-    [item.label, item.w, item.h, item.tone, item.action, hovered, c, size, icon],
+    [texture, item.label, item.w, item.h, item.tone, pressable, hovered, c, size, icon],
   )
-  useEffect(() => () => texture.dispose(), [texture])
   const ui: VrUi | undefined = item.action && { id: item.id, action: item.action }
   return (
     <mesh
@@ -92,7 +126,7 @@ function MenuMesh({ item, hovered }: { item: MenuItem; hovered: boolean }) {
       <meshBasicMaterial map={texture} transparent side={DoubleSide} depthTest={false} toneMapped={false} />
     </mesh>
   )
-}
+}, sameMesh)
 
 /**
  * Menyn på vänster hand (se menuLayout). Gruppens läge sätts av VrRig varje
@@ -114,6 +148,7 @@ export function VrMenu({ group }: { group: RefObject<Group | null> }) {
   useDocumentStore((s) => s.doc)
   useViewStore((s) => s.exploded)
   useLibraryStore((s) => s.notices)
+  useVrScale((s) => s.label)
   const hover = useVrHover((s) => s.id)
   const items = menuLayout(menuState())
 

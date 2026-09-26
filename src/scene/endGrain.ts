@@ -95,6 +95,45 @@ export function pliesFor(min: readonly number[], max: readonly number[], axis: 0
 const EDGE_MM = 2
 const EDGE_PX = 1
 
+/** Ändträets värden i shadern (se withEndGrain). */
+export interface EndGrainUniforms {
+  uPith: { value: [number, number] }
+  uTangent: { value: [number, number] }
+  uRepeat: { value: number }
+  uPly: { value: [number, number] }
+  uBoxMin: { value: number[] }
+  uBoxMax: { value: number[] }
+  uEdges: { value: number }
+}
+
+/**
+ * Sätter ändträets värden för delens nuvarande form. repeat: texturens
+ * upprepning per UV_MM (samma som texture.repeat).
+ */
+export function setEndGrain(
+  u: EndGrainUniforms,
+  {
+    end,
+    repeat,
+    plies,
+    edges,
+  }: {
+    end: EndGrain
+    repeat: number
+    plies?: Plies
+    /** Formens låda i geometrins koordinater, för de rundade kanterna. Saknas för runda delar. */
+    edges?: { min: readonly number[]; max: readonly number[] }
+  },
+) {
+  u.uPith.value = end.pith
+  u.uTangent.value = end.tangent
+  u.uRepeat.value = repeat
+  u.uPly.value = plies ? [plies.min, plies.ply] : [0, 1]
+  u.uBoxMin.value = edges ? [...edges.min] : [0, 0, 0]
+  u.uBoxMax.value = edges ? [...edges.max] : [0, 0, 0]
+  u.uEdges.value = edges ? 1 : 0
+}
+
 /** Korslagda skikt: fibern går in i kanten, så de är mörkare, som ändträ. */
 const CROSS_PLY = 0.8
 /** Limfogen mellan skikten, som en tunn mörk linje: dess bredd i skikt, och hur mörk den är. */
@@ -104,38 +143,28 @@ const GLUE_DARK = 0.7
 /**
  * Lägger till ändträet i ett trämaterial, för plywood skikten på kanterna
  * (där syns inget ändträ; alla fyra kanterna visar skikten), och rundade kanter.
- * repeat: texturens upprepning per UV_MM (samma som texture.repeat). Alla
- * delar med samma fiberriktning (och skiktriktning) delar samma program
- * (customProgramCacheKey); märgen och skikten skiljer bara i uniforms.
+ * plyAxis: skiktens axel för plywood, annars null. Alla delar med samma
+ * fiberriktning (och skiktriktning) delar samma program (customProgramCacheKey);
+ * märgen, skikten och kanterna skiljer bara i uniforms, som sätts med setEndGrain.
  */
-export function withEndGrain(
-  material: Material,
-  {
-    grain,
-    end,
-    repeat,
-    plies,
-    edges,
-  }: {
-    grain: 0 | 1 | 2
-    end: EndGrain
-    repeat: number
-    plies?: Plies
-    /** Formens låda i geometrins koordinater, för de rundade kanterna. Saknas för runda delar. */
-    edges?: { min: readonly number[]; max: readonly number[] }
-  },
-): void {
+export function withEndGrain(material: Material, grain: 0 | 1 | 2, plyAxis: 0 | 1 | 2 | null): EndGrainUniforms {
   const [a, b] = plane(grain)
   const axes = 'xyz'
-  material.customProgramCacheKey = () => `end-grain-${grain}-${plies?.axis ?? 'massiv'}`
+  // Värdena ligger i uniforms som materialet behåller: när delen ändrar storlek (push/pull)
+  // ändras de på plats (setEndGrain). Ett nytt material i varje bildruta körde om hela
+  // shaderbytet nedan varje gång, och drog ut en del gick trögt.
+  const uniforms: EndGrainUniforms = {
+    uPith: { value: [0, 0] },
+    uTangent: { value: [1, 0] },
+    uRepeat: { value: 1 },
+    uPly: { value: [0, 1] },
+    uBoxMin: { value: [0, 0, 0] },
+    uBoxMax: { value: [0, 0, 0] },
+    uEdges: { value: 0 },
+  }
+  material.customProgramCacheKey = () => `end-grain-${grain}-${plyAxis ?? 'massiv'}`
   material.onBeforeCompile = (shader: WebGLProgramParametersWithUniforms) => {
-    shader.uniforms.uPith = { value: end.pith }
-    shader.uniforms.uTangent = { value: end.tangent }
-    shader.uniforms.uRepeat = { value: repeat }
-    shader.uniforms.uPly = { value: plies ? [plies.min, plies.ply] : [0, 1] }
-    shader.uniforms.uBoxMin = { value: edges ? [...edges.min] : [0, 0, 0] }
-    shader.uniforms.uBoxMax = { value: edges ? [...edges.max] : [0, 0, 0] }
-    shader.uniforms.uEdges = { value: edges ? 1 : 0 }
+    Object.assign(shader.uniforms, uniforms)
     shader.vertexShader = shader.vertexShader
       .replace(
         'void main() {',
@@ -155,7 +184,7 @@ vWoodAxis[2] = normalize(normalMatrix * vec3(0.0, 0.0, 1.0));`,
     // De byts in för hand: #include läses in först efter onBeforeCompile.
     const chunk = (name: keyof typeof ShaderChunk) =>
       ShaderChunk[name].replace(/vMapUv/g, 'woodMapUv').replace(/vNormalMapUv/g, 'woodNormalUv')
-    const ply = plies ? axes[plies.axis] : null
+    const ply = plyAxis === null ? null : axes[plyAxis]
     shader.fragmentShader = shader.fragmentShader
       .replace(
         'void main() {',
@@ -228,4 +257,5 @@ void main() {
   }`,
       )
   }
+  return uniforms
 }

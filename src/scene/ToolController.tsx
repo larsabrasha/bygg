@@ -11,6 +11,7 @@ import {
   cancel,
   commit,
   doubleTap,
+  handleOf,
   hoverAt,
   move,
   rulerHoverAt,
@@ -372,13 +373,14 @@ export function ToolController() {
       const view = useViewStore.getState()
       if (!hovers(kind, e.buttons) || view.spacePan.held || view.exploded) return
       if (tool === 'select') {
-        // Handen visar att pilen går att dra i.
-        const onHandle =
-          useDocumentStore.getState().selection && pick(e.clientX, e.clientY, kind)?.target.kind === 'handle'
-        el.style.cursor = onHandle ? 'grab' : ''
+        // Handen visar att pilen går att dra i, och pilen lyser upp.
+        const target = useDocumentStore.getState().selection ? pick(e.clientX, e.clientY, kind)?.target : undefined
+        el.style.cursor = target?.kind === 'handle' ? 'grab' : ''
+        useToolStore.getState().setHoverHandle(handleOf(target))
         return
       }
       const hit = pick(e.clientX, e.clientY, kind)
+      useToolStore.getState().setHoverHandle(handleOf(hit?.target))
       if (tool === 'measure') {
         el.style.cursor = 'crosshair'
         rulerHoverAt(hit, hit ? tolFor(hit.point, kind) : 0)
@@ -498,6 +500,7 @@ export function ToolController() {
         )
       t.setHover(null)
       t.setHoverPoint(null)
+      t.setHoverHandle(null)
       if (t.rulerHover) t.setRulerHover(null)
     }
 

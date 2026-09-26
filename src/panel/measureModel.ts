@@ -7,6 +7,7 @@ import { useToolStore, type Axis, type Op, type PushPullOp } from '../store/tool
 import {
   amendableOp,
   applyMeasure,
+  dismissLast,
   extendableCopy,
   faceDimension,
   liveMeasure,
@@ -136,6 +137,9 @@ export function submitMeasure() {
   t.setMeasure(0, '')
   t.setMeasure(1, '')
   useDocumentStore.getState().select(null)
+  // Det nyss gjorda går inte längre att ändra: väljer man samma sida igen är den
+  // redo att dras ut på nytt (readyPushPull), i stället för att rutan inte syns.
+  dismissLast()
 }
 
 /** Vad en skiss på en del blir när den dras ut, med knappens text och förklaring. */

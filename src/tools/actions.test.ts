@@ -17,6 +17,7 @@ import {
   commit,
   doubleTap,
   extendCopies,
+  handleOf,
   hoverAt,
   liveMeasure,
   move,
@@ -420,6 +421,21 @@ describe('flytta', () => {
     tools().setTool('rect')
     expect(doubleTap({ point: [100, 22, -100], target: { kind: 'body', id: b.id, face: 'n+' } })).toBe(false)
     expect(tools().tool).toBe('rect')
+  })
+
+  it('andra trycket på pilen som första trycket tog fram räknas också: pilen står mitt på sidan', () => {
+    const b = extrude(drawGroundRect(), '22')
+    tools().setTool('select')
+    docs().select(null)
+    tap({ point: [300, 22, -200], target: { kind: 'body', id: b.id, face: 'n+' } }, 0)
+    expect(doubleTap({ point: [300, 22, -200], target: { kind: 'handle' } })).toBe(true)
+    expect(tools().tool).toBe('move')
+    expect(tools().op).toBeNull()
+    // Pilen på en skiss är ingen del.
+    tools().setTool('select')
+    docs().select({ kind: 'sketch', id: drawGroundRect(1000, 0, 1400, -400) })
+    tools().setTool('select')
+    expect(doubleTap({ point: [1200, 0, -200], target: { kind: 'handle' } })).toBe(false)
   })
 
   it('tryck utanför den valda delen lämnar Flytta/vrid, som ett tryck i Välj', () => {
@@ -1051,5 +1067,27 @@ describe('mät', () => {
     tap({ point: [0, 0, 0], target: { kind: 'ground' } }, 0)
     tools().setTool('select')
     expect(tools().ruler).toHaveLength(0)
+  })
+})
+
+describe('pilen under pekaren', () => {
+  it('pilar och bågar lyser upp, men inte en pil som pekar rakt mot kameran', () => {
+    expect(handleOf({ kind: 'handle' })).toEqual({ kind: 'handle' })
+    expect(handleOf({ kind: 'handle', headOn: true })).toBeNull()
+    expect(handleOf({ kind: 'axis', axis: 1 })).toEqual({ kind: 'axis', axis: 1 })
+    expect(handleOf({ kind: 'axis', axis: 1, headOn: true })).toBeNull()
+    expect(handleOf({ kind: 'rotate', axis: 2 })).toEqual({ kind: 'rotate', axis: 2 })
+    expect(handleOf({ kind: 'ground' })).toBeNull()
+    expect(handleOf(undefined)).toBeNull()
+  })
+  it('samma pil igen ändrar inte storen (ingen ny rendering), och en operation släcker den', () => {
+    tools().setHoverHandle({ kind: 'axis', axis: 0 })
+    const before = tools().hoverHandle
+    tools().setHoverHandle({ kind: 'axis', axis: 0 })
+    expect(tools().hoverHandle).toBe(before)
+    tools().setHoverHandle({ kind: 'axis', axis: 1 })
+    expect(tools().hoverHandle).toEqual({ kind: 'axis', axis: 1 })
+    drawGroundRect()
+    expect(tools().hoverHandle).toBeNull()
   })
 })

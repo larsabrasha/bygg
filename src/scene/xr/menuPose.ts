@@ -1,7 +1,5 @@
-import { Matrix4, Quaternion, Vector3 } from 'three'
+import { Euler, Matrix4, Quaternion, Vector3 } from 'three'
 
-/** Så högt ovanför vänster kontroll menyns nederkant sitter, i meter. */
-const LIFT_M = 0.04
 const UP = new Vector3(0, 1, 0)
 const rot = new Matrix4()
 const at = new Vector3()
@@ -9,17 +7,26 @@ const q = new Quaternion()
 const s = new Vector3()
 
 /**
- * Menyns läge i världen (mm): nederkanten mitt ovanför vänster kontroll, och
- * framsidan (+Z) vänd mot ögonen, rak (ingen lutning åt sidan). Så går den att
- * läsa och peka på hur man än håller handen. scale är origos skala (MM_PER_M):
- * menyns egna mått är i meter.
+ * Menyns läge i vänster kontrolls strålriktning (targetRaySpace, i meter):
+ * nederkanten 3 cm ovanför och 2 cm bakom där strålen börjar, och lutad 35°
+ * bakåt mot en utöver kontrollens vinkel. Så ligger den vänd mot ögonen när man
+ * håller handen avslappnat, lite nedåt framåt, och vrider man handen vrids
+ * menyn med, som en palett (Tilt Brush, Quill). Strålens riktning och inte
+ * greppet (gripSpace): greppets vinkel skiljer sig mellan kontroller, strålen
+ * pekar alltid dit man siktar.
  */
-export function menuMatrix(hand: Vector3, head: Vector3, scale: number, target = new Matrix4()): Matrix4 {
-  at.copy(hand).addScaledVector(UP, LIFT_M * scale)
-  // lookAt ger en rotation där +Z pekar från at mot huvudet.
-  rot.lookAt(head, at, UP)
-  q.setFromRotationMatrix(rot)
-  return target.compose(at, q, s.setScalar(scale))
+export const MENU_OFFSET = new Matrix4().compose(
+  new Vector3(0, 0.03, 0.02),
+  new Quaternion().setFromEuler(new Euler(-0.6, 0, 0)),
+  new Vector3(1, 1, 1),
+)
+
+/**
+ * Menyns läge i världen (mm): kontrollens läge i världen (hand, med origos skala)
+ * gånger MENU_OFFSET. Menyns egna mått är i meter, och skalan följer med från handen.
+ */
+export function menuMatrix(hand: Matrix4, target = new Matrix4()): Matrix4 {
+  return target.multiplyMatrices(hand, MENU_OFFSET)
 }
 
 /** Hur långt ut från handen skylten med knapparna sitter (legendMatrix), i meter. */

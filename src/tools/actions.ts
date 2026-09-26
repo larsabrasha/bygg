@@ -40,6 +40,7 @@ import {
   type PushPullTarget,
   type RectOp,
   type RotateOp,
+  type HandleHover,
 } from '../store/toolStore'
 
 /**
@@ -60,6 +61,17 @@ export type PickTarget =
   | { kind: 'axis'; axis: Axis; headOn?: boolean }
   /** En av bågarna i Flytta-läget; att dra i den vrider delen runt axeln. */
   | { kind: 'rotate'; axis: Axis }
+
+/**
+ * Pilen eller bågen en träff gäller, för att lysa upp den under pekaren.
+ * En pil som pekar rakt mot kameran (headOn) går inte att dra i och lyser inte.
+ */
+export function handleOf(t: PickTarget | undefined): HandleHover | null {
+  if (t?.kind === 'handle') return t.headOn ? null : { kind: 'handle' }
+  if (t?.kind === 'axis') return t.headOn ? null : { kind: 'axis', axis: t.axis }
+  if (t?.kind === 'rotate') return { kind: 'rotate', axis: t.axis }
+  return null
+}
 
 export interface Hit {
   point: Vec3
@@ -297,8 +309,12 @@ export function tap(hit: Hit | null, tol: number) {
  * False om dubbeltrycket inte betyder något här; då räknas det som ett vanligt tryck.
  */
 export function doubleTap(hit: Hit | null): boolean {
-  if (tools().tool !== 'select' || hit?.target.kind !== 'body') return false
-  docs().select({ kind: 'body', id: hit.target.id, face: hit.target.face })
+  if (tools().tool !== 'select') return false
+  const sel = docs().selection
+  // Första trycket valde en sida, och dess pil står mitt på den: trycker man där igen träffas pilen.
+  const target = hit?.target.kind === 'handle' && sel?.kind === 'body' ? sel : hit?.target
+  if (target?.kind !== 'body') return false
+  docs().select({ kind: 'body', id: target.id, face: target.face })
   tools().setTool('move')
   return true
 }

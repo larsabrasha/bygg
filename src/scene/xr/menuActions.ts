@@ -27,13 +27,30 @@ export const useVrHover = create<{ id: string | null; set: (id: string | null) =
   set: (id) => set({ id }),
 }))
 
+/**
+ * Skalan i VR (VrRig sätter den när den ändras med båda händerna) och en
+ * begäran att gå tillbaka till verklig storlek (reset ökar; VrRig ställer
+ * origo som när VR startar).
+ */
+export const useVrScale = create<{
+  label: string | null
+  reset: number
+  setLabel: (label: string | null) => void
+  requestReset: () => void
+}>()((set) => ({
+  label: null,
+  reset: 0,
+  setLabel: (label) => set((s) => (s.label === label ? s : { label })),
+  requestReset: () => set((s) => ({ reset: s.reset + 1 })),
+}))
+
 /** Det en knapp i menyn har i userData, så att strålen (VrRig) kan trycka på den. */
 export interface VrUi {
   id: string
   action: MenuAction
 }
 
-/** Menyns knappar under group: det strålen kan träffa. */
+/** Menyns knappar under group: det strålen kan trycka på. */
 export function uiTargets(group: Object3D | null): Object3D[] {
   const out: Object3D[] = []
   group?.traverse((o) => {
@@ -94,12 +111,15 @@ export function runMenuAction(action: MenuAction) {
     case 'dismiss':
       useLibraryStore.getState().dismiss(action.id)
       return
+    case 'realSize':
+      useVrScale.getState().requestReset()
+      return
   }
 }
 
 /** Menyns innehåll just nu, ur storarna. */
 export function menuState(): MenuState {
-  return { ...toolState(), notice: latestNotice() }
+  return { ...toolState(), notice: latestNotice(), scale: useVrScale.getState().label }
 }
 
 function latestNotice(): MenuState['notice'] {

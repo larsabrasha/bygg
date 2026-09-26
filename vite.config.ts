@@ -26,7 +26,9 @@ function noXrEmulator(): Plugin {
 
 // npm run dev:vr (mode vr): https med ett självsignerat certifikat. WebXR kräver https
 // utom på localhost, och headsetet sitter på en annan dator. Webbläsaren varnar för
-// certifikatet första gången. Övriga lägen är http, också förhandsvisningen i dev.
+// certifikatet första gången. npm run preview:vr: produktionsbygget över https, med
+// samma certifikat, för att prova hur fort det går i VR (dev-läget i React är långsammare).
+// Övriga lägen är http.
 export default defineConfig(({ mode }) => ({
   // Egen cache för förbyggda beroenden: läget ingår i dess nyckel, och med samma katalog
   // byggde dev:vr och dev om dem åt varandra (öppna sidor fick "Outdated Optimize Dep").

@@ -59,12 +59,12 @@ export interface HandYaw {
 /**
  * Origo medan man håller i världen (greppknappen): punkten man tog tag i och
  * handens riktning står still i världen, så att världen följer handen när man
- * drar och vrider. Bara vridning runt lodlinjen, och origo stannar på golvet:
- * golvet ligger kvar och skalan 1:1 står fast.
+ * drar och vrider. Bara vridning runt lodlinjen, och origo står kvar i höjd
+ * (y): golvet ligger kvar, och skalan står fast.
  * start är handen i världen (mm) när greppet började; hand är handen nu i
- * sessionens koordinater (meter); scale är origos skala (MM_PER_M).
+ * sessionens koordinater (meter); scale är origos skala (MM_PER_M i verklig storlek).
  */
-export function grabRig(start: HandYaw, hand: HandYaw, scale: number): { position: Vec3; yaw: number } {
+export function grabRig(start: HandYaw, hand: HandYaw, scale: number, y = 0): { position: Vec3; yaw: number } {
   const yaw = start.yaw - hand.yaw
   const c = Math.cos(yaw)
   const s = Math.sin(yaw)
@@ -72,5 +72,56 @@ export function grabRig(start: HandYaw, hand: HandYaw, scale: number): { positio
   // Handen i världen = origo + vridning(yaw) · (hand · scale); lös ut origo.
   const hx = (c * x + s * z) * scale
   const hz = (-s * x + c * z) * scale
-  return { position: [start.pos[0] - hx, 0, start.pos[2] - hz], yaw }
+  return { position: [start.pos[0] - hx, y, start.pos[2] - hz], yaw }
+}
+
+/** Origos läge, vridning runt lodlinjen och skala (MM_PER_M = verklig storlek). */
+export interface RigPose {
+  position: Vec3
+  yaw: number
+  scale: number
+}
+
+/** Hur stor modellen kan bli med båda händerna: 4 gånger verklig storlek, och 30 gånger mindre. */
+export const MIN_SCALE = MM_PER_M / 4
+export const MAX_SCALE = MM_PER_M * 30
+/** Så nära verklig storlek snäpper den till 1:1, som skalan 100 % i Shapr3D. */
+const SNAP_REAL = 0.06
+
+const rotY = (yaw: number, [x, y, z]: Vec3): Vec3 => {
+  const c = Math.cos(yaw)
+  const s = Math.sin(yaw)
+  return [c * x + s * z, y, -s * x + c * z]
+}
+
+/**
+ * Origo medan man håller i världen med båda händerna (båda greppknapparna),
+ * som att zooma med två fingrar: drar man isär händerna blir modellen större,
+ * för man ihop dem blir den mindre, och vrider man dem vrids den runt
+ * lodlinjen. Punkten mitt mellan händerna står still i världen.
+ * start är origo när greppet började; from är händerna då och now är de nu,
+ * i sessionens koordinater (meter).
+ */
+export function twoHandRig(start: RigPose, from: [Vec3, Vec3], now: [Vec3, Vec3]): RigPose {
+  const mid = ([a, b]: [Vec3, Vec3]): Vec3 => [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2, (a[2] + b[2]) / 2]
+  const span = ([a, b]: [Vec3, Vec3]) => Math.hypot(b[0] - a[0], b[1] - a[1], b[2] - a[2])
+  // Riktningen från vänster hand mot höger, runt lodlinjen (som three.js räknar rotation.y).
+  const angle = ([a, b]: [Vec3, Vec3]) => Math.atan2(b[0] - a[0], b[2] - a[2])
+  let scale = Math.min(MAX_SCALE, Math.max(MIN_SCALE, (start.scale * span(from)) / Math.max(span(now), 0.01)))
+  if (Math.abs(MM_PER_M / scale - 1) < SNAP_REAL) scale = MM_PER_M
+  // Riktningen mellan händerna står still i världen: origo vrids lika mycket åt andra hållet.
+  const yaw = start.yaw + angle(from) - angle(now)
+  const m0 = rotY(start.yaw, mid(from).map((v) => v * start.scale) as Vec3)
+  const held: Vec3 = [start.position[0] + m0[0], start.position[1] + m0[1], start.position[2] + m0[2]]
+  const m1 = rotY(yaw, mid(now).map((v) => v * scale) as Vec3)
+  return { position: [held[0] - m1[0], held[1] - m1[1], held[2] - m1[2]], yaw, scale }
+}
+
+/** Skalan som text, när den inte är verklig storlek: "1:5" för fem gånger mindre, "2:1" för dubbelt så stor. */
+export function scaleLabel(scale: number): string | null {
+  if (scale === MM_PER_M) return null
+  const factor = MM_PER_M / scale
+  const n = factor < 1 ? 1 / factor : factor
+  const text = (n < 10 ? Math.round(n * 10) / 10 : Math.round(n)).toString().replace('.', ',')
+  return factor < 1 ? `1:${text}` : `${text}:1`
 }

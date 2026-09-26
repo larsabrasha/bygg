@@ -1,6 +1,6 @@
 import { Edges } from '@react-three/drei'
 import { useFrame } from '@react-three/fiber'
-import { memo, useEffect, useMemo, useRef } from 'react'
+import { memo, useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import {
   BoxGeometry,
   BufferAttribute,
@@ -22,7 +22,8 @@ import { frameQuaternion } from './frameTransform'
 import { grainUvs, hash01 } from './grainUv'
 import { tangentPoints } from './silhouette'
 import { useColorScheme } from './useColorScheme'
-import { endGrainFor, pliesFor, withEndGrain } from './endGrain'
+import { eyePosition } from './viewer'
+import { endGrainFor, pliesFor, setEndGrain, withEndGrain, type EndGrainUniforms } from './endGrain'
 import { useWoodTexture, woodTone } from './woodTexture'
 import type { Look } from '../store/viewStore'
 
@@ -140,15 +141,20 @@ function BodyMeshImpl({
   // En material per sida (i BoxGeometrys ordning) så att en sida kan markeras,
   // och så att raycast ger materialIndex = vilken sida som träffades.
   // En cylinder har tre: runda sidan, n+ och n− (CylinderGeometrys ordning).
-  const materials = useMemo(() => {
+  // Materialen beror inte på delens storlek: under push/pull ändras den i varje bildruta, och
+  // ett nytt trämaterial kostar ett nytt shaderbyte (withEndGrain). Ändträets värden för
+  // storleken sätts nedan (setEndGrain).
+  const hasSolid = solid !== null
+  const { materials, grainUniforms } = useMemo(() => {
+    const grainUniforms: EndGrainUniforms[] = []
     // Resultatet med verktyg är en enda yta; där markeras hela delen.
-    const parts: (readonly Face[])[] = solid
+    const parts: (readonly Face[])[] = hasSolid
       ? [FACES]
       : round
         ? [['u+', 'u-', 'v+', 'v-'], ['n+'], ['n-']]
         : FACES.map((f) => [f])
-    return parts.map((faces) => {
-      const marked = !solid && !!highlightFace && faces.includes(highlightFace)
+    const list = parts.map((faces) => {
+      const marked = !hasSolid && !!highlightFace && faces.includes(highlightFace)
       const lit = selected || marked
       if (wire && !ghost) {
         // Trådmodell: ytan syns bara som en svag fyllning när den är markerad eller vald.
@@ -173,11 +179,33 @@ function BodyMeshImpl({
         depthWrite: !ghost && !faded,
         depthTest: !ghost,
       })
-      if (wood && endGrain) withEndGrain(material, { grain, ...endGrain, repeat: wood.map.repeat.x })
+      if (wood && real) grainUniforms.push(withEndGrain(material, grain, plywood ? thickness : null))
       return material
     })
-  }, [solid, round, color, selected, highlightFace, preview, ghost, faded, wire, real, wood, grain, endGrain, tone])
+    return { materials: list, grainUniforms }
+  }, [
+    hasSolid,
+    round,
+    color,
+    selected,
+    highlightFace,
+    preview,
+    ghost,
+    faded,
+    wire,
+    real,
+    wood,
+    grain,
+    plywood,
+    thickness,
+    tone,
+  ])
   useEffect(() => () => materials.forEach((m) => m.dispose()), [materials])
+  // Före ritningen: en layouteffekt körs innan three.js ritar nästa bildruta.
+  useLayoutEffect(() => {
+    if (!wood || !endGrain) return
+    for (const u of grainUniforms) setEndGrain(u, { ...endGrain, repeat: wood.map.repeat.x })
+  }, [grainUniforms, endGrain, wood])
 
   const edge = selected || preview ? ACCENT : sibling ? ACCENT_LIGHT : wire && scheme === 'dark' ? WIRE_DARK : EDGE
   // Trä ritas utan kanter, som ett foto; det valda och kopiorna av det har dem ändå.
@@ -275,10 +303,10 @@ function Silhouette({
   }, [])
   useEffect(() => () => geometry.dispose(), [geometry])
 
-  useFrame(({ camera }) => {
+  useFrame((state) => {
     const line = ref.current
     if (!line) return
-    const p = line.worldToLocal(cameraLocal.copy(camera.position))
+    const p = line.worldToLocal(eyePosition(state, cameraLocal))
     const points = tangentPoints(center, r, [p.x, p.y])
     line.visible = !!points
     if (!points) return

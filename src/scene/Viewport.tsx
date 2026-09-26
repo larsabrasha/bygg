@@ -244,10 +244,12 @@ function RealisticLight({ bodies, scheme }: { bodies: readonly Body[]; scheme: '
       <mesh
         position={[center[0], 0.3, center[2]]}
         rotation={[-Math.PI / 2, 0, 0]}
+        // Skalad i stället för en ny geometri: storleken följer modellen, också i varje bildruta under ett drag.
+        scale={[floor, floor, 1]}
         receiveShadow
         userData={{ noThumb: true }}
       >
-        <planeGeometry args={[floor, floor]} />
+        <planeGeometry args={[1, 1]} />
         <shadowMaterial opacity={dark ? 0.34 : 0.32} transparent depthWrite={false} />
       </mesh>
       {/*

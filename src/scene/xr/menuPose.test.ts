@@ -1,24 +1,33 @@
 import { describe, expect, it } from 'vitest'
-import { Vector3 } from 'three'
+import { Euler, Matrix4, Quaternion, Vector3 } from 'three'
 import { legendMatrix, menuMatrix } from './menuPose'
 
 describe('menuMatrix', () => {
-  const hand = new Vector3(-250, 1100, 1300)
-  const head = new Vector3(0, 1600, 1680)
-  const m = menuMatrix(hand, head, 1000)
+  // Kontrollen i världen: vid handen, skalad som origo, och vriden på något sätt.
+  const grip = new Matrix4().compose(
+    new Vector3(-250, 1100, 1300),
+    new Quaternion().setFromEuler(new Euler(0.4, -0.7, 0.2)),
+    new Vector3(1000, 1000, 1000),
+  )
+  const m = menuMatrix(grip)
   const pos = new Vector3().setFromMatrixPosition(m)
-  const x = new Vector3().setFromMatrixColumn(m, 0).normalize()
-  const z = new Vector3().setFromMatrixColumn(m, 2).normalize()
 
-  it('nederkanten 4 cm ovanför handen', () => {
-    expect(pos.toArray()).toEqual([-250, 1140, 1300])
+  it('nederkanten 3 cm ovanför och 2 cm bakom strålens start, i kontrollens riktningar', () => {
+    const up = new Vector3().setFromMatrixColumn(grip, 1).normalize()
+    const back = new Vector3().setFromMatrixColumn(grip, 2).normalize()
+    const expected = new Vector3(-250, 1100, 1300).addScaledVector(up, 30).addScaledVector(back, 20)
+    expect(pos.distanceTo(expected)).toBeCloseTo(0, 6)
   })
-  it('framsidan vänd mot ögonen', () => {
-    const toHead = head.clone().sub(pos).normalize()
-    expect(z.dot(toHead)).toBeCloseTo(1, 6)
+  it('följer handen: vrids greppet, vrids menyn lika mycket', () => {
+    const turn = new Matrix4().makeRotationY(0.5)
+    const turned = menuMatrix(turn.clone().multiply(grip))
+    const z = (x: Matrix4) => new Vector3().setFromMatrixColumn(x, 2).normalize()
+    expect(z(turned).distanceTo(z(m).applyMatrix4(turn))).toBeCloseTo(0, 6)
   })
-  it('ingen lutning åt sidan: kanterna är vågräta', () => {
-    expect(x.y).toBeCloseTo(0, 6)
+  it('lutad 35° bakåt mot en utöver kontrollens vinkel', () => {
+    const z = new Vector3().setFromMatrixColumn(menuMatrix(new Matrix4()), 2)
+    expect(Math.atan2(z.y, z.z)).toBeCloseTo(0.6, 9)
+    expect(z.x).toBeCloseTo(0, 9)
   })
   it('skalad som origo, så att menyns mått i meter blir mm i världen', () => {
     expect(new Vector3().setFromMatrixColumn(m, 1).length()).toBeCloseTo(1000, 6)

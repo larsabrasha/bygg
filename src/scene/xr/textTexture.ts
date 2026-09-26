@@ -17,6 +17,8 @@ export interface TextStyle {
   radius?: number
   /** En ikon mitt i rutan i stället för text; size är dess sida i meter. */
   icon?: { image: CanvasImageSource; size: number } | null
+  /** Upplösningen för en ny textur, om den ska vara lägre än PX_PER_M (en yta utan text). */
+  pxPerM?: number
 }
 
 /**
@@ -25,25 +27,48 @@ export interface TextStyle {
  * Lång text bryts på ord. Med en ikon ritas den i stället för texten.
  */
 export function textTexture(text: string, style: TextStyle): CanvasTexture {
-  const w = Math.max(8, Math.round(style.width * PX_PER_M))
-  const h = Math.max(8, Math.round(style.height * PX_PER_M))
+  const texture = canvasTexture(style.width, style.height, style.pxPerM)
+  drawText(texture, text, style)
+  return texture
+}
+
+/** En tom textur att rita text på (drawText), style.width × style.height meter stor. */
+export function canvasTexture(width: number, height: number, pxPerM = PX_PER_M): CanvasTexture {
   const canvas = document.createElement('canvas')
-  canvas.width = w
-  canvas.height = h
+  canvas.width = Math.max(8, Math.round(width * pxPerM))
+  canvas.height = Math.max(8, Math.round(height * pxPerM))
+  const texture = new CanvasTexture(canvas)
+  texture.colorSpace = SRGBColorSpace
+  texture.anisotropy = 4
+  return texture
+}
+
+/**
+ * Ritar om texten i en textur från canvasTexture, i samma canvas. Så kostar en
+ * text som ändras varje bildruta (måttet medan man drar) bara en uppladdning
+ * till grafikkortet, inte en ny canvas och en ny textur.
+ */
+export function drawText(texture: CanvasTexture, text: string, style: TextStyle) {
+  const canvas = texture.image as HTMLCanvasElement
+  const ppm = canvas.width / style.width
+  const w = canvas.width
+  const h = canvas.height
   const g = canvas.getContext('2d')!
-  const r = (style.radius ?? 0) * PX_PER_M
+  g.clearRect(0, 0, w, h)
+  const r = (style.radius ?? 0) * ppm
   g.fillStyle = style.bg
   g.beginPath()
   g.roundRect(0, 0, w, h, r)
   g.fill()
+  texture.needsUpdate = true
 
   if (style.icon) {
-    const side = style.icon.size * PX_PER_M
+    const side = style.icon.size * ppm
     g.drawImage(style.icon.image, (w - side) / 2, (h - side) / 2, side, side)
-    return finish(canvas)
+    return
   }
 
-  const px = style.size * PX_PER_M
+  const px = style.size * ppm
   g.font = `${style.bold ? 600 : 400} ${px}px system-ui, -apple-system, 'Segoe UI', sans-serif`
   g.fillStyle = style.color
   g.textBaseline = 'middle'
@@ -55,14 +80,6 @@ export function textTexture(text: string, style: TextStyle): CanvasTexture {
   const lineH = px * 1.25
   const top = h / 2 - ((lines.length - 1) * lineH) / 2
   lines.forEach((line, i) => g.fillText(line, x, top + i * lineH))
-  return finish(canvas)
-}
-
-function finish(canvas: HTMLCanvasElement): CanvasTexture {
-  const texture = new CanvasTexture(canvas)
-  texture.colorSpace = SRGBColorSpace
-  texture.anisotropy = 4
-  return texture
 }
 
 /**

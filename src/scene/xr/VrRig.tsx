@@ -11,6 +11,7 @@ import {
   type ArrayCamera,
   type Group,
   type Mesh,
+  type MeshBasicMaterial,
   type Object3D,
 } from 'three'
 import type { Vec3 } from '../../model/types'
@@ -22,6 +23,7 @@ import {
   cancel,
   commit,
   doubleTap,
+  handleOf,
   hoverAt,
   move,
   opFocus,
@@ -40,14 +42,17 @@ import {
   MM_PER_M,
   SNAP_TURN,
   startPlacement,
+  scaleLabel,
   turnAround,
+  twoHandRig,
   walkStep,
   type HandYaw,
+  type RigPose,
 } from './locomotion'
 import { legendMatrix, menuMatrix } from './menuPose'
 import { fixScaledXrCamera } from './xrCulling'
 import { formatVrReport, newVrReport, recordFrame, recordSource } from './vrReport'
-import { runMenuAction, uiTargets, useVrHover, type VrUi } from './menuActions'
+import { runMenuAction, uiTargets, useVrHover, useVrScale, type VrUi } from './menuActions'
 import { VrLegend, VrMenu } from './VrMenu'
 import { useInVr } from './xrStore'
 
@@ -76,11 +81,13 @@ const DRAG_RAD = 0.035
 const DRAG_MM = 30
 /** Skyltarna om vad knapparna gör (se VrLegend). */
 const LEGEND_RIGHT =
-  'Avtryckare: välj och dra\nGrepp: håll i världen\nSpak: vrid dig\nA: ångra    B: gör om\nTryck in spaken: dölj'
+  'Avtryckare: välj och dra\nGrepp: håll i världen\nBåda greppen: zooma\nSpak: vrid dig\nA: ångra    B: gör om\nTryck in spaken: dölj'
 const LEGEND_LEFT = 'Spak: gå\nTryck in spaken: dölj'
 
 /** Två tryck på samma del inom så här många ms är ett dubbeltryck. */
 const DOUBLE_TAP_MS = 400
+/** Punkten där strålen träffar menyn. */
+const CURSOR_ON_MENU = '#ffffff'
 /** Strålen när den inte träffar något, i mm. */
 const RAY_MM = 4000
 
@@ -164,6 +171,10 @@ function Controllers() {
   const legendLeft = useRef<Group>(null)
   const legendRight = useRef<Group>(null)
   const legendsOn = useRef(true)
+  /** Båda greppknapparna hålls in (se twoHandRig): origo och händerna när det började. */
+  const twoHands = useRef<{ start: RigPose; from: [Vec3, Vec3] } | null>(null)
+  /** Senaste begäran om verklig storlek som är gjord (se useVrScale). */
+  const resetDone = useRef(useVrScale.getState().reset)
   const report = useMemo(() => newVrReport(), [])
 
   // Hjälpobjekt, så att inget skapas varje bildruta.
@@ -195,16 +206,7 @@ function Controllers() {
     // Sessionen sparas på origo, som står kvar över en hot reload (en variabel här gör det inte).
     if (rig && session && rig.userData.placedFor !== session) {
       rig.userData.placedFor = session
-      scene.updateMatrixWorld()
-      const box = new Box3()
-      scene.traverse((o) => {
-        if (o.userData.pick) box.expandByObject(o)
-      })
-      const center = box.isEmpty() ? null : (box.getCenter(new Vector3()).toArray() as Vec3)
-      const radius = box.isEmpty() ? 0 : box.getSize(new Vector3()).length() / 2
-      const { position, yaw } = startPlacement(center, radius)
-      rig.position.fromArray(position)
-      rig.rotation.set(0, yaw, 0)
+      placeRig(rig, scene)
     }
     // Närplanet i meter (sessionens enhet): 2 cm, så att man kan titta nära en fog.
     cam.near = 0.02
@@ -213,6 +215,7 @@ function Controllers() {
       const t = useToolStore.getState()
       t.setHover(null)
       t.setHoverPoint(null)
+      t.setHoverHandle(null)
       if (t.rulerHover) t.setRulerHover(null)
       // Vad kontrollerna rapporterade, så att man ser om knapparna hamnade rätt.
       const text = formatVrReport(report)
@@ -246,6 +249,39 @@ function Controllers() {
     recordFrame(report, delta)
     for (const src of sources) recordSource(report, src.handedness, src.profiles, src.gamepad!)
 
+    // Knappen Verklig storlek i menyn: stå som när VR startade.
+    const { reset } = useVrScale.getState()
+    if (reset !== resetDone.current) {
+      resetDone.current = reset
+      twoHands.current = null
+      placeRig(rig, scene)
+    }
+
+    // Båda greppknapparna: zooma och vrid världen med händerna, som med två fingrar (twoHandRig).
+    const gripOf = (h: XRHandedness) => {
+      const src = sources.find((x) => x.handedness === h)
+      if (!src?.gamepad?.buttons[SQUEEZE]?.pressed) return null
+      const p = frame.getPose(src.gripSpace ?? src.targetRaySpace, ref)?.transform.position
+      return p ? ([p.x, p.y, p.z] as Vec3) : null
+    }
+    const leftGrip = gripOf('left')
+    const rightGrip = gripOf('right')
+    if (leftGrip && rightGrip) {
+      if (!twoHands.current) {
+        twoHands.current = {
+          start: { position: rig.position.toArray() as Vec3, yaw: rig.rotation.y, scale: rig.scale.x },
+          from: [leftGrip, rightGrip],
+        }
+      }
+      const next = twoHandRig(twoHands.current.start, twoHands.current.from, [leftGrip, rightGrip])
+      rig.position.fromArray(next.position)
+      rig.rotation.set(0, next.yaw, 0)
+      rig.scale.setScalar(next.scale)
+    } else twoHands.current = null
+    useVrScale.getState().setLabel(scaleLabel(rig.scale.x))
+    /** Världens mm per verklig mm: 1 i verklig storlek, större när modellen är förminskad. */
+    const k = rig.scale.x / MM_PER_M
+
     // Gå och vrid först, så att strålen räknas från där man står nu.
     for (const src of sources) {
       const axes = src.gamepad!.axes
@@ -254,12 +290,13 @@ function Controllers() {
       const hand = handOf(hands, src.handedness)
       if (src.handedness === 'left') {
         // Högst 0,1 s per steg: efter ett hack i bildtakten hoppar man annars långt.
+        // Lika fort sett från ögat i alla skalor.
         const [dx, , dz] = walkStep(x, y, headYaw, Math.min(delta, 0.1))
-        rig.position.x += dx
-        rig.position.z += dz
+        rig.position.x += dx * k
+        rig.position.z += dz * k
       } else if (src.handedness === 'right') {
         // Greppknappen (långfingret) hålls in: världen sitter fast i handen (se grabRig).
-        const squeezing = src.gamepad!.buttons[SQUEEZE]?.pressed ?? false
+        const squeezing = !twoHands.current && (src.gamepad!.buttons[SQUEEZE]?.pressed ?? false)
         const gripPose = squeezing ? frame.getPose(src.gripSpace ?? src.targetRaySpace, ref) : undefined
         if (gripPose) {
           const p = gripPose.transform.position
@@ -270,7 +307,7 @@ function Controllers() {
             tmp.hand.set(p.x, p.y, p.z).applyMatrix4(rig.matrixWorld)
             hand.grab = { pos: tmp.hand.toArray() as Vec3, yaw: rig.rotation.y + now.yaw }
           }
-          const next = grabRig(hand.grab, now, rig.scale.x)
+          const next = grabRig(hand.grab, now, rig.scale.x, rig.position.y)
           rig.position.fromArray(next.position)
           rig.rotation.set(0, next.yaw, 0)
         } else hand.grab = null
@@ -287,21 +324,20 @@ function Controllers() {
     }
     rig.updateMatrixWorld()
 
-    // Menyn ovanför vänster kontroll, vänd mot ögonen (se menuMatrix).
+    // Menyn sitter fast i vänster kontroll och följer handens vinkel (se menuMatrix).
     const menuHand = sources.find((s) => s.handedness === 'left')
-    const menuPose = menuHand && frame.getPose(menuHand.gripSpace ?? menuHand.targetRaySpace, ref)
+    const menuPose = menuHand && frame.getPose(menuHand.targetRaySpace, ref)
     if (menu.current) {
       menu.current.visible = !!menuPose
       if (menuPose) {
         tmp.m.fromArray(menuPose.transform.matrix).premultiply(rig.matrixWorld)
-        tmp.hand.setFromMatrixPosition(tmp.m)
-        xrCam.getWorldPosition(tmp.head)
-        menuMatrix(tmp.hand, tmp.head, rig.scale.x, menu.current.matrix)
+        menuMatrix(tmp.m, menu.current.matrix)
         menu.current.updateMatrixWorld(true)
       }
     }
 
-    // Skyltarna bredvid kontrollerna, på utsidan av varje hand.
+    // Skyltarna bredvid kontrollerna, på utsidan av varje hand, vända mot ögonen där de står nu.
+    xrCam.getWorldPosition(tmp.head)
     for (const [handedness, legend, side] of [
       ['left', legendLeft, -1],
       ['right', legendRight, 1],
@@ -357,8 +393,13 @@ function Controllers() {
         }
 
         // Menyn först: den ligger närmast, och det man trycker på där ska inte nå modellen.
+        // Knapparna först, också bakifrån: med handen lägre än menyn kommer strålen från baksidan,
+        // och där ligger bakgrunden närmast. Resten av menyn stoppar strålen, också mellan knapparna.
         raycaster.set(tmp.pos, tmp.dir)
-        const uiHit = menu.current?.visible ? raycaster.intersectObjects(uiTargets(menu.current), false)[0] : undefined
+        const uiHit = menu.current?.visible
+          ? (raycaster.intersectObjects(uiTargets(menu.current), false)[0] ??
+            raycaster.intersectObject(menu.current, true)[0])
+          : undefined
         const ui = uiHit?.object.userData.vrUi as VrUi | undefined
         const hovered = useVrHover.getState()
         if (hovered.id !== (ui?.id ?? null)) hovered.set(ui?.id ?? null)
@@ -368,16 +409,18 @@ function Controllers() {
         if (hand.uiPress) {
           // Avtryckaren hålls nere efter ett tryck i menyn: inget med modellen förrän den släpps.
           if (!pressed(TRIGGER)) hand.uiPress = false
-        } else if (ui) {
+        } else if (uiHit) {
+          useToolStore.getState().setHoverHandle(null)
           // Pekar man på menyn står operationen kvar där den var, som när musen lämnar 3D-vyn.
+          // Ett tryck mellan knapparna gör inget, men når inte heller modellen.
           if (edge(TRIGGER)) {
             hand.uiPress = true
-            runMenuAction(ui.action)
+            if (ui) runMenuAction(ui.action)
           }
         } else if (edge(TRIGGER)) {
           hit = onDown(ray, pick, tolAt, tolForOp, hand)
         } else if (released(TRIGGER)) {
-          onUp(ray, tolForOp, hand)
+          onUp(ray, tolForOp, hand, k)
         } else if (op) {
           move(ray, tolForOp())
         } else if (!pressed(TRIGGER)) {
@@ -394,11 +437,12 @@ function Controllers() {
 
         // Strålen och markören: till det man pekar på, annars en bit ut.
         const at = uiHit ? (uiHit.point.toArray() as Vec3) : (hit?.point ?? null)
-        const length = at ? tmp.pos.distanceTo({ x: at[0], y: at[1], z: at[2] }) : RAY_MM
+        const length = at ? tmp.pos.distanceTo({ x: at[0], y: at[1], z: at[2] }) : RAY_MM * k
         if (beam.current && beamLine.current) {
           beam.current.position.copy(tmp.pos)
           beam.current.quaternion.copy(tmp.q)
-          beamLine.current.scale.set(1, length, 1)
+          // Lika tjock sett från ögat i alla skalor.
+          beamLine.current.scale.set(k, length, k)
           beamLine.current.position.set(0, 0, -length / 2)
           shown = true
         }
@@ -406,7 +450,9 @@ function Controllers() {
           cursor.current.visible = at !== null
           if (at) {
             cursor.current.position.fromArray(at)
-            cursor.current.scale.setScalar(Math.max(4, length * 0.006))
+            // På menyn en mindre, vit punkt: den syns på alla knappar, också de blå, och man ser vilken man träffar.
+            cursor.current.scale.setScalar(uiHit ? 2.5 * k : Math.max(4 * k, length * 0.006))
+            ;(cursor.current.material as MeshBasicMaterial).color.set(uiHit ? CURSOR_ON_MENU : ACCENT)
           }
         }
       }
@@ -421,7 +467,7 @@ function Controllers() {
     <>
       <VrMenu group={menu} />
       <VrLegend group={legendLeft} text={LEGEND_LEFT} width={0.09} height={0.034} />
-      <VrLegend group={legendRight} text={LEGEND_RIGHT} width={0.11} height={0.072} />
+      <VrLegend group={legendRight} text={LEGEND_RIGHT} width={0.11} height={0.084} />
       {/* Strålen från handkontrollen (kontrollerna själva ritas av xrStore). Inte med på modellbilderna. */}
       <group ref={beam} userData={{ noThumb: true }} visible={false}>
         {/* Accentfärgen, som markeringen av det valda: syns mot både ljus och mörk bakgrund (vitt syntes inte i ljust läge). */}
@@ -430,7 +476,8 @@ function Controllers() {
           <meshBasicMaterial color={ACCENT} transparent opacity={0.8} depthWrite={false} toneMapped={false} />
         </mesh>
       </group>
-      <mesh ref={cursor} userData={{ noThumb: true }} visible={false}>
+      {/* Efter menyn (renderOrder 10 och 11), så att punkten syns ovanpå knapparna. */}
+      <mesh ref={cursor} userData={{ noThumb: true }} visible={false} renderOrder={12}>
         <sphereGeometry args={[1, 16, 12]} />
         <meshBasicMaterial color={ACCENT} depthTest={false} transparent opacity={0.95} toneMapped={false} />
       </mesh>
@@ -447,6 +494,21 @@ function pulse(gamepad: Gamepad) {
     .hapticActuators
   // Avvisas löftet (kontrollen kan inte vibrera nu) gör det inget.
   Promise.resolve(actuators?.[0]?.pulse?.(0.6, 80)).catch(() => {})
+}
+
+/** Origo som när VR startar: i verklig storlek, framför modellen och vänd mot den (se startPlacement). */
+function placeRig(rig: Object3D, scene: Object3D) {
+  scene.updateMatrixWorld()
+  const box = new Box3()
+  scene.traverse((o) => {
+    if (o.userData.pick) box.expandByObject(o)
+  })
+  const center = box.isEmpty() ? null : (box.getCenter(new Vector3()).toArray() as Vec3)
+  const radius = box.isEmpty() ? 0 : box.getSize(new Vector3()).length() / 2
+  const { position, yaw } = startPlacement(center, radius)
+  rig.position.fromArray(position)
+  rig.rotation.set(0, yaw, 0)
+  rig.scale.setScalar(MM_PER_M)
 }
 
 function handOf(hands: Map<XRHandedness, Hand>, h: XRHandedness) {
@@ -483,9 +545,12 @@ function onDown(
     return hit
   }
   // Dubbeltryck på en del: Flytta/vrid, som i 3D-vyn. Första trycket har redan valt den.
+  // Pilen som första trycket tog fram räknas som delen den sitter på (se doubleTap).
   const t = hit?.target
+  const sel = useDocumentStore.getState().selection
+  const id = t?.kind === 'body' ? t.id : t?.kind === 'handle' && sel?.kind === 'body' ? sel.id : null
   const now = performance.now()
-  const again = t?.kind === 'body' && hand.lastTap?.id === t.id && now - hand.lastTap.time < DOUBLE_TAP_MS
+  const again = id !== null && hand.lastTap?.id === id && now - hand.lastTap.time < DOUBLE_TAP_MS
   hand.lastTap = t?.kind === 'body' && !again ? { time: now, id: t.id } : null
   if (again && doubleTap(hit)) {
     hand.press = null
@@ -503,13 +568,13 @@ function onDown(
 }
 
 /** Avtryckaren släpps: en dragning sparar operationen, ett tryck som startade den låter den följa strålen. */
-function onUp(ray: Ray, tolForOp: () => number, hand: Hand) {
+function onUp(ray: Ray, tolForOp: () => number, hand: Hand, k: number) {
   const p = hand.press
   hand.press = null
   if (!p || !useToolStore.getState().op) return
   const turned = p.dir.angleTo(new Vector3(...ray.dir))
   const moved = p.origin.distanceTo(new Vector3(...ray.origin))
-  const dragged = turned > DRAG_RAD || moved > DRAG_MM
+  const dragged = turned > DRAG_RAD || moved > DRAG_MM * k
   if (!dragged && p.startedOp) {
     if (p.afterTap === 'drop') cancel()
     return
@@ -520,8 +585,10 @@ function onUp(ray: Ray, tolForOp: () => number, hand: Hand) {
 
 /** Strålen rör sig utan pågående operation: visa vad ett tryck skulle göra, som muspekaren. */
 function onHover(hit: Hit | null, tolAt: (p: Vec3) => number) {
-  const { tool, hover, setHover } = useToolStore.getState()
+  const { tool, hover, setHover, setHoverHandle } = useToolStore.getState()
   if (useViewStore.getState().exploded) return
+  // Pilen eller bågen strålen pekar på lyser upp, som under muspekaren.
+  setHoverHandle(handleOf(hit?.target))
   if (tool === 'measure') {
     rulerHoverAt(hit, hit ? tolAt(hit.point) : 0)
     return

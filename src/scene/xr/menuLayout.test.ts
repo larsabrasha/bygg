@@ -174,3 +174,15 @@ describe('meddelanden', () => {
     }
   })
 })
+
+describe('verklig storlek', () => {
+  it('en knapp tillbaka ovanför verktygen när man zoomat, annars ingen', () => {
+    expect(menuLayout({ tool: 'select', measure: null, note: null }).some((i) => i.id === 'real-size')).toBe(false)
+    const items = menuLayout({ tool: 'select', measure: null, note: null, scale: '1:5' })
+    const button = items.find((i) => i.id === 'real-size')!
+    expect(button.label).toBe('Verklig storlek (nu 1:5)')
+    expect(button.action).toEqual({ kind: 'realSize' })
+    const toolsTop = Math.max(...items.filter((i) => i.action?.kind === 'tool').map((i) => i.y + i.h / 2))
+    expect(button.y).toBeGreaterThan(toolsTop)
+  })
+})
