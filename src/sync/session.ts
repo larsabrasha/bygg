@@ -9,6 +9,7 @@ import { useViewStore } from '../store/viewStore'
 import { ApiError, httpApi } from './api'
 import { syncOnce, type SyncEvent } from './engine'
 import { idbRepo, importLegacy, LEGACY_KEY, type LocalModel } from './localRepo'
+import { deleteHistory, getHistory, packHistory, putHistory, unpackHistory } from './history'
 import { parsePath, pathFor, type Route } from './route'
 import {
   captureThumbnail,
@@ -141,7 +142,18 @@ function showModel(m: LocalModel): boolean {
   lastPersistedDoc = docs().doc
   lib().set({ currentId: m.id, currentName: m.name, currentBase: m.baseRevision })
   void repo.setCurrentId(m.id)
+  void restoreHistory(m, docs().doc)
   return true
+}
+
+/**
+ * Sätter tillbaka ångra-historiken som sparades med modellen här (se history.ts).
+ * Bara om man inte hunnit ändra något eller öppna en annan modell under tiden.
+ */
+async function restoreHistory(m: LocalModel, loaded: ModelDocument) {
+  const saved = await getHistory(m.id).catch(() => undefined)
+  const h = unpackHistory(saved, m.file.savedAt)
+  if (h && lib().currentId === m.id && docs().doc === loaded) docs().setHistory(h.past, h.future)
 }
 
 /** Skriver den öppna modellen till det lokala förrådet, om den ändrats. */
@@ -149,7 +161,7 @@ async function persistNow(force = false) {
   if (saveTimer) clearTimeout(saveTimer)
   saveTimer = null
   const { currentId, currentName, currentBase } = lib()
-  const doc = docs().doc
+  const { doc, past, future } = docs()
   if (!currentId || (!force && doc === lastPersistedDoc)) return
   lastPersistedDoc = doc
   // Be om beständig lagring så att webbläsaren inte rensar modellerna vid platsbrist.
@@ -158,14 +170,20 @@ async function persistNow(force = false) {
     askedPersist = true
     navigator.storage?.persist?.().catch(() => {})
   }
+  const file = serialize(doc)
   await repo.put({
     id: currentId,
     name: currentName,
-    file: serialize(doc),
+    file,
     updatedAt: new Date().toISOString(),
     baseRevision: currentBase,
     dirty: true,
   })
+  // Historiken hör till just den här sparningen (file.savedAt). Går den inte att spara ska
+  // modellen ändå sparas; då går det bara inte att ångra efter omladdning.
+  await putHistory(currentId, packHistory(past, future, file.savedAt)).catch((e: unknown) =>
+    console.warn('[bygg] Kunde inte spara ångra-historiken', e),
+  )
   await updateThumbnail(currentId)
   await refreshList()
   scheduleSync(SYNC_DELAY_MS)
@@ -208,6 +226,12 @@ async function openFallback() {
   else await createModel()
 }
 
+async function moveHistory(from: string, to: string) {
+  const h = await getHistory(from).catch(() => undefined)
+  if (h) await putHistory(to, h).catch(() => {})
+  await deleteHistory(from).catch(() => {})
+}
+
 async function handle(events: SyncEvent[], docAtStart: ModelDocument) {
   const { currentId } = lib()
   // Inga osparade ändringar sedan synken startade: då får vi byta innehåll i den öppna modellen.
@@ -222,6 +246,8 @@ async function handle(events: SyncEvent[], docAtStart: ModelDocument) {
       case 'conflict':
         // Bilden här är av vår version, som nu är kopian; serverns bild hör till den andra.
         unsentThumbs.delete(e.id)
+        // Historiken också: den följer vår version.
+        await moveHistory(e.id, e.copyId)
         if (isCurrent) {
           // Vi fortsätter i vår egen version, som nu är kopian.
           lib().set({ currentId: e.copyId, currentName: e.copyName, currentBase: null })
@@ -390,6 +416,7 @@ export async function deleteModel(id: string) {
   if (m.baseRevision === null) await repo.remove(id)
   else await repo.put({ ...m, deleted: true })
   await deleteThumbnail(id).catch(() => {})
+  await deleteHistory(id).catch(() => {})
   if (id === lib().currentId) await openFallback()
   await refreshList()
   scheduleSync(0)
