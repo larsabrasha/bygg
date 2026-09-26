@@ -6,6 +6,7 @@ import {
   BufferAttribute,
   BufferGeometry,
   GreaterDepth,
+  MeshPhysicalMaterial,
   MeshStandardMaterial,
   Vector3,
   type LineSegments,
@@ -21,7 +22,8 @@ import { frameQuaternion } from './frameTransform'
 import { grainUvs, hash01 } from './grainUv'
 import { tangentPoints } from './silhouette'
 import { useColorScheme } from './useColorScheme'
-import { woodTexture } from './woodTexture'
+import { endGrainFor, withEndGrain } from './endGrain'
+import { useWoodTexture } from './woodTexture'
 import type { Look } from '../store/viewStore'
 
 /** Formens låda, för att räkna ut vilken sida en träff på resultatet ligger på (faceOnBox). */
@@ -90,12 +92,42 @@ function BodyMeshImpl({
     [manifold, body.profile, body.shape, body.z0, body.z1, body.tools, segments],
   )
 
-  // En material per sida (i BoxGeometrys ordning) så att en sida kan markeras,
-  // och så att raycast ger materialIndex = vilken sida som träffades.
-  // En cylinder har tre: runda sidan, n+ och n− (CylinderGeometrys ordning).
   const color = materialColor(body.material)
   const wire = look === 'wireframe'
   const real = look === 'realistic' && !ghost
+  // Medan texturen laddas ritas trät i sin färg.
+  const wood = useWoodTexture(body.material, real)
+  const grain = AXIS_INDEX[body.grainAxis]
+
+  // Cylinderns axel längs n (three.js lägger den längs y). Ändarnas kanter blir cirklar;
+  // den runda sidan har inga kanter, eftersom vinkeln mellan segmenten är liten.
+  // Geometrin ges alltid som prop. Växlade den mellan prop och <boxGeometry> fick meshen en
+  // tom geometri under bytet (t.ex. när ett verktyg lossas), och Edges kraschade på den.
+  const own = useMemo(() => (round ? cylinderGeometry(w, d) : new BoxGeometry(w, h, d)), [round, w, h, d])
+  useEffect(() => () => own.dispose(), [own])
+
+  // Trä: texturkoordinater längs fibern, med ett eget mönster per del (se grainUv).
+  // I render, inte i en effekt: de ska finnas redan när delen ritas första gången.
+  const geometry = solid ?? own
+  useMemo(() => {
+    if (!real) return
+    const pos = geometry.getAttribute('position')
+    const normal = geometry.getAttribute('normal')
+    if (!pos || !normal) return
+    const uv = grainUvs(pos.array, normal.array, grain, [hash01(body.id), hash01(body.id, 1)])
+    geometry.setAttribute('uv', new BufferAttribute(uv, 2))
+  }, [real, geometry, grain, body.id])
+  // Märgen för ändträet, utanför delen eller (rund del längs fibern) nära mitten.
+  const end = useMemo(() => {
+    if (!real) return null
+    geometry.computeBoundingBox()
+    const { min, max } = geometry.boundingBox!
+    return endGrainFor(min.toArray(), max.toArray(), grain, round && grain === 2, body.id)
+  }, [real, geometry, grain, body.id, round])
+
+  // En material per sida (i BoxGeometrys ordning) så att en sida kan markeras,
+  // och så att raycast ger materialIndex = vilken sida som träffades.
+  // En cylinder har tre: runda sidan, n+ och n− (CylinderGeometrys ordning).
   const materials = useMemo(() => {
     // Resultatet med verktyg är en enda yta; där markeras hela delen.
     const parts: (readonly Face[])[] = solid
@@ -115,9 +147,11 @@ function BodyMeshImpl({
           depthWrite: false,
         })
       }
-      return new MeshStandardMaterial({
-        color: ghost ? ACCENT : real ? '#ffffff' : color,
-        ...(real && { map: woodTexture(body.material), roughness: 0.62, metalness: 0 }),
+      // Trä i det realistiska utseendet: ett tunt lager lack eller olja som glänser svagt i ljuset.
+      const material = new (real ? MeshPhysicalMaterial : MeshStandardMaterial)({
+        color: ghost ? ACCENT : wood ? '#ffffff' : color,
+        ...(real && { roughness: 0.62, metalness: 0, clearcoat: 0.3, clearcoatRoughness: 0.35 }),
+        ...(wood && { map: wood.map, normalMap: wood.normalMap }),
         emissive: lit ? ACCENT : '#000000',
         emissiveIntensity: marked ? 0.45 : lit ? 0.2 : 0,
         transparent: preview || ghost || faded,
@@ -127,29 +161,11 @@ function BodyMeshImpl({
         depthWrite: !ghost && !faded,
         depthTest: !ghost,
       })
+      if (wood && end) withEndGrain(material, grain, end, wood.map.repeat.x)
+      return material
     })
-  }, [solid, round, color, selected, highlightFace, preview, ghost, faded, wire, real, body.material])
+  }, [solid, round, color, selected, highlightFace, preview, ghost, faded, wire, real, wood, grain, end])
   useEffect(() => () => materials.forEach((m) => m.dispose()), [materials])
-
-  // Cylinderns axel längs n (three.js lägger den längs y). Ändarnas kanter blir cirklar;
-  // den runda sidan har inga kanter, eftersom vinkeln mellan segmenten är liten.
-  // Geometrin ges alltid som prop. Växlade den mellan prop och <boxGeometry> fick meshen en
-  // tom geometri under bytet (t.ex. när ett verktyg lossas), och Edges kraschade på den.
-  const own = useMemo(() => (round ? cylinderGeometry(w, d) : new BoxGeometry(w, h, d)), [round, w, h, d])
-  useEffect(() => () => own.dispose(), [own])
-
-  // Trä: texturkoordinater längs fibern, med ett eget mönster per del (se grainUv).
-  // I render, inte i en effekt: de ska finnas redan när delen ritas första gången.
-  const geometry = solid ?? own
-  const grain = AXIS_INDEX[body.grainAxis]
-  useMemo(() => {
-    if (!real) return
-    const pos = geometry.getAttribute('position')
-    const normal = geometry.getAttribute('normal')
-    if (!pos || !normal) return
-    const uv = grainUvs(pos.array, normal.array, grain, [hash01(body.id), hash01(body.id, 1)])
-    geometry.setAttribute('uv', new BufferAttribute(uv, 2))
-  }, [real, geometry, grain, body.id])
 
   const edge = selected || preview ? ACCENT : sibling ? ACCENT_LIGHT : wire && scheme === 'dark' ? WIRE_DARK : EDGE
   // Trä ritas utan kanter, som ett foto; det valda och kopiorna av det har dem ändå.

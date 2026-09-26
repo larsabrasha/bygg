@@ -13,7 +13,8 @@
     "dev:lan": "vite --host",
     "start": "tsx server/index.ts",
     "format": "prettier --write src server",
-    "icons": "pwa-assets-generator"
+    "icons": "pwa-assets-generator",
+    "textures": "tsx scripts/woodTextures.ts"
   },
   "dependencies": {
     "@hono/node-server": "^2.1.1",
@@ -43,6 +44,7 @@
     "prettier": "^3.9.9",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
+    "sharp": "^0.35.4",
     "tailwindcss": "^4.3.3",
     "three": "^0.186.1",
     "typescript": "^6.0.3",

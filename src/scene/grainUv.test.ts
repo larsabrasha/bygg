@@ -1,25 +1,25 @@
 import { describe, expect, it } from 'vitest'
-import { ACROSS_MM, GRAIN_MM, grainUvs, hash01 } from './grainUv'
+import { grainUvs, hash01, UV_MM } from './grainUv'
 
 describe('grainUvs', () => {
   it('lägger u längs fibern på en sida där fibern ligger i planet', () => {
     // Två hörn på ovansidan (normal +z), fibern längs x.
     const uv = grainUvs([0, 0, 22, 600, 150, 22], [0, 0, 1, 0, 0, 1], 0)
-    expect([...uv]).toEqual([0, 0, 1, 1])
+    expect([...uv]).toEqual([0, 0, 600 / UV_MM, 150 / UV_MM].map(Math.fround))
   })
 
   it('följer fibern när den går längs en annan axel', () => {
     // Samma ovansida, fibern längs y: u följer y, v följer x.
     const uv = grainUvs([150, 600, 22], [0, 0, 1], 1)
-    expect(uv[0]).toBeCloseTo(600 / GRAIN_MM)
-    expect(uv[1]).toBeCloseTo(150 / ACROSS_MM)
+    expect(uv[0]).toBeCloseTo(600 / UV_MM)
+    expect(uv[1]).toBeCloseTo(150 / UV_MM)
   })
 
-  it('ger ändträ på en ände, där fibern går rakt ut', () => {
+  it('lägger u längs planets första axel på en ände, där fibern går rakt ut', () => {
     // Änden (normal +x) med fibern längs x.
     const uv = grainUvs([800, 150, 22], [1, 0, 0], 0)
-    expect(uv[0]).toBeCloseTo(150 / ACROSS_MM)
-    expect(uv[1]).toBeCloseTo(22 / ACROSS_MM)
+    expect(uv[0]).toBeCloseTo(150 / UV_MM)
+    expect(uv[1]).toBeCloseTo(22 / UV_MM)
   })
 
   it('flyttar mönstret med offset', () => {

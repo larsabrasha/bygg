@@ -1,6 +1,5 @@
-import { GizmoHelper, GizmoViewport, Grid } from '@react-three/drei'
-import { Object3D, PMREMGenerator } from 'three'
-import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js'
+import { ContactShadows, Environment, GizmoHelper, GizmoViewport, Grid, Lightformer } from '@react-three/drei'
+import { NeutralToneMapping, Object3D } from 'three'
 import { bodyCorners } from '../model/drawing'
 import type { Body, Vec3 } from '../model/types'
 import { Canvas, useThree } from '@react-three/fiber'
@@ -49,6 +48,7 @@ function Scene() {
   const explodeShown = useViewStore((s) => s.explodeShown)
   const showDims = useViewStore((s) => s.showDims)
   const look = useViewStore((s) => s.look)
+  const scheme = useColorScheme()
   const exploded = useViewStore((s) => s.exploded) || explodeShown > 0
 
   // Under en operation ritas dokumentet som det skulle bli; berörda delar halvgenomskinliga.
@@ -107,7 +107,7 @@ function Scene() {
           />
         )
       })}
-      {look === 'realistic' && <RealisticLight bodies={bodies} />}
+      {look === 'realistic' && <RealisticLight bodies={bodies} scheme={scheme} />}
       {offsets && <PartNames bodies={bodies} offsets={offsets} />}
       {!exploded &&
         shown.sketches.map((s) => (
@@ -137,24 +137,30 @@ function Scene() {
 }
 
 /**
- * Ljuset i det realistiska utseendet: ett rum runt modellen som ger reflexer
- * och mjukt ljus från alla håll (RoomEnvironment, byggs i appen och fungerar
- * offline), och ett riktat ljus med skugga på golvet och på andra delar.
+ * Ljuset i det realistiska utseendet, som i en fotostudio: stora mjuka
+ * ljuskällor (softboxar) runt modellen som ger reflexer och mjukt ljus
+ * (Lightformer i en egen miljö, byggs i appen och fungerar offline), ett
+ * riktat ljus från huvudljusets håll med mjuk skugga, och en kontaktskugga
+ * där delarna står på golvet. Golvet syns inte: bakgrunden är ett sömlöst
+ * studiopapper, och golvet tar bara emot skuggorna.
  */
-function RealisticLight({ bodies }: { bodies: readonly Body[] }) {
-  // Scenen hämtas med get(): den ändras här, och värden från en hook får inte ändras.
+/** Neutral tonmappning är mörkare än ACES i mellantonerna; det här tar trät till ungefär sin färg. */
+const EXPOSURE = 1.5
+/** Hur högt upp från golvet kontaktskuggan ser, i mm. */
+const CONTACT_MM = 150
+
+function RealisticLight({ bodies, scheme }: { bodies: readonly Body[]; scheme: 'light' | 'dark' }) {
+  // Neutral tonmappning håller trät i sin färg; ACES (standard) gör ljust trä som björk grått.
+  // Renderaren hämtas med get(): den ändras här, och värden från en hook får inte ändras.
   const get = useThree((s) => s.get)
   useEffect(() => {
-    const { gl, scene, invalidate } = get()
-    const pmrem = new PMREMGenerator(gl)
-    const env = pmrem.fromScene(new RoomEnvironment(), 0.04).texture
-    scene.environment = env
-    scene.environmentIntensity = 0.45
+    const { gl, invalidate } = get()
+    const before = [gl.toneMapping, gl.toneMappingExposure] as const
+    gl.toneMapping = NeutralToneMapping
+    gl.toneMappingExposure = EXPOSURE
     invalidate()
     return () => {
-      scene.environment = null
-      env.dispose()
-      pmrem.dispose()
+      ;[gl.toneMapping, gl.toneMappingExposure] = before
       invalidate()
     }
   }, [get])
@@ -168,19 +174,33 @@ function RealisticLight({ bodies }: { bodies: readonly Body[] }) {
   const center: Vec3 = [(lo[0]! + hi[0]!) / 2, (lo[1]! + hi[1]!) / 2, (lo[2]! + hi[2]!) / 2]
   const radius = Math.max(200, Math.hypot(hi[0]! - lo[0]!, hi[1]! - lo[1]!, hi[2]! - lo[2]!) / 2)
   const floor = radius * 3
+  const dark = scheme === 'dark'
   return (
     <group userData={{ noThumb: true }}>
+      {/*
+        Studion som bara syns i reflexer och ljus: en stor softbox ovanför,
+        en snett framifrån (huvudljuset), en svagare från andra sidan och
+        smala lister bakom som ger kanterna ljus. Enheterna är miljöns egna.
+      */}
+      <Environment resolution={256} environmentIntensity={1.1}>
+        <color attach="background" args={['#3a3835']} />
+        <Lightformer form="rect" intensity={1.6} position={[0, 6, 0]} rotation-x={Math.PI / 2} scale={[10, 10, 1]} />
+        <Lightformer form="rect" intensity={2.4} position={[5, 3, 5]} scale={[6, 4, 1]} target={[0, 0, 0]} />
+        <Lightformer form="rect" intensity={0.8} position={[-6, 2, 2]} scale={[4, 3, 1]} target={[0, 0, 0]} />
+        <Lightformer form="rect" intensity={1.2} position={[-2, 2, -6]} scale={[8, 0.6, 1]} target={[0, 0, 0]} />
+        <Lightformer form="rect" intensity={1.2} position={[3, 2, -6]} scale={[0.6, 6, 1]} target={[0, 0, 0]} />
+      </Environment>
       <primitive object={target} position={center} />
-      {/* Solen snett ovanifrån, som huvudljuset i det skuggade utseendet. Skuggkameran rymmer modellen. */}
+      {/* Solen från huvudljusets håll. Skuggkameran rymmer modellen; radius gör kanten mjuk. */}
       <directionalLight
-        position={[center[0] + radius * 1.6, center[1] + radius * 3, center[2] + radius * 2]}
+        position={[center[0] + radius * 2, center[1] + radius * 3, center[2] + radius * 2]}
         target={target}
-        intensity={1.1}
+        intensity={1.2}
         castShadow
         shadow-mapSize={[2048, 2048]}
         shadow-bias={-0.0004}
         shadow-normalBias={1.5}
-        shadow-radius={4}
+        shadow-radius={6}
         shadow-camera-left={-radius * 1.5}
         shadow-camera-right={radius * 1.5}
         shadow-camera-top={radius * 1.5}
@@ -188,11 +208,25 @@ function RealisticLight({ bodies }: { bodies: readonly Body[] }) {
         shadow-camera-near={radius}
         shadow-camera-far={radius * 8}
       />
-      {/* Golvet tar bara emot skuggan; rutnätet syns som förut. */}
+      {/* Golvet tar bara emot skuggan. På mörkt papper syns en svag skugga inte, så den är starkare där. */}
       <mesh position={[center[0], 0.3, center[2]]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
         <planeGeometry args={[floor, floor]} />
-        <shadowMaterial opacity={0.28} transparent depthWrite={false} />
+        <shadowMaterial opacity={dark ? 0.45 : 0.22} transparent depthWrite={false} />
       </mesh>
+      {/*
+        Mörkt där delarna står nära golvet, som i ett hörn: det som får dem att stå på golvet.
+        Bara det som ligger under CONTACT_MM räknas. drei ritar utan djuptest, så en del längre
+        upp (en bordsskiva) skulle annars skriva över benen under den. Den ser uppåt och ligger
+        under golvet: av ett ben syns bara undersidan, och den ligger på golvet.
+      */}
+      <ContactShadows
+        position={[center[0], -1, center[2]]}
+        scale={floor}
+        far={CONTACT_MM}
+        blur={2.5}
+        resolution={384}
+        opacity={dark ? 0.9 : 0.7}
+      />
     </group>
   )
 }
@@ -200,20 +234,21 @@ function RealisticLight({ bodies }: { bodies: readonly Body[] }) {
 // Scenen ritas i millimeter: 1 enhet = 1 mm.
 export function Viewport() {
   const colors = SCENE[useColorScheme()]
-  // Realistiskt: miljöljuset och solen i RealisticLight ersätter det jämna ljuset och huvudljuset.
+  // Realistiskt: studioljuset i RealisticLight ersätter det jämna ljuset och huvudljusen,
+  // och bakgrunden är studiopapper utan rutnät.
   const realistic = useViewStore((s) => s.look) === 'realistic'
 
   return (
     // frameloop="demand": ritar bara om när något ändras. Sparar batteri på mobil.
     // shadows: skuggkartor finns, men bara ljuset i RealisticLight kastar skugga.
     <Canvas shadows frameloop="demand" camera={{ position: [...HOME.position], fov: 45, near: 1, far: 50000 }}>
-      <color attach="background" args={[colors.background]} />
+      <color attach="background" args={[realistic ? colors.studio : colors.background]} />
       <ambientLight intensity={realistic ? 0 : 0.6} />
       <directionalLight position={[2000, 4000, 3000]} intensity={realistic ? 0 : 1.6} />
-      <directionalLight position={[-3000, 2000, -1000]} intensity={realistic ? 0.2 : 0.4} />
+      <directionalLight position={[-3000, 2000, -1000]} intensity={realistic ? 0 : 0.4} />
 
       {/* Lite under y=0 så att delarnas undersida inte flimrar mot linjerna. Inte med på modellbilderna. */}
-      <group userData={{ noThumb: true }}>
+      <group userData={{ noThumb: true }} visible={!realistic}>
         <Grid
           position={[0, -0.5, 0]}
           cellSize={100}
