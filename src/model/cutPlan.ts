@@ -1,6 +1,7 @@
 import { buildCutList } from './cutlist'
 import { numberFormat } from './numberFormat'
 import { fitsBin, packGuillotine, type PackItem } from './guillotine'
+import { BOARD, PANEL, panelThicknesses, SHEET, standardThickness } from './swedishStock'
 import type { Body, StockSettings, StockSize } from './types'
 
 /** Material som köps som skivor. Övriga köps som brädor eller limfogsskivor av massivt trä. */
@@ -8,46 +9,61 @@ export const SHEET_MATERIALS: readonly string[] = ['plywood']
 
 export const DEFAULT_KERF = 3
 
-/**
- * Det som rensas bort innan delarna läggs ut, i mm. Skivor: runt alla kanter,
- * som sällan är raka från fabrik. Massivt trä: bara ändarna, som ofta har
- * sprickor; sidorna på hyvlat virke är färdiga.
- */
-const DEFAULT_TRIM = { sheet: 10, solid: 20 }
-
-export const defaultTrim = (material: string) =>
-  SHEET_MATERIALS.includes(material) ? DEFAULT_TRIM.sheet : DEFAULT_TRIM.solid
-
-/** Hyvlat virke säljs i dessa bredder och i längder med 300 mm steg. */
-const BOARD_WIDTHS = [45, 70, 95, 120, 145, 170, 195]
+/** En vanlig bräda när inget annat talar för en längd. */
 const BOARD_LENGTH = 2400
-const PANEL_WIDTH = 600
-const SHEET: StockSize = { length: 2440, width: 1220 }
+const SHEET_SIZE: StockSize = { length: SHEET.length, width: SHEET.width }
+
+const MAX_BOARD_WIDTH = BOARD.widths.at(-1)!
 
 /** Köps som skiva (skivmaterial eller limfogsskiva, bredare än någon bräda) eller som bräda. */
-export const isPanel = (g: { sheet: boolean; stock: StockSize }) => g.sheet || g.stock.width > BOARD_WIDTHS.at(-1)!
+export const isPanel = (sheet: boolean, stock: StockSize) => sheet || stock.width > MAX_BOARD_WIDTH
+
+/**
+ * Det som rensas bort innan delarna läggs ut, i mm, när inget är inställt.
+ * Skivmaterial: 10 runt alla kanter, som ofta är stötta. Brädor: 20 i varje
+ * ände, där det ofta finns sprickor; sidorna på hyvlat virke är färdiga.
+ * Limfogsskivor: inget, ändarna är raka och hela.
+ */
+export const defaultTrim = (sheet: boolean, stock: StockSize) => (sheet ? 10 : isPanel(false, stock) ? 0 : 20)
 
 /** "skiva", "skivor", "bräda" eller "brädor". */
 export const stockNoun = (panel: boolean, count: number) =>
   panel ? (count === 1 ? 'skiva' : 'skivor') : count === 1 ? 'bräda' : 'brädor'
 
-/** Nyckeln för lagermåttet: material och tjocklek (samma avrundning som kaplistan). */
+/** Nyckeln för lagermåtten: material och tjocklek (samma avrundning som kaplistan). */
 export const stockKey = (material: string, thickness: number) => `${material}|${thickness}`
 
 const roundUp = (n: number, step: number) => Math.ceil(n / step) * step
 
+/** Det minsta i listan som räcker, annars n avrundat uppåt till step. */
+const atLeast = (list: readonly number[], n: number, step: number) => list.find((x) => x >= n) ?? roundUp(n, step)
+
+type Dims = { length: number; width: number }
+
 /**
- * Lagermåttet när inget är inställt. Skivmaterial: en hel skiva. Massivt trä:
- * en bräda som räcker för den bredaste delen, eller en limfogsskiva om ingen
- * bräda är bred nog; 2400 lång, eller längre om den längsta delen kräver det.
+ * Lagermåtten när inget är inställt, för delarnas färdiga mått. Skivmaterial:
+ * en hel skiva. Massivt trä: en bräda för delarna som ryms på en (den smalaste
+ * som räcker för den bredaste av dem), och en limfogsskiva i vanligt mått för
+ * de bredare. Längden räcker för den längsta delen med kapmån och kapade ändar.
  */
-export function defaultStock(material: string, parts: readonly { length: number; width: number }[]): StockSize {
-  if (SHEET_MATERIALS.includes(material)) return SHEET
-  const longest = Math.max(0, ...parts.map((p) => p.length))
-  const widest = Math.max(0, ...parts.map((p) => p.width))
-  const length = longest <= BOARD_LENGTH ? BOARD_LENGTH : roundUp(longest, 300)
-  const width = BOARD_WIDTHS.find((w) => w >= widest) ?? Math.max(PANEL_WIDTH, roundUp(widest, 100))
-  return { length, width }
+export function defaultStocks(material: string, parts: readonly Dims[], allowance = 0): StockSize[] {
+  if (SHEET_MATERIALS.includes(material)) return [SHEET_SIZE]
+  const narrow = parts.filter((p) => p.width <= MAX_BOARD_WIDTH)
+  const wide = parts.filter((p) => p.width > MAX_BOARD_WIDTH)
+  const longest = (list: readonly Dims[]) => Math.max(...list.map((p) => p.length)) + allowance
+  const widest = (list: readonly Dims[]) => Math.max(...list.map((p) => p.width))
+  const out: StockSize[] = []
+  if (narrow.length) {
+    const board = { length: 0, width: atLeast(BOARD.widths, widest(narrow), 5) }
+    const need = longest(narrow) + 2 * defaultTrim(false, board)
+    out.push({ ...board, length: atLeast(BOARD.lengths, need, 300) })
+  }
+  if (wide.length) {
+    const panel = { length: 0, width: atLeast(PANEL.widths, widest(wide), 100) }
+    const need = longest(wide) + 2 * defaultTrim(false, panel)
+    out.push({ ...panel, length: atLeast(PANEL.lengths, need, 300) })
+  }
+  return out.length ? out : [{ length: BOARD_LENGTH, width: BOARD.widths[0]! }]
 }
 
 export interface PlacedPiece {
@@ -65,21 +81,39 @@ export interface PlacedPiece {
   rotated: boolean
 }
 
+/** Ett lagermått i en grupp och delarna som kapas ur det. */
+export interface StockLayout {
+  /** Lagermåttet, med trim alltid satt (inställt eller standard). */
+  stock: StockSize & { trim: number }
+  /** Köps som skiva, inte som bräda (isPanel). */
+  panel: boolean
+  /** Tjockleken man köper: den minsta svenska standardtjockleken som räcker för delarna. */
+  thickness: number
+  /** En lista per skiva eller bräda. */
+  boards: PlacedPiece[][]
+}
+
 export interface CutPlanGroup {
   key: string
   material: string
   thickness: number
+  /** Skivmaterial: rensas runt om och får vridas om det är inställt. */
   sheet: boolean
-  /** Lagermåttet, med trim alltid satt (inställt eller standard). */
-  stock: StockSize & { trim: number }
-  /** Lagermåttet är inte inställt utan gissat (defaultStock). */
+  /** Lagermåtten i den ordning de står i inställningen (eller defaultStocks). */
+  stocks: StockLayout[]
+  /** Lagermåtten är inte inställda utan gissade (defaultStocks). */
   isDefault: boolean
-  /** En lista per skiva eller bräda. */
-  boards: PlacedPiece[][]
-  /** Delar som inte går in på en hel skiva eller bräda. */
+  /** Delar som inte går in på något av lagermåtten, ens på en hel skiva eller bräda. */
   tooBig: { bodyId: string; name: string; length: number; width: number }[]
-  /** Andel av skivornas yta som blir spill, 0–1. */
+  /** Andel av skivornas och brädornas yta som blir spill, 0–1. */
   waste: number
+  /** Delar får kapas ur spill på ett annat mått (inställningen noLeftover). */
+  leftover: boolean
+  /**
+   * Delarna som kapas ur spill på ett annat mått än det smalaste de ryms på, eller skulle
+   * göra det om spill användes; tomt när spill inte gör någon skillnad.
+   */
+  moved: { bodyId: string; name: string; length: number; width: number; toPanel: boolean; fromPanel: boolean }[]
 }
 
 export interface CutPlan {
@@ -89,24 +123,38 @@ export interface CutPlan {
   lengthAllowance: number
 }
 
-interface Piece {
+interface Part {
+  index: number
   bodyId: string
   name: string
+  length: number
+  width: number
 }
+
+/** Delarna läggs inom det rensade: bara ändarna för massivt trä, alla kanter för skivor. */
+const insetOf = (sheet: boolean, trim: number) => ({ x: trim, y: sheet ? trim : 0 })
+
+/** Högst så många försök att flytta delar till spill, så att en stor modell inte hänger sig. */
+const MAX_MOVES = 200
 
 /**
  * Kapschemat: kaplistans delar utlagda på skivor och brädor, en grupp per
  * material och tjocklek. Delens längd (L, längs fibern) ligger längs skivans
  * längd, utom där skivan får vridas.
+ *
+ * Har en grupp flera lagermått kapas varje del först ur det smalaste den får
+ * plats på (vid lika bredd det kortaste), så att smala delar tas ur brädor och
+ * breda ur skivor. Sedan flyttas delarna på en bräda eller skiva, en i taget
+ * med den minst fyllda först, till ett annat mått om det minskar ytan som
+ * behöver köpas: en sockel kapas hellre ur spillet på en skiva man ändå köper
+ * än ur en egen bräda. Ytan, inte priset, eftersom priserna inte är kända.
+ * Användaren kan välja bort det per grupp (noLeftover); moved säger vilka delar det gäller.
  */
 export function buildCutPlan(bodies: readonly Body[], settings: StockSettings = {}): CutPlan {
   const kerf = settings.kerf ?? DEFAULT_KERF
   const allowance = settings.lengthAllowance ?? 0
   const names = new Map(bodies.map((b) => [b.id, b.name]))
-  const byKey = new Map<
-    string,
-    { material: string; thickness: number; parts: (Piece & { length: number; width: number })[] }
-  >()
+  const byKey = new Map<string, { material: string; thickness: number; parts: Part[] }>()
 
   for (const row of buildCutList(bodies).rows) {
     if (row.length <= 0 || row.width <= 0) continue
@@ -114,70 +162,169 @@ export function buildCutPlan(bodies: readonly Body[], settings: StockSettings = 
     let group = byKey.get(key)
     if (!group) byKey.set(key, (group = { material: row.material, thickness: row.thickness, parts: [] }))
     for (const bodyId of row.bodyIds)
-      group.parts.push({ bodyId, name: names.get(bodyId) ?? '', length: row.length, width: row.width })
+      group.parts.push({
+        index: group.parts.length,
+        bodyId,
+        name: names.get(bodyId) ?? '',
+        length: row.length,
+        width: row.width,
+      })
   }
 
   const groups: CutPlanGroup[] = []
   for (const [key, { material, thickness, parts }] of byKey) {
     const sheet = SHEET_MATERIALS.includes(material)
-    const saved = settings.sizes?.[key]
-    const trim = saved?.trim ?? defaultTrim(material)
-    // Det som går åt av skivans längd och bredd för delen, utöver delen själv.
-    const extraL = allowance + 2 * trim
-    const extraW = sheet ? 2 * trim : 0
-    const stock = {
-      ...(saved ??
-        defaultStock(
-          material,
-          parts.map((p) => ({ length: p.length + extraL, width: p.width + extraW })),
-        )),
-      trim,
+    // Bara en lista räknas: ett ensamt mått från förr (kvar i minnet efter hot reload) har också length.
+    const list = settings.sizes?.[key]
+    const saved = Array.isArray(list) && list.length > 0 ? list : undefined
+    const sizes = saved ?? defaultStocks(material, parts, allowance)
+    const stocks = sizes.map((s) => ({ ...s, trim: s.trim ?? defaultTrim(sheet, s) }))
+    const binOf = (stock: StockSize & { trim: number }) => {
+      const inset = insetOf(sheet, stock.trim)
+      return { width: stock.length - 2 * inset.x, height: stock.width - 2 * inset.y }
     }
-    // Delarna läggs inom det rensade: bara ändarna för massivt trä, alla kanter för skivor.
-    const inset = { x: trim, y: sheet ? trim : 0 }
-    const bin = { width: stock.length - 2 * inset.x, height: stock.width - 2 * inset.y }
-    const rotatable = sheet && stock.rotate === true
-
-    const items: PackItem<Piece & { length: number; width: number }>[] = []
-    const tooBig: CutPlanGroup['tooBig'] = []
-    for (const p of parts) {
-      const item = { width: p.length + allowance, height: p.width, rotatable, data: p }
-      if (bin.width > 0 && bin.height > 0 && fitsBin(bin, item)) items.push(item)
-      else tooBig.push({ bodyId: p.bodyId, name: p.name, length: p.length, width: p.width })
+    const bins = stocks.map(binOf)
+    const area = stocks.map((s) => s.length * s.width)
+    const item = (p: Part, i: number): PackItem<Part> => ({
+      width: p.length + allowance,
+      height: p.width,
+      rotatable: sheet && stocks[i]!.rotate === true,
+      data: p,
+    })
+    const fits = (p: Part, i: number) => {
+      const bin = bins[i]!
+      return bin.width > 0 && bin.height > 0 && fitsBin(bin, item(p, i))
     }
 
-    const boards = packGuillotine(bin, items, kerf).map((placed) =>
-      placed.map((p) => ({
-        bodyId: p.data.bodyId,
-        name: p.data.name,
-        x: p.x + inset.x,
-        y: p.y + inset.y,
-        w: p.width,
-        h: p.height,
-        length: p.data.length,
-        width: p.data.width,
-        rotated: p.rotated,
-      })),
-    )
-    // Spillet räknas mot delarnas färdiga mått: kapmån och rensade kanter är också spill.
-    const used = boards.flat().reduce((sum, p) => sum + p.length * p.width, 0)
-    const total = boards.length * stock.length * stock.width
+    // Smalast först, vid lika bredd kortast: det första som delen ryms på vinner.
+    const order = stocks
+      .map((_, i) => i)
+      .sort((a, b) => stocks[a]!.width - stocks[b]!.width || stocks[a]!.length - stocks[b]!.length)
+    let assign = parts.map((p) => order.find((i) => fits(p, i)) ?? -1)
+    const pack = (i: number, a: readonly number[]) =>
+      packGuillotine(
+        bins[i]!,
+        parts.filter((p) => a[p.index] === i).map((p) => item(p, i)),
+        kerf,
+      )
+
+    // I ett förslag får brädor och limfogsskivor den standardlängd som ger minst att köpa:
+    // fyra ben om 720 ryms på en bräda om 3000 i stället för två om 2400. Vid lika den kortaste.
+    if (!saved && !sheet) {
+      stocks.forEach((stock, i) => {
+        const lengths = isPanel(false, stock) ? PANEL.lengths : BOARD.lengths
+        let best = { length: stock.length, cost: pack(i, assign).length * stock.length }
+        for (const length of lengths.filter((l) => l > stock.length)) {
+          stocks[i] = { ...stock, length }
+          bins[i] = binOf(stocks[i]!)
+          const cost = pack(i, assign).length * length
+          if (cost < best.cost) best = { length, cost }
+        }
+        stocks[i] = { ...stock, length: best.length }
+        bins[i] = binOf(stocks[i]!)
+        area[i] = best.length * stock.width
+      })
+    }
+    let packed = stocks.map((_, i) => pack(i, assign))
+    const first = { assign, packed }
+
+    // Flytta delarna på en bräda eller skiva till ett annat mått, om det minskar ytan att köpa.
+    const fill = (board: readonly { width: number; height: number }[]) =>
+      board.reduce((sum, p) => sum + p.width * p.height, 0)
+    let moves = 0
+    search: while (stocks.length > 1 && moves < MAX_MOVES) {
+      for (const i of order) {
+        for (const board of [...packed[i]!].sort((a, b) => fill(a) - fill(b))) {
+          const ids = board.map((p) => p.data.index)
+          for (const j of order) {
+            if (j === i || !ids.every((k) => fits(parts[k]!, j))) continue
+            if (++moves > MAX_MOVES) break search
+            const trial = assign.slice()
+            for (const k of ids) trial[k] = j
+            const pi = pack(i, trial)
+            const pj = pack(j, trial)
+            const before = packed[i]!.length * area[i]! + packed[j]!.length * area[j]!
+            const after = pi.length * area[i]! + pj.length * area[j]!
+            if (after < before) {
+              assign = trial
+              packed = packed.map((b, n) => (n === i ? pi : n === j ? pj : b))
+              continue search
+            }
+          }
+        }
+      }
+      break
+    }
+    // Delarna som hamnade i spill. Vill man inte det står utlägget utan flyttar kvar.
+    const moved = parts
+      .filter((p) => assign[p.index] !== first.assign[p.index])
+      .map(({ bodyId, name, length, width, index }) => ({
+        bodyId,
+        name,
+        length,
+        width,
+        toPanel: isPanel(sheet, stocks[assign[index]!]!),
+        fromPanel: isPanel(sheet, stocks[first.assign[index]!]!),
+      }))
+    const leftover = !settings.noLeftover?.includes(key)
+    if (!leftover) ({ assign, packed } = first)
+
+    let used = 0
+    let total = 0
+    const layouts: StockLayout[] = stocks.map((stock, i) => {
+      const inset = insetOf(sheet, stock.trim)
+      const boards = packed[i]!.map((placed) =>
+        placed.map((p) => ({
+          bodyId: p.data.bodyId,
+          name: p.data.name,
+          x: p.x + inset.x,
+          y: p.y + inset.y,
+          w: p.width,
+          h: p.height,
+          length: p.data.length,
+          width: p.data.width,
+          rotated: p.rotated,
+        })),
+      )
+      // Spillet räknas mot delarnas färdiga mått: kapmån och rensade kanter är också spill.
+      used += boards.flat().reduce((sum, p) => sum + p.length * p.width, 0)
+      total += boards.length * area[i]!
+      const panel = isPanel(sheet, stock)
+      const standard = sheet ? SHEET.thicknesses : panel ? panelThicknesses(material) : BOARD.thicknesses
+      return { stock, panel, thickness: standardThickness(standard, thickness), boards }
+    })
+
     groups.push({
       key,
       material,
       thickness,
       sheet,
-      stock,
+      // Ett förslag som inget kapas ur (sockeln hamnade i spillet) visas inte; inställda mått står kvar.
+      stocks:
+        saved || layouts.every((l) => l.boards.length === 0) ? layouts : layouts.filter((l) => l.boards.length > 0),
       isDefault: !saved,
-      boards,
-      tooBig,
+      tooBig: parts
+        .filter((p) => assign[p.index] === -1)
+        .map(({ bodyId, name, length, width }) => ({ bodyId, name, length, width })),
       waste: total > 0 ? 1 - used / total : 0,
+      leftover,
+      moved,
     })
   }
 
   // Samma ordning som kaplistan: material, sedan tjockast först.
   groups.sort((a, b) => a.material.localeCompare(b.material, 'sv') || b.thickness - a.thickness)
   return { groups, kerf, lengthAllowance: allowance }
+}
+
+/** "1 skiva · 2 brädor": antalet per slag i gruppen, eller "0 brädor" om inget behövs. */
+export function groupCount(g: CutPlanGroup): string {
+  const count = (panel: boolean) => g.stocks.filter((l) => l.panel === panel).reduce((n, l) => n + l.boards.length, 0)
+  const parts = [true, false]
+    .map((panel) => ({ panel, n: count(panel) }))
+    .filter(({ n }) => n > 0)
+    .map(({ panel, n }) => `${n} ${stockNoun(panel, n)}`)
+  return parts.length ? parts.join(' · ') : `0 ${stockNoun(g.sheet, 0)}`
 }
 
 /** Lika texter en gång, med antal före: "2 × Sarg (900 × 95)". */
@@ -199,22 +346,59 @@ export interface Purchase {
   text: string
   /** Löpmeter för brädor ("4,8 m"); saknas för skivor. */
   length?: string
+  /** När man köper tjockare än delarna är ritade (thicknessNote). */
+  note?: string
 }
+
+/**
+ * När man köper tjockare än delarna är ritade. Brädor hyvlas ner. En limfogsskiva
+ * hyvlar få hemma, och plywood går inte: där står i stället tjocklekarna som finns,
+ * så att man kan rita om delarna.
+ */
+function thicknessNote(g: CutPlanGroup, l: StockLayout): string {
+  const drawn = `delarna ${mm.format(g.thickness)} mm`
+  if (!l.panel) return `${drawn}, hyvlas ner`
+  // De två närmaste som finns: den tunnare och den man köper.
+  const list = g.sheet ? SHEET.thicknesses : panelThicknesses(g.material)
+  const thinner = list.filter((t) => t < g.thickness).at(-1)
+  const near = [thinner, l.thickness].filter((t) => t !== undefined).map((t) => mm.format(t))
+  return `${drawn}; ${g.sheet ? g.material : 'limfog'} finns i ${near.join(' och ')}`
+}
+
+/** "22 × 95 × 2 400": tjocklek × bredd × längd, som virke märks i Sverige. */
+export const stockDims = (l: StockLayout) =>
+  [l.thickness, l.stock.width, l.stock.length].map((n) => mm.format(n)).join(' × ')
 
 /** Det som ska köpas: antal skivor och brädor per material, tjocklek och lagermått. */
 export function purchaseList(plan: CutPlan): Purchase[] {
-  return plan.groups
-    .filter((g) => g.boards.length > 0)
-    .map((g) => {
-      const panel = isPanel(g)
-      const count = g.boards.length
-      const size = [g.thickness, g.stock.width, g.stock.length].map((n) => mm.format(n)).join(' × ')
-      return {
-        key: g.key,
-        material: g.material,
-        count,
-        text: `${count} ${stockNoun(panel, count)} ${g.material} ${size}`,
-        ...(!panel && { length: `${meters.format((count * g.stock.length) / 1000)} m` }),
-      }
-    })
+  return plan.groups.flatMap((g) =>
+    g.stocks
+      .filter((l) => l.boards.length > 0)
+      .map((l, i) => {
+        const count = l.boards.length
+        return {
+          key: `${g.key}|${i}`,
+          material: g.material,
+          count,
+          text: `${count} ${stockNoun(l.panel, count)} ${g.material} ${stockDims(l)}`,
+          ...(!l.panel && { length: `${meters.format((count * l.stock.length) / 1000)} m` }),
+          ...(l.thickness !== g.thickness && { note: thicknessNote(g, l) }),
+        }
+      }),
+  )
+}
+
+/**
+ * Ett nytt lagermått att lägga till. Finns delar som inte får plats: ett mått
+ * som räcker för dem (som standardmåtten, defaultStocks). Annars för massivt
+ * trä en bräda om gruppen saknar en, en limfogsskiva om den saknar en, och
+ * till sist en kopia av det sista måttet, att ändra. Det som rensas bort blir
+ * standard för sitt slag, utom i kopian.
+ */
+export function nextStock(g: CutPlanGroup, allowance: number): StockSize {
+  const [fit] = defaultStocks(g.material, g.tooBig, allowance)
+  if (g.tooBig.length > 0 && fit) return fit
+  if (!g.sheet && !g.stocks.some((l) => !l.panel)) return { length: BOARD_LENGTH, width: 95 }
+  if (!g.sheet && !g.stocks.some((l) => l.panel)) return { length: BOARD_LENGTH, width: 600 }
+  return { ...g.stocks.at(-1)!.stock }
 }

@@ -89,8 +89,15 @@ function cleanStock(x: unknown): StockSettings | undefined {
   const out: StockSettings = {}
   if (isNum(x.kerf) && x.kerf >= 0) out.kerf = x.kerf
   if (isNum(x.lengthAllowance) && x.lengthAllowance >= 0) out.lengthAllowance = x.lengthAllowance
+  if (Array.isArray(x.noLeftover)) {
+    const keys = x.noLeftover.filter((k): k is string => typeof k === 'string')
+    if (keys.length) out.noLeftover = keys
+  }
   if (isObj(x.sizes)) {
-    const sizes = Object.entries(x.sizes).filter(([, v]) => isStockSize(v))
+    // Först sparades ett lagermått per grupp, nu en lista: ett ensamt mått blir en lista med ett.
+    const sizes = Object.entries(x.sizes)
+      .map(([k, v]) => [k, (Array.isArray(v) ? v : [v]).filter(isStockSize)] as const)
+      .filter(([, v]) => v.length > 0)
     if (sizes.length) out.sizes = Object.fromEntries(sizes) as StockSettings['sizes']
   }
   return Object.keys(out).length ? out : undefined

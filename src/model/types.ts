@@ -133,8 +133,10 @@ export interface StockSettings {
   kerf?: number
   /** Kapmån på delarnas längd i mm. */
   lengthAllowance?: number
-  /** Lagermått per material och tjocklek, med nyckel från stockKey. */
-  sizes?: Record<string, StockSize>
+  /** Grupper (stockKey) där varje del kapas ur det smalaste måttet den ryms på, aldrig ur spill på ett annat. */
+  noLeftover?: string[]
+  /** Lagermåtten per material och tjocklek, med nyckel från stockKey. Varje del kapas ur det smalaste den ryms på. */
+  sizes?: Record<string, StockSize[]>
 }
 
 export interface ModelDocument {
