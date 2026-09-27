@@ -117,11 +117,32 @@ export interface Param {
   value: number
 }
 
+/** Måtten på det man köper: en skiva eller bräda. length längs fibern. */
+export interface StockSize {
+  length: number
+  width: number
+  /** Delarna får vridas på skivan (fibern spelar ingen roll). Bara för skivmaterial. */
+  rotate?: boolean
+  /** Rensas bort i mm: alla kanter på en skiva, ändarna på massivt trä. Saknas = standard (se cutPlan). */
+  trim?: number
+}
+
+/** Inställningar för kapschemat. Saknas något gäller standardvärdena (se cutPlan). */
+export interface StockSettings {
+  /** Sågbladets bredd i mm. */
+  kerf?: number
+  /** Kapmån på delarnas längd i mm. */
+  lengthAllowance?: number
+  /** Lagermått per material och tjocklek, med nyckel från stockKey. */
+  sizes?: Record<string, StockSize>
+}
+
 export interface ModelDocument {
   sketches: Sketch[]
   defs: PartDef[]
   instances: Instance[]
   params: Param[]
+  stock?: StockSettings
 }
 
 /**

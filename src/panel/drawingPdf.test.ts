@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { buildCutPlan } from '../model/cutPlan'
 import { buildCutList } from '../model/cutlist'
 import { drawingPositions } from '../model/partSheet'
 import { testBody } from '../model/testFixtures'
@@ -12,11 +13,14 @@ async function pageSizes(blob: Blob): Promise<string[]> {
   )
 }
 
-function input(parts: number): DrawingPdfInput {
-  // Olika längder: en rad per del i både stycklistan och kaplistan.
-  const bodies = Array.from({ length: parts }, (_, i) =>
+const bodiesOf = (parts: number) =>
+  Array.from({ length: parts }, (_, i) =>
     testBody({ id: `b${i}`, name: `Del ${i + 1}`, profile: { x0: 0, y0: 0, x1: 300 + i * 10, y1: 120 } }),
   )
+
+function input(parts: number): DrawingPdfInput {
+  // Olika längder: en rad per del i både stycklistan och kaplistan.
+  const bodies = bodiesOf(parts)
   return {
     name: 'Provmodell',
     date: '2026-09-26',
@@ -38,5 +42,15 @@ describe('buildDrawingPdf', () => {
     expect(pages[0]).toBe('liggande')
     expect(pages.length).toBeGreaterThan(2)
     expect(pages.slice(1).every((p) => p === 'stående')).toBe(true)
+  })
+
+  it('kapschemat sist, liggande, och fler sidor när brädorna inte ryms', async () => {
+    const one = { ...input(3), sheets: 4, cutPlan: buildCutPlan(bodiesOf(3)) }
+    expect(await pageSizes(await buildDrawingPdf(one))).toEqual(['liggande', 'stående', 'liggande'])
+    // 60 delar på 2400-brädor: långt fler brädor än ryms på en sida.
+    const many = { ...input(60), sheets: 4, cutPlan: buildCutPlan(bodiesOf(60)) }
+    const pages = await pageSizes(await buildDrawingPdf(many))
+    expect(pages.at(-1)).toBe('liggande')
+    expect(pages.at(-2)).toBe('liggande')
   })
 })
