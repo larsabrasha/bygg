@@ -230,8 +230,8 @@ export interface SheetDim {
   ty: number
   vertical: boolean
   ends: [DimEnd, DimEnd]
-  /** Hänvisningsstreck från texten till måttet, när texten fått flyttas åt sidan. */
-  leader?: [number, number, number, number]
+  /** Hänvisningsstreck från mitten av måttet till texten, när texten fått flyttas åt sidan. */
+  leader?: [number, number][]
 }
 
 /** Där en avbruten vy är avbruten: vid x, över vyns höjd h från y. */
@@ -703,6 +703,8 @@ function placeTexts(
     const mid = (lo + hi) / 2
     // Efter en pil som står utanför fortsätter måttlinjen en bit; texten står efter den.
     const past = (end: DimEnd) => (end === 'out' ? ARROW + 1.5 : 0) + TEXT_GAP + w / 2
+    // Åt sidan, närmast först. Helst så lite att måttets mitt ligger inom texten: då går
+    // strecket rakt ut från mitten av måttet och in i texten.
     const shifted = (lift: number) =>
       Array.from({ length: Math.round(SHIFT_MAX / 0.5) }, (_, k) => (k + 1) * 0.5)
         .flatMap((d) => [mid + d, mid - d])
@@ -766,11 +768,25 @@ export function dimRows(
     const texts = placeTexts(onPaper)
     return onPaper.map(({ p1, p2, lo, hi, text, ends }, i) => {
       const { at: along, lift, leader } = texts[i]!
-      // Hänvisningsstrecket: från textens närmaste ände till mitten av måttlinjen.
+      // Hänvisningsstrecket: vinkelrätt ut från mitten av måttet till textens insida, och
+      // om mitten inte ligger inom texten längs den till textens närmaste ände.
       const w = textWidth(text)
       const mid = (lo + hi) / 2
-      const near = along > mid ? along - w / 2 : along + w / 2
-      const across = line - 1 - lift - 0.8
+      // Textens insida (närmast måttlinjen): baslinjen, 1 mm från linjen, och 0,6 mm under den.
+      const inside = line - 0.4 - lift
+      const reach = Math.abs(along - mid) <= w / 2 - 0.3 ? mid : along > mid ? along - w / 2 + 0.3 : along + w / 2 - 0.3
+      const path: [number, number][] =
+        orientation === 'horizontal'
+          ? [
+              [mid, line],
+              [mid, inside],
+              [reach, inside],
+            ]
+          : [
+              [line, mid],
+              [inside, mid],
+              [inside, reach],
+            ]
       const ext: SheetDim['ext'] =
         orientation === 'horizontal'
           ? [
@@ -793,7 +809,7 @@ export function dimRows(
             ty: line - 1 - lift,
             vertical: false,
             ends,
-            ...(leader && { leader: [near, across, mid, line] as SheetDim['leader'] }),
+            ...(leader && { leader: path }),
           }
         : {
             x1: line,
@@ -806,7 +822,7 @@ export function dimRows(
             ty: along,
             vertical: true,
             ends,
-            ...(leader && { leader: [across, near, line, mid] as SheetDim['leader'] }),
+            ...(leader && { leader: path }),
           }
     })
   })

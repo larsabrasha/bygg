@@ -257,7 +257,7 @@ export function Dim({ dim: d }: { dim: SheetDim }) {
         x2={d.x2 + ux * extra(finish)}
         y2={d.y2 + uy * extra(finish)}
       />
-      {d.leader && <line x1={d.leader[0]} y1={d.leader[1]} x2={d.leader[2]} y2={d.leader[3]} />}
+      {d.leader && <polyline points={d.leader.map((p) => p.join(',')).join(' ')} fill="none" />}
       {marker(d.x1, d.y1, 1, start, 'a')}
       {marker(d.x2, d.y2, -1, finish, 'b')}
       <text
