@@ -9,13 +9,20 @@ och generera kaplistor. Self-hostad, körs i webbläsaren (PWA).
 - Tailwind CSS (v4, via @tailwindcss/vite) för all styling
 - Zustand för state (dokumentet ligger i en store, inte i komponenter)
 - IndexedDB för autospar (lokalt först, fungerar offline)
-- Synkserver: Hono på Node (server/), en JSON-fil per modell i DATA_DIR.
+- Synkserver: Hono på Node (server/), en JSON-fil per modell och användare i DATA_DIR.
   Krockar upptäcks med revisionsnummer; ingen version skrivs över tyst.
   I dev körs API:t inuti Vite (server/devPlugin.ts). Driftsätts med Docker.
 - PWA via vite-plugin-pwa: service worker bara i produktionsbygget (inte i dev,
   där den skulle störa HMR). Kräver https utom på localhost; Caddy framför servern.
   Ikoner genereras från public/icon.svg med `npm run icons`.
-- Ingen inloggning: appen används bara av en person i det egna nätet.
+- Inloggning via OIDC mot Pocket ID (https://id.larsabrasha.com), skött av servern
+  (server/auth.ts) med signerad session-cookie. Modeller per användare, både på
+  servern (DATA_DIR/users/<sub>/) och lokalt (IndexedDB, src/sync/localStore.ts).
+  I dev finns ingen inloggning; allt gäller användaren "dev".
+- Utan konto (gästläget, "Prova utan konto" på startsidan): egen IndexedDB-databas,
+  ingen synk, servern tillfrågas inte. Inloggning tar bort valet.
+- Utloggad ser startsidan (src/landing) med riktiga modeller, kaplista och kapschema
+  räknade med appens egen kod. I dev visas den med ?startsida.
 - Ingen CSG-kärna i början; manifold-3d läggs till vid behov
 
 ## Datamodell

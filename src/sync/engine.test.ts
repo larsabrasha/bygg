@@ -1,9 +1,10 @@
-import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { createApp } from '../../server/app'
-import { FileStorage } from '../../server/storage'
+import { devAuth } from '../../server/auth'
+import { UserStorages } from '../../server/storage'
 import { newId } from '../model/id'
 import { serialize, type SavedFile } from '../persist/format'
 import { ApiError, httpApi, type SyncApi } from './api'
@@ -51,9 +52,7 @@ function device() {
 
 beforeEach(async () => {
   dir = await mkdtemp(path.join(tmpdir(), 'bygg-sync-'))
-  const storage = new FileStorage(dir)
-  await storage.init()
-  const app = createApp({ storage })
+  const app = createApp({ storages: new UserStorages(dir), auth: devAuth() })
   api = httpApi('http://test', async (url, init) => app.request(url, init))
 })
 
@@ -188,7 +187,9 @@ describe('synk mellan två enheter', () => {
       updatedAt: '2026-09-25T00:00:00Z',
       file: { version: 99, savedAt: '', doc: {} },
     }
-    await writeFile(path.join(dir, 'models', `${id}.json`), JSON.stringify(future))
+    const models = path.join(dir, 'users', 'dev', 'models')
+    await mkdir(models, { recursive: true })
+    await writeFile(path.join(models, `${id}.json`), JSON.stringify(future))
     const b = device()
     const r = await b.sync()
     expect(r.events).toEqual([{ kind: 'incompatible', id, name: 'Framtid' }])

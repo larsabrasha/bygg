@@ -31,6 +31,8 @@
   /* Varning: offline, konfliktkopia. */
   --color-warn: #a15c07;
   --color-warn-soft: #fbeed3;
+  /* Studiopappret bakom möblerna på startsidan (src/landing); samma som SCENE.studio i src/scene/colors.ts. */
+  --color-studio: #e6e3de;
 
   /* Rutan "Öppnar …" (panel/OpeningOverlay.tsx): syns först om det tar en stund. */
   --animate-appear-late: appear 150ms ease-out 400ms both;
@@ -68,6 +70,7 @@
     --color-unit: #857e74;
     --color-warn: #f0b453;
     --color-warn-soft: #3b2e14;
+    --color-studio: #3a3733;
   }
 }
 

@@ -4,13 +4,16 @@ import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { FORMAT_VERSION, serialize } from '../src/persist/format'
 import { createApp } from './app'
-import { FileStorage } from './storage'
+import { devAuth } from './auth'
+import { UserStorages } from './storage'
 
 const ID = '11111111-2222-4333-8444-555555555555'
 const emptyDoc = { sketches: [], defs: [], instances: [], params: [] }
 const file = serialize(emptyDoc, new Date('2026-09-25T10:00:00Z'))
 
 let dir: string
+/** Dev-användarens modeller. */
+let userDir: string
 let app: ReturnType<typeof createApp>
 
 async function put(body: unknown, id = ID, headers: Record<string, string> = {}) {
@@ -23,9 +26,8 @@ async function put(body: unknown, id = ID, headers: Record<string, string> = {})
 
 beforeEach(async () => {
   dir = await mkdtemp(path.join(tmpdir(), 'bygg-test-'))
-  const storage = new FileStorage(dir, () => new Date('2026-09-25T12:00:00Z'))
-  await storage.init()
-  app = createApp({ storage })
+  userDir = path.join(dir, 'users', 'dev')
+  app = createApp({ storages: new UserStorages(dir, () => new Date('2026-09-25T12:00:00Z')), auth: devAuth() })
 })
 
 afterEach(async () => {
@@ -48,7 +50,7 @@ describe('API', () => {
 
   it('lagrar en läsbar JSON-fil per modell', async () => {
     await put({ name: 'Bord', baseRevision: null, file })
-    const raw = await readFile(path.join(dir, 'models', `${ID}.json`), 'utf8')
+    const raw = await readFile(path.join(userDir, 'models', `${ID}.json`), 'utf8')
     expect(raw).toContain('\n  "name": "Bord"')
     expect(JSON.parse(raw)).toMatchObject({ id: ID, name: 'Bord', revision: 1, file: { version: FORMAT_VERSION } })
   })
@@ -85,8 +87,8 @@ describe('API', () => {
     await put({ name: 'Bord', baseRevision: null, file })
     expect((await app.request(`/api/models/${ID}?baseRevision=2`, { method: 'DELETE' })).status).toBe(409)
     expect((await app.request(`/api/models/${ID}?baseRevision=1`, { method: 'DELETE' })).status).toBe(204)
-    expect(await readdir(path.join(dir, 'models'))).toEqual([])
-    expect(await readdir(path.join(dir, 'trash'))).toHaveLength(1)
+    expect(await readdir(path.join(userDir, 'models'))).toEqual([])
+    expect(await readdir(path.join(userDir, 'trash'))).toHaveLength(1)
     expect((await app.request(`/api/models/${ID}`)).status).toBe(404)
   })
 
@@ -139,6 +141,6 @@ describe('bilden av en modell', () => {
     await putThumb(png)
     await app.request(`/api/models/${ID}?baseRevision=1`, { method: 'DELETE' })
     expect((await app.request(`/api/models/${ID}/thumb`)).status).toBe(404)
-    expect((await readdir(path.join(dir, 'trash'))).some((f) => f.endsWith('.png'))).toBe(true)
+    expect((await readdir(path.join(userDir, 'trash'))).some((f) => f.endsWith('.png'))).toBe(true)
   })
 })

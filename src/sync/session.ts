@@ -1,4 +1,4 @@
-import { del as idbDel, get as idbGet, set as idbSet } from 'idb-keyval'
+import { del as idbDel, get as idbGet, isGuest, set as idbSet } from './localStore'
 import { newId } from '../model/id'
 import type { ModelDocument } from '../model/types'
 import { migrate, serialize } from '../persist/format'
@@ -7,6 +7,7 @@ import { useLibraryStore, type SyncStatus } from '../store/libraryStore'
 import { useToolStore } from '../store/toolStore'
 import { useViewStore } from '../store/viewStore'
 import { ApiError, httpApi } from './api'
+import { forgetUser } from './auth'
 import { syncOnce, type SyncEvent } from './engine'
 import { idbRepo, importLegacy, LEGACY_KEY, type LocalModel } from './localRepo'
 import { deleteHistory, getHistory, packHistory, putHistory, unpackHistory } from './history'
@@ -58,7 +59,7 @@ const deleteTimers = new Map<string, { timer: ReturnType<typeof setTimeout>; not
 async function refreshList() {
   const models = (await repo.list())
     .filter((m) => !m.deleted)
-    .map(({ id, name, updatedAt, dirty }) => ({ id, name, updatedAt, dirty }))
+    .map(({ id, name, updatedAt, dirty, example }) => ({ id, name, updatedAt, dirty, ...(example && { example }) }))
     .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
   const thumbs: Record<string, string> = {}
   await Promise.all(
@@ -215,6 +216,7 @@ const STATUS_FOR: Record<ApiError['kind'], SyncStatus> = {
   offline: 'offline',
   'no-server': 'local-only',
   server: 'error',
+  auth: 'logged-out',
 }
 
 async function openFallback() {
@@ -294,6 +296,14 @@ export function syncNow(): Promise<void> {
     return syncing
   }
   syncing = (async () => {
+    // Utan konto finns ingen server att synka mot; allt ligger kvar i webbläsaren.
+    if (isGuest()) {
+      await persistNow()
+      lib().set({ status: 'guest', error: null })
+      await refreshList()
+      syncing = null
+      return
+    }
     try {
       do {
         rerun = false
@@ -321,8 +331,53 @@ export function syncNow(): Promise<void> {
   return syncing
 }
 
+/** Satt i gästens databas när exemplen lagts dit, så att de inte kommer tillbaka när man tagit bort dem. */
+const EXAMPLES_KEY = 'bygg:examples'
+
+/** Data-URL för en bild, som bilderna i startvyn sparas. */
+async function dataUrl(url: string): Promise<string> {
+  const blob = await (await fetch(url)).blob()
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(String(reader.result))
+    reader.onerror = () => reject(reader.error)
+    reader.readAsDataURL(blob)
+  })
+}
+
+/**
+ * Utan konto, första gången: några exempelmodeller att prova på (src/examples), märkta
+ * som exempel. Den första i listan ligger överst; FIRST_OPEN öppnas under startvyn.
+ */
+async function addExamples() {
+  if (await idbGet(EXAMPLES_KEY)) return
+  const { EXAMPLES, FIRST_OPEN } = await import('../examples')
+  const now = Date.now()
+  let open: string | null = null
+  for (const [i, e] of EXAMPLES.entries()) {
+    const r = migrate(e.file)
+    if (!r.ok) continue
+    const id = newId()
+    await repo.put({
+      id,
+      name: e.name,
+      file: serialize(r.doc),
+      // En minut isär, så att de står i den ordning de har i EXAMPLES.
+      updatedAt: new Date(now - i * 60_000).toISOString(),
+      baseRevision: null,
+      dirty: false,
+      example: true,
+    })
+    await putThumbnail(id, await dataUrl(e.thumb)).catch(() => {})
+    if (e.name === FIRST_OPEN) open = id
+  }
+  if (open) await repo.setCurrentId(open)
+  await idbSet(EXAMPLES_KEY, true)
+}
+
 /** Öppnar senast använda modell vid start (och flyttar över den gamla enkelmodellen första gången). */
 export async function openInitial() {
+  if (isGuest()) await addExamples().catch((e) => console.warn('[bygg] Kunde inte lägga till exemplen', e))
   await importLegacy(
     repo,
     () => idbGet(LEGACY_KEY),
@@ -464,6 +519,8 @@ export async function duplicateModel(id: string) {
     baseRevision: null,
     dirty: true,
     deleted: undefined,
+    // Kopian är ens egen.
+    example: undefined,
   }
   await repo.put(copy)
   const thumb = await getThumbnail(id).catch(() => undefined)
@@ -613,6 +670,20 @@ function startRouting(): () => void {
     unsubscribeLib()
     unsubscribeView()
     window.removeEventListener('popstate', onPopState)
+  }
+}
+
+/** Loggar ut. Sparar det som går till servern först; modellerna ligger kvar på enheten till nästa inloggning. */
+export async function logout() {
+  await saveNow()
+  await syncNow()
+  try {
+    const r = await fetch('/auth/logout', { method: 'POST' })
+    const { redirect } = (await r.json()) as { redirect: string }
+    await forgetUser()
+    location.assign(redirect)
+  } catch {
+    lib().notify('Det går inte att logga ut utan kontakt med servern.')
   }
 }
 

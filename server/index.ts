@@ -1,23 +1,47 @@
 import { serve } from '@hono/node-server'
 import { serveStatic } from '@hono/node-server/serve-static'
 import { createApp } from './app'
-import { FileStorage } from './storage'
+import { oidcAuth } from './auth'
+import { UserStorages } from './storage'
 
 /**
- * Produktionsserver: API under /api och den byggda appen (dist/) för allt annat.
- * Miljövariabler:
- *   PORT        (8787)
- *   DATA_DIR    (./data)  – här hamnar models/ och trash/
- *   STATIC_DIR  (./dist)
+ * Produktionsserver: API under /api, inloggning under /auth och den byggda appen
+ * (dist/) för allt annat. Sidan är öppen; utan inloggning visar den startsidan
+ * (src/landing), och modellerna nås bara via API:t, som kräver inloggning. Miljövariabler:
+ *   APP_URL             appens publika adress, t.ex. https://bygg.larsabrasha.com
+ *   OIDC_ISSUER         (https://id.larsabrasha.com)
+ *   OIDC_CLIENT_ID      från OIDC-klienten i Pocket ID
+ *   OIDC_CLIENT_SECRET  d:o
+ *   SESSION_SECRET      minst 32 slumpade tecken; signerar cookies (openssl rand -hex 32)
+ *   PORT                (8787)
+ *   DATA_DIR            (./data)  – här hamnar users/<användare>/models, thumbs och trash
+ *   STATIC_DIR          (./dist)
  */
 const port = Number(process.env.PORT ?? 8787)
 const dataDir = process.env.DATA_DIR ?? './data'
 const staticDir = process.env.STATIC_DIR ?? './dist'
 
-const storage = new FileStorage(dataDir)
-await storage.init()
+function required(name: string, check: (v: string) => boolean = (v) => v.length > 0): string {
+  const v = process.env[name] ?? ''
+  if (!check(v)) {
+    console.error(`[bygg] ${name} saknas eller är ogiltig. Servern startar inte utan inloggning.`)
+    process.exit(1)
+  }
+  return v
+}
 
-const app = createApp({ storage })
+const storages = new UserStorages(dataDir)
+const auth = oidcAuth({
+  appUrl: required('APP_URL', (v) => URL.canParse(v)),
+  issuer: process.env.OIDC_ISSUER || 'https://id.larsabrasha.com',
+  clientId: required('OIDC_CLIENT_ID'),
+  clientSecret: required('OIDC_CLIENT_SECRET'),
+  sessionSecret: required('SESSION_SECRET', (v) => v.length >= 32),
+  // Den första som loggar in får modellerna från före inloggningen (se UserStorages).
+  onLogin: (user) => storages.for(user.sub),
+})
+
+const app = createApp({ storages, auth })
 
 // Filer med hash i namnet ändras aldrig; allt annat (index.html, sw.js, manifest)
 // måste kontrolleras varje gång, annars fastnar klienter på en gammal version.

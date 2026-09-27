@@ -1,4 +1,4 @@
-import { del, get, set } from 'idb-keyval'
+import { del, get, set, userHeader } from './localStore'
 
 /**
  * Bilder av modellerna till startvyn. Tas lokalt när modellen sparas och
@@ -40,7 +40,7 @@ export async function uploadThumbnail(id: string, url: string): Promise<'ok' | '
     const png = await (await fetch(url)).blob()
     const r = await fetch(`/api/models/${id}/thumb`, {
       method: 'PUT',
-      headers: { 'content-type': 'image/png' },
+      headers: { ...userHeader(), 'content-type': 'image/png' },
       body: png,
     })
     return r.status === 204 ? 'ok' : r.status === 404 ? 'missing' : 'failed'
@@ -52,7 +52,7 @@ export async function uploadThumbnail(id: string, url: string): Promise<'ok' | '
 /** Serverns bild av modellen som data-URL, eller null om den saknas eller inte går att hämta. */
 export async function downloadThumbnail(id: string): Promise<string | null> {
   try {
-    const r = await fetch(`/api/models/${id}/thumb`)
+    const r = await fetch(`/api/models/${id}/thumb`, { headers: userHeader() })
     if (r.status !== 200 || r.headers.get('content-type') !== 'image/png') return null
     const blob = await r.blob()
     return await new Promise<string>((resolve, reject) => {

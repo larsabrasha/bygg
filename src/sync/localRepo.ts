@@ -1,4 +1,4 @@
-import { del, get, keys, set } from 'idb-keyval'
+import { del, get, keys, set } from './localStore'
 import { migrate, type SavedFile } from '../persist/format'
 import type { ServerModel } from './protocol'
 
@@ -15,6 +15,8 @@ export interface LocalModel {
   dirty: boolean
   /** Borttagen lokalt, väntar på att servern ska ta bort den. */
   deleted?: boolean
+  /** En av exempelmodellerna man får utan konto (src/examples); märks så i startvyn. */
+  example?: boolean
 }
 
 export interface LocalRepo {

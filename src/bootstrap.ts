@@ -11,6 +11,7 @@ import { openInitial, start } from './sync/session'
  */
 
 // Öppna modell bara vid riktig sidladdning; vid HMR har storen redan datan.
+// Vem som är inloggad är redan klart (main.tsx): det avgör vilken lokal lagring modellerna läses från.
 if (!import.meta.hot?.data.loaded) {
   await openInitial()
   if (import.meta.hot) import.meta.hot.data.loaded = true
