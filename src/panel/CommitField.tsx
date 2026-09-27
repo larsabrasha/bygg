@@ -13,6 +13,7 @@ export function CommitField({
   prefix,
   suffix,
   label,
+  placeholder,
   expr = false,
 }: {
   value: string
@@ -26,6 +27,8 @@ export function CommitField({
   suffix?: string
   /** Namn för skärmläsare när fältet saknar synlig etikett. */
   label?: string
+  /** Blek text i ett tomt fält, t.ex. ett exempel. */
+  placeholder?: string
   /** Fältet tar uttryck: föreslå parametrar och visa dem som badges. */
   expr?: boolean
 }) {
@@ -46,6 +49,7 @@ export function CommitField({
   const common = {
     'aria-label': label,
     'aria-invalid': !!error,
+    placeholder,
     inputMode,
     onBlur: save,
     onKeyDown: (e: React.KeyboardEvent<HTMLInputElement>) => {

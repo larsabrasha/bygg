@@ -10,7 +10,7 @@ import {
   type CutPlan,
   type StockLayout,
 } from '../model/cutPlan'
-import { groupByMaterial, type CutList, type CutListRow } from '../model/cutlist'
+import { groupByMaterial, paintText, type CutList, type CutListRow } from '../model/cutlist'
 import { compactNames, compactNumbers } from '../model/cutlistExport'
 import { numberFormat } from '../model/numberFormat'
 import { SHEET } from '../model/partSheet'
@@ -91,6 +91,12 @@ function text(
   doc.setTextColor(opts.gray ?? 0)
   doc.text(s, x, y, { align: opts.align ?? 'left', baseline: opts.baseline ?? 'alphabetic' })
 }
+
+/** Benämningen på en rad: namnen, diametern på en rund del och färgen den målas i. */
+const rowName = (row: CutListRow) =>
+  compactNames(row.names) +
+  (row.round ? ` (Ø ${num.format(row.round.diameter)})` : '') +
+  (row.paint ? `, ${paintText(row.paint)}` : '')
 
 /** Kortar texten med … tills den ryms i bredden (i den storlek och vikt som är vald). */
 function fitText(doc: jsPDF, s: string, width: number): string {
@@ -229,7 +235,7 @@ function drawAssembly(doc: jsPDF, input: DrawingPdfInput) {
     text(doc, String(row.count), cols.ant, base, size, { align: 'right' })
     doc.setFont('helvetica', 'normal')
     doc.setFontSize(size * PT)
-    const name = compactNames(row.names) + (row.round ? ` (Ø ${num.format(row.round.diameter)})` : '')
+    const name = rowName(row)
     text(doc, fitText(doc, name, nameW), cols.name, base, size)
     text(doc, num.format(row.length), cols.l, base, size, { align: 'right' })
     text(doc, num.format(row.width), cols.b, base, size, { align: 'right' })
@@ -343,7 +349,7 @@ function drawCutList(doc: jsPDF, input: DrawingPdfInput) {
   const rowLines = (row: CutListRow) => {
     doc.setFont('helvetica', 'normal')
     doc.setFontSize(3.6 * PT)
-    const name = compactNames(row.names) + (row.round ? ` (Ø ${num.format(row.round.diameter)})` : '')
+    const name = rowName(row)
     const names = doc.splitTextToSize(name, nameW) as string[]
     doc.setFontSize(3.4 * PT)
     const pos = doc.splitTextToSize(posList(row), mx + cw - col.pos) as string[]

@@ -104,7 +104,7 @@ export function buildArScene(bodies: readonly Body[], { manifold, woods }: ArAss
     const solid = manifold && b.tools ? solidGeometry(manifold, b, b.tools).clone() : null
     const geometry = solid ?? (b.shape === 'circle' ? cylinderGeometry(w, d) : new BoxGeometry(w, h, d))
 
-    const wood = woods?.get(b.material)
+    const wood = b.paint ? undefined : woods?.get(b.material)
     let material: MeshStandardMaterial | MeshStandardMaterial[]
     if (wood) {
       let t = textures.get(b.material)
@@ -134,16 +134,18 @@ export function buildArScene(bodies: readonly Body[], { manifold, woods }: ArAss
           }),
       )
     } else {
-      let m = flat.get(b.material)
+      // Målade delar av samma material och färg delar yta.
+      const key = b.paint ? `${b.material} ${b.paint.color}` : b.material
+      let m = flat.get(key)
       if (!m) {
         const { opacity } = materialSpec(b.material)
         m = new MeshStandardMaterial({
-          name: b.material,
-          color: materialColor(b.material),
+          name: b.paint?.code ?? b.material,
+          color: b.paint?.color ?? materialColor(b.material),
           roughness: opacity ? 0.05 : 0.8,
           ...(opacity && { transparent: true, opacity }),
         })
-        flat.set(b.material, m)
+        flat.set(key, m)
       }
       material = m
     }
@@ -151,6 +153,9 @@ export function buildArScene(bodies: readonly Body[], { manifold, woods }: ArAss
     const mesh = new Mesh(geometry, material)
     mesh.name = b.name
     mesh.userData.material = b.material
+    // Färgen i 3MF-filen: den målade, annars materialets.
+    mesh.userData.color = b.paint?.color ?? materialColor(b.material)
+    if (b.paint?.code) mesh.userData.paintCode = b.paint.code
     // Lådan och cylindern har mitten i origo, resultatet från manifold-3d delens origo.
     const q = frameQuaternion(b.frame)
     const center = solid ? new Vector3() : new Vector3((x0 + x1) / 2, (y0 + y1) / 2, (b.z0 + b.z1) / 2)

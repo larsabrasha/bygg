@@ -84,6 +84,7 @@ export function resolveBodies(doc: ModelDocument): Body[] {
       defId: d.id,
       name: d.name,
       material: d.material,
+      ...(d.paint && { paint: d.paint }),
       grainAxis: d.grainAxis,
       thicknessAxis: d.thicknessAxis,
       frame: inst.frame,

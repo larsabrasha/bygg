@@ -4,7 +4,6 @@ import { strToU8, zipSync } from 'three/examples/jsm/libs/fflate.module.js'
 import { mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import type { Body } from '../model/types'
 import { buildArScene, type ArAssets } from './arExport'
-import { materialColor } from './colors'
 
 /**
  * Filer för andra program. GLB är i meter med y uppåt (glTF:s regel, Blender vrider
@@ -22,7 +21,10 @@ export async function exportGlb(bodies: readonly Body[], assets: ArAssets = {}):
 /** En del som trianglar i världens koordinater, i millimeter. */
 export interface PartMesh {
   name: string
+  /** Materialet, eller för en målad del färgens kod ("NCS S 0502-Y") om den finns. */
   material: string
+  /** Färgen som #rrggbb: den målade, annars materialets. */
+  color: string
   geometry: BufferGeometry
 }
 
@@ -44,7 +46,12 @@ export function partMeshes(bodies: readonly Body[], assets: ArAssets, up: 'y' | 
     if (src.index) g.setIndex(src.index.clone())
     const flat = g.index ? g.toNonIndexed() : g
     flat.applyMatrix4(o.matrixWorld)
-    parts.push({ name: o.name, material: String(o.userData.material), geometry: flat })
+    parts.push({
+      name: o.name,
+      material: String(o.userData.paintCode ?? o.userData.material),
+      color: String(o.userData.color),
+      geometry: flat,
+    })
   })
   return parts
 }
@@ -113,7 +120,9 @@ const hex = (c: Color) => `#${c.getHexString().toUpperCase()}`
  */
 export function export3mf(bodies: readonly Body[], assets: ArAssets = {}, title = 'Modell'): Uint8Array<ArrayBuffer> {
   const parts = partMeshes(bodies, assets, 'z')
-  const materials = [...new Set(parts.map((p) => p.material))]
+  // Ett basmaterial per material och färg: två kulörer på samma MDF blir två.
+  const keyOf = (p: PartMesh) => `${p.material}|${p.color}`
+  const materials = [...new Map(parts.map((p) => [keyOf(p), p])).values()]
   const out: string[] = [
     '<?xml version="1.0" encoding="UTF-8"?>',
     '<model unit="millimeter" xml:lang="sv-SE" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">',
@@ -121,13 +130,13 @@ export function export3mf(bodies: readonly Body[], assets: ArAssets = {}, title 
     '<metadata name="Application">Bygg</metadata>',
     '<resources>',
     '<basematerials id="1">',
-    ...materials.map((m) => `<base name="${xml(m)}" displaycolor="${hex(new Color(materialColor(m)))}"/>`),
+    ...materials.map((m) => `<base name="${xml(m.material)}" displaycolor="${hex(new Color(m.color))}"/>`),
     '</basematerials>',
   ]
   parts.forEach((p, i) => {
     const { vertices, triangles } = closedMesh(p.geometry)
     out.push(
-      `<object id="${i + 2}" type="model" name="${xml(p.name)}" pid="1" pindex="${materials.indexOf(p.material)}"><mesh><vertices>`,
+      `<object id="${i + 2}" type="model" name="${xml(p.name)}" pid="1" pindex="${materials.findIndex((m) => keyOf(m) === keyOf(p))}"><mesh><vertices>`,
     )
     for (let v = 0; v < vertices.length; v += 3)
       out.push(`<vertex x="${num(vertices[v]!)}" y="${num(vertices[v + 1]!)}" z="${num(vertices[v + 2]!)}"/>`)

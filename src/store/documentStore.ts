@@ -56,7 +56,7 @@ interface Snapshot {
   future: HistoryEntry[]
 }
 
-export type PartPatch = Partial<Pick<PartDef, 'name' | 'material' | 'grainAxis' | 'thicknessAxis'>>
+export type PartPatch = Partial<Pick<PartDef, 'name' | 'material' | 'grainAxis' | 'thicknessAxis' | 'paint'>>
 
 interface DocumentState extends Snapshot {
   /**
@@ -379,7 +379,10 @@ export const useDocumentStore = create<DocumentState>()((set, get) => {
       const found = findInstance(instanceId)
       if (!found || Object.entries(patch).every(([k, v]) => found.def[k as keyof PartDef] === v)) return
       // Fiber och tjocklek måste ligga på olika axlar; withAxes löser krockar.
-      commit(replaceDef(get().doc, { ...found.def, ...patch, ...withAxes(found.def, patch) }))
+      const def = { ...found.def, ...patch, ...withAxes(found.def, patch) }
+      // paint: undefined tar bort färgen; nyckeln ska inte ligga kvar i dokumentet.
+      if (def.paint === undefined) delete def.paint
+      commit(replaceDef(get().doc, def))
     },
 
     setExtent: (instanceId, axis, text) => {

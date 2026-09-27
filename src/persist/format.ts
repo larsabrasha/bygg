@@ -1,5 +1,5 @@
 import { axesFromLegacyGrain } from '../model/partAxes'
-import type { ModelDocument, StockSettings } from '../model/types'
+import type { ModelDocument, Paint, PartDef, StockSettings } from '../model/types'
 
 /** Höj när formatet ändras, och lägg till en konvertering i migrate. */
 export const FORMAT_VERSION = 7
@@ -103,6 +103,20 @@ function cleanStock(x: unknown): StockSettings | undefined {
   return Object.keys(out).length ? out : undefined
 }
 
+/** Färgen om den ser rimlig ut (#rrggbb, koden en text), annars ingen: delen blir omålad. */
+function cleanPaint(x: unknown): Paint | undefined {
+  if (!isObj(x) || typeof x.color !== 'string' || !/^#[0-9a-f]{6}$/i.test(x.color)) return undefined
+  const code = typeof x.code === 'string' && x.code.trim() ? x.code.trim() : undefined
+  return { color: x.color.toLowerCase(), ...(code && { code }) }
+}
+
+function cleanDefPaint(d: PartDef): PartDef {
+  if (d.paint === undefined) return d
+  const { paint, ...rest } = d
+  const clean = cleanPaint(paint)
+  return clean ? { ...rest, paint: clean } : rest
+}
+
 export type LoadResult = { ok: true; doc: ModelDocument } | { ok: false; reason: string }
 
 /**
@@ -137,9 +151,11 @@ export function migrate(raw: unknown): LoadResult {
   // 6 → 7: combine kan vara en tapp (op 'joint', into). Äldre appar skulle avvisa den.
   // (7) dokumentet kan ha stock (kapschemats lagermått). Frivilligt och ofarligt att tappa, så
   // versionen höjs inte: en server med äldre kod skulle annars neka att spara.
+  // (7) former kan ha paint (färgen delen målas i). Frivilligt och ofarligt att tappa, som stock.
   if (!isModelDocument(doc)) return { ok: false, reason: 'Trasigt dokument' }
-  if (doc.stock === undefined) return { ok: true, doc }
-  const { stock, ...rest } = doc
+  const painted = doc.defs.some((d) => d.paint !== undefined) ? { ...doc, defs: doc.defs.map(cleanDefPaint) } : doc
+  if (painted.stock === undefined) return { ok: true, doc: painted }
+  const { stock, ...rest } = painted
   const clean = cleanStock(stock)
   return { ok: true, doc: clean ? { ...rest, stock: clean } : rest }
 }

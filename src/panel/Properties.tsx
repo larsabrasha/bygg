@@ -13,6 +13,7 @@ import { CommitField } from './CommitField'
 import { Group } from './Group'
 import { dangerButton, field, fieldLabel, primaryButton, secondaryButton, sectionTitle } from './ui'
 import { NothingSelected } from './NothingSelected'
+import { PaintField } from './PaintField'
 import { Tip } from './Tip'
 import { numberFormat } from '../model/numberFormat'
 
@@ -286,6 +287,7 @@ export function Properties() {
                 )}
               </select>
             </label>
+            <PaintField instanceId={body.id} def={def} />
           </Group>
 
           {/* Utan fiber (MDF, glas) följer fälten delens axlar; kaplistan tar det längsta som L. */}

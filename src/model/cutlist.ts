@@ -1,7 +1,7 @@
 import { bodyExtents } from './box'
 import { compareMaterials } from './materials'
 import { cutAxes, extent } from './partAxes'
-import type { Body } from './types'
+import type { Body, Paint } from './types'
 
 export interface CutListRow {
   key: string
@@ -16,6 +16,8 @@ export interface CutListRow {
    */
   round?: { diameter: number; length: number }
   material: string
+  /** Delarna på raden målas i den här färgen. Olika färg blir olika rader. */
+  paint?: Paint
   bodyIds: string[]
   /** Volymen för alla delar på raden, i kubikmeter. */
   volumeM3: number
@@ -35,7 +37,7 @@ const round01 = (n: number) => Math.round(n * 10) / 10
  * Kaplista: L×B×T mäts i varje dels egen riktning (L längs fibern, T tjockleken),
  * så en roterad eller stående del får samma mått som en liggande. Material utan
  * fiber (MDF, glas) har L som det längre av de två måtten som inte är tjockleken.
- * Identiska delar (material + mått) blir en rad med antal.
+ * Identiska delar (material, färg och mått) blir en rad med antal.
  */
 export function buildCutList(bodies: readonly Body[]): CutList {
   const groups = new Map<string, CutListRow>()
@@ -56,7 +58,8 @@ export function buildCutList(bodies: readonly Body[]): CutList {
     const volumeM3 = ((round ? Math.PI / 4 : 1) * length * width * thickness) / 1e9
     totalVolumeM3 += volumeM3
 
-    const key = `${b.material}|${length}|${width}|${thickness}|${round ? 'rund' : ''}`
+    const paint = b.paint ? `${b.paint.color}|${b.paint.code ?? ''}` : ''
+    const key = `${b.material}|${length}|${width}|${thickness}|${round ? 'rund' : ''}|${paint}`
     const row = groups.get(key)
     if (row) {
       row.count++
@@ -73,6 +76,7 @@ export function buildCutList(bodies: readonly Body[]): CutList {
         thickness,
         ...(round && { round }),
         material: b.material,
+        ...(b.paint && { paint: b.paint }),
         bodyIds: [b.id],
         volumeM3,
       })
@@ -109,3 +113,6 @@ export function groupByMaterial(rows: readonly CutListRow[]): MaterialGroup[] {
   }
   return groups
 }
+
+/** "målas NCS S 0502-Y", eller bara "målas" när koden inte är skriven. */
+export const paintText = (paint: Paint) => (paint.code ? `målas ${paint.code}` : 'målas')

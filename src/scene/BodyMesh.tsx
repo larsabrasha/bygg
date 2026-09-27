@@ -94,13 +94,15 @@ function BodyMeshImpl({
     [manifold, body.profile, body.shape, body.z0, body.z1, body.tools, segments],
   )
 
-  const color = materialColor(body.material)
+  // En målad del ritas i sin färg, utan trämönster och ändträ.
+  const painted = body.paint !== undefined
+  const color = body.paint?.color ?? materialColor(body.material)
   // Glas och akryl: genomskinliga, med en blank yta.
   const clear = materialSpec(body.material).opacity
   const wire = look === 'wireframe'
   const real = look === 'realistic' && !ghost
   // Medan texturen laddas ritas trät i sin färg.
-  const wood = useWoodTexture(body.material, real)
+  const wood = useWoodTexture(body.material, real && !painted)
   const grain = AXIS_INDEX[body.grainAxis]
 
   // Cylinderns axel längs n (three.js lägger den längs y). Ändarnas kanter blir cirklar;
@@ -174,7 +176,9 @@ function BodyMeshImpl({
         ...(real &&
           (clear
             ? { roughness: 0.05, metalness: 0 }
-            : { roughness: 0.62, metalness: 0, clearcoat: 0.3, clearcoatRoughness: 0.35 })),
+            : painted
+              ? { roughness: 0.55, metalness: 0 }
+              : { roughness: 0.62, metalness: 0, clearcoat: 0.3, clearcoatRoughness: 0.35 })),
         ...(wood && { map: wood.map, normalMap: wood.normalMap }),
         emissive: lit ? ACCENT : '#000000',
         emissiveIntensity: marked ? 0.45 : lit ? 0.2 : 0,
@@ -204,6 +208,7 @@ function BodyMeshImpl({
     round,
     color,
     clear,
+    painted,
     selected,
     highlightFace,
     preview,
@@ -354,7 +359,8 @@ const sameBody = (a: Body, b: Body) =>
     a.z1 === b.z1 &&
     a.shape === b.shape &&
     a.tools === b.tools &&
-    a.material === b.material)
+    a.material === b.material &&
+    a.paint === b.paint)
 
 /**
  * Under push/pull och flytt skapas nya Body-objekt för alla delar vid varje

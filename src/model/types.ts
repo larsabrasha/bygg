@@ -55,6 +55,15 @@ export interface Sketch {
 }
 
 /**
+ * Färgen en del målas i. color är den som ritas (#rrggbb); code är det man
+ * beställer färgen efter, som man skrev den ("NCS S 0502-Y", "RAL 9010").
+ */
+export interface Paint {
+  color: string
+  code?: string
+}
+
+/**
  * Delens form, delad av alla kopior (som en komponent i SketchUp).
  * Profilen (rektangel, eller cirkel inskriven i den) i u/v, utdragen längs n
  * från z0 till z1, i lokala koordinater. En utdragen cirkel är en cylinder.
@@ -72,6 +81,8 @@ export interface PartDef {
   z0: number
   z1: number
   dims?: DimExprs
+  /** Delen målas: färgen ersätter materialets i 3D-vyn och på ritningen. Måtten påverkas inte. */
+  paint?: Paint
 }
 
 /** Världens axlar: x åt höger, y uppåt, z mot betraktaren (som axelkorset i 3D-vyn). */
@@ -169,6 +180,7 @@ export interface Body {
   defId: string
   name: string
   material: string
+  paint?: Paint
   grainAxis: Axis
   thicknessAxis: Axis
   frame: Frame

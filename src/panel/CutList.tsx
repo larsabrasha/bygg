@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { buildCutList, groupByMaterial, type CutListRow } from '../model/cutlist'
+import { buildCutList, groupByMaterial, paintText, type CutListRow } from '../model/cutlist'
 import { compactNames } from '../model/cutlistExport'
 import { numberFormat } from '../model/numberFormat'
 import { materialColor } from '../scene/colors'
@@ -119,6 +119,19 @@ function Row({ row }: { row: CutListRow }) {
         {/* L×B×T är ämnet; en rund del får sin diameter under namnet. */}
         {row.round && (
           <span className="block text-xs text-muted tabular-nums">Rund, Ø {num.format(row.round.diameter)}</span>
+        )}
+        {/* Kulören får gå ut under måtten, där raden är tom, i stället för att brytas i den smala kolumnen. */}
+        {row.paint && (
+          <span className="relative block h-4">
+            <span className="absolute inset-y-0 left-0 flex items-center gap-1.5 text-xs whitespace-nowrap text-muted">
+              <span
+                className="size-2.5 shrink-0 rounded-full ring-1 ring-black/15 ring-inset"
+                style={{ background: row.paint.color }}
+                aria-hidden
+              />
+              {paintText(row.paint)}
+            </span>
+          </span>
         )}
       </td>
       <td className={dimCol}>{num.format(row.length)}</td>
