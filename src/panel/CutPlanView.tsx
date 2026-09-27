@@ -5,7 +5,7 @@ import {
   countSame,
   groupCount,
   nextStock,
-  purchaseList,
+  materialList,
   stockDims,
   stockNoun,
   type CutPlanGroup,
@@ -62,24 +62,24 @@ function stockSummary(l: StockLayout, sheet: boolean): string {
 
 /**
  * Kapschemat: kaplistans delar utlagda på skivor och brädor, med
- * giljotinsnitt (se model/guillotine). Överst det man ska köpa, sedan en grupp
+ * giljotinsnitt (se model/guillotine). Överst materialet som behövs, sedan en grupp
  * per material och tjocklek. Lagermåtten och sågbladet står som en rad och
  * ändras först när man trycker på Ändra, så att schemat är lugnt att läsa.
  */
 export function CutPlanView({ bodies }: { bodies: readonly Body[] }) {
   const stock = useDocumentStore((s) => s.doc.stock)
   const plan = useMemo(() => buildCutPlan(bodies, stock), [bodies, stock])
-  const purchases = useMemo(() => purchaseList(plan), [plan])
+  const materials = useMemo(() => materialList(plan), [plan])
 
   return (
     <div className="flex flex-col gap-6">
-      {/* Överblicken: det man ska köpa och sågen, som två kort tätt ihop. */}
+      {/* Överblicken: materialet som behövs och sågen, som två kort tätt ihop. */}
       <div className="flex flex-col gap-3">
-        {purchases.length > 0 && (
+        {materials.length > 0 && (
           <div className="flex flex-col gap-1.5 rounded-lg bg-hover px-3 py-2.5">
-            <h3 className={groupTitle}>Att köpa</h3>
+            <h3 className={groupTitle}>Material som behövs</h3>
             <ul className="flex flex-col gap-1 text-[13px]">
-              {purchases.map((p) => (
+              {materials.map((p) => (
                 <li key={p.key} className="flex items-baseline gap-2">
                   <span
                     className="size-2.5 shrink-0 translate-y-px self-start rounded-[3px] ring-1 ring-black/15 ring-inset"
@@ -88,7 +88,7 @@ export function CutPlanView({ bodies }: { bodies: readonly Body[] }) {
                   />
                   <span className="min-w-0 flex-1 tabular-nums">
                     {p.text}
-                    {/* Köps tjockare än delarna ritats. */}
+                    {/* Tjockare än delarna är ritade. */}
                     {p.note && <span className="block text-xs text-muted">{p.note}</span>}
                   </span>
                   {p.length && (
@@ -139,7 +139,7 @@ function SawOptions({ kerf, allowance }: { kerf: number; allowance: number }) {
       />
     </label>
   )
-  // Ett kort som inköpslistan, med ikon, rubrik och pil: inställningen ska synas, inte bara vara en
+  // Ett kort som materiallistan, med ikon, rubrik och pil: inställningen ska synas, inte bara vara en
   // blek rad. Hela kortet öppnar fälten.
   return (
     <div className="rounded-lg bg-hover">
@@ -210,8 +210,8 @@ function GroupView({ group: g, allowance }: { group: CutPlanGroup; allowance: nu
           {g.stocks.map((l, i) => (
             <li key={i}>{stockSummary(l, g.sheet)}</li>
           ))}
-          {/* Standardmåtten är en gissning; det ska synas att de går att ändra till det man köper. */}
-          {g.isDefault && <li className="text-faint">Förslag. Ändra till det du köper.</li>}
+          {/* Standardmåtten är en gissning; det ska synas att de går att ändra till de mått man har. */}
+          {g.isDefault && <li className="text-faint">Förslag. Ändra till dina mått.</li>}
         </ul>
       </div>
 

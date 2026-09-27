@@ -5,7 +5,7 @@ import {
   groupCount,
   isPanel,
   nextStock,
-  purchaseList,
+  materialList,
   stockKey,
   type CutPlanGroup,
   type StockLayout,
@@ -197,7 +197,7 @@ describe('buildCutPlan', () => {
     expect(lengths.stocks.map(names)).toEqual([['lång'], ['kort']])
   })
 
-  it('kapar hellre ur spillet på en skiva man ändå köper än ur en egen bräda', () => {
+  it('kapar hellre ur spillet på en skiva som ändå behövs än ur en egen bräda', () => {
     const table = [
       part('skiva', 1100, 650, 22, { material: 'ek' }),
       part('sarg1', 900, 95, 22, { material: 'ek' }),
@@ -237,7 +237,7 @@ describe('buildCutPlan', () => {
     expect(off.moved.map((p) => p.name)).toEqual(['sockel'])
   })
 
-  it('matbord: förslaget väljer den säljlängd som ger minst att köpa', () => {
+  it('matbord: förslaget väljer den standardlängd som ger minst material', () => {
     const table = [
       ...[1, 2, 3, 4].map((i) => part(`ben${i}`, 720, 70, 70, { material: 'ek' })),
       ...[1, 2].map((i) => part(`lång${i}`, 1600, 100, 22, { material: 'ek' })),
@@ -250,7 +250,7 @@ describe('buildCutPlan', () => {
     // Bordsskivan på en limfogsskiva i sitt eget mått, utan spill.
     expect(top!.stocks.map((l) => [l.stock.length, l.stock.width, l.boards.length])).toEqual([[1800, 900, 1]])
     expect(top!.waste).toBeCloseTo(0)
-    // En lång och en kort sarg per bräda om 2400 räcker; längre brädor ger inte mindre att köpa.
+    // En lång och en kort sarg per bräda om 2400 räcker; längre brädor ger inte mindre material.
     expect(rails!.stocks.map((l) => [l.stock.length, l.boards.length])).toEqual([[2400, 2]])
   })
 
@@ -281,7 +281,7 @@ describe('isPanel', () => {
   })
 })
 
-describe('purchaseList', () => {
+describe('materialList', () => {
   it('ger antal och mått per lagermått, med löpmeter för brädor', () => {
     const plan = buildCutPlan([
       part('ben1', 1300, 45, 45),
@@ -291,7 +291,7 @@ describe('purchaseList', () => {
     // Två 1300-ben ryms inte på en 2400-bräda, men på en om 2700: 1300 + 3 + 1300 + 2 × 20 = 2643.
     // Tusentalsavgränsaren är ett hårt mellanslag; här jämförs den som vanligt mellanslag.
     const plain = (s?: string) => s?.replace(/\s/g, ' ')
-    expect(purchaseList(plan).map(({ text, length }) => [plain(text), plain(length)])).toEqual([
+    expect(materialList(plan).map(({ text, length }) => [plain(text), plain(length)])).toEqual([
       ['1 bräda furu 45 × 45 × 2 700', '2,7 m'],
       ['1 skiva plywood 18 × 1 220 × 2 440', undefined],
     ])
@@ -301,7 +301,7 @@ describe('purchaseList', () => {
     const plan = buildCutPlan([part('lång', 3000, 95, 22)], {
       sizes: { [stockKey('furu', 22)]: [{ length: 2400, width: 95 }] },
     })
-    expect(purchaseList(plan)).toEqual([])
+    expect(materialList(plan)).toEqual([])
   })
 })
 
@@ -333,7 +333,7 @@ describe('nextStock', () => {
 })
 
 describe('svenska standardmått', () => {
-  it('köper den minsta standardtjocklek som räcker och säger att delarna hyvlas ner', () => {
+  it('väljer den minsta standardtjocklek som räcker och säger att delarna hyvlas ner', () => {
     const plan = buildCutPlan([
       part('hylla', 700, 95, 20),
       part('skiva', 1000, 400, 22),
@@ -341,13 +341,13 @@ describe('svenska standardmått', () => {
       part('ben', 700, 45, 45),
     ])
     const plain = (s?: string) => s?.replace(/\s/g, ' ')
-    expect(purchaseList(plan).map(({ text, note }) => [plain(text), plain(note)])).toEqual([
-      // Hyvlat virke: 45 finns, 20 köps som 22.
+    expect(materialList(plan).map(({ text, note }) => [plain(text), plain(note)])).toEqual([
+      // Hyvlat virke: 45 finns, 20 tas ur 22.
       ['1 bräda furu 45 × 45 × 1 800', undefined],
       // Limfog av furu finns i 18 och 27: en del om 22 kräver 27.
       ['1 skiva furu 27 × 400 × 1 200', 'delarna 22 mm; limfog finns i 18 och 27'],
       ['1 bräda furu 22 × 95 × 1 800', 'delarna 20 mm, hyvlas ner'],
-      // Plywood: 20 köps som 21.
+      // Plywood: 20 tas ur 21.
       ['1 skiva plywood 21 × 1 220 × 2 440', 'delarna 20 mm; plywood finns i 18 och 21'],
     ])
   })

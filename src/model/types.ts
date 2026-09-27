@@ -117,7 +117,7 @@ export interface Param {
   value: number
 }
 
-/** Måtten på det man köper: en skiva eller bräda. length längs fibern. */
+/** Lagermåttet: en skiva eller bräda. length längs fibern. */
 export interface StockSize {
   length: number
   width: number

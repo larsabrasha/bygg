@@ -1,8 +1,9 @@
 import { Trash2 } from 'lucide-react'
+import { useState } from 'react'
 import { useDocumentStore } from '../store/documentStore'
 import { EmptyState } from './EmptyState'
 import { PushPullPicture } from './pictures'
-import { quietDangerButton } from './ui'
+import { dangerButton, quietDangerButton, secondaryButton } from './ui'
 
 const ICON_SM = { size: 16, strokeWidth: 1.75, 'aria-hidden': true } as const
 
@@ -38,9 +39,41 @@ function Hints({ items, className }: { items: [string, string][]; className: str
   )
 }
 
+/** Rensa modellen, med en fråga först: knappen byts mot Rensa och Avbryt på samma plats. */
+function ClearModel() {
+  const clearDocument = useDocumentStore((s) => s.clearDocument)
+  const [asking, setAsking] = useState(false)
+  if (!asking)
+    return (
+      <button className={`${quietDangerButton} mt-auto self-start`} onClick={() => setAsking(true)}>
+        <Trash2 {...ICON_SM} />
+        Rensa modellen
+      </button>
+    )
+  return (
+    <div className="mt-auto flex flex-col gap-2" role="group" aria-label="Rensa modellen">
+      <p className="text-[13px] text-ink">Ta bort alla delar och skisser? Du kan ångra efteråt.</p>
+      <div className="flex gap-2">
+        <button
+          className={dangerButton}
+          onClick={() => {
+            setAsking(false)
+            clearDocument()
+          }}
+        >
+          <Trash2 {...ICON_SM} />
+          Rensa
+        </button>
+        <button className={secondaryButton} onClick={() => setAsking(false)} autoFocus>
+          Avbryt
+        </button>
+      </div>
+    </div>
+  )
+}
+
 /** Egenskaper när inget är valt: vad man kan göra, och Rensa modellen längst ner. */
 export function NothingSelected({ isEmpty }: { isEmpty: boolean }) {
-  const clearDocument = useDocumentStore((s) => s.clearDocument)
   return (
     <div className="flex flex-1 flex-col gap-5">
       <EmptyState picture={<PushPullPicture />} title={isEmpty ? 'Börja med en skiss' : 'Inget valt'}>
@@ -50,12 +83,7 @@ export function NothingSelected({ isEmpty }: { isEmpty: boolean }) {
       </EmptyState>
       <Hints items={KEYS} className="self-center pointer-coarse:hidden" />
       <Hints items={GESTURES} className="hidden self-center pointer-coarse:grid" />
-      {!isEmpty && (
-        <button className={`${quietDangerButton} mt-auto self-start`} onClick={clearDocument}>
-          <Trash2 {...ICON_SM} />
-          Rensa modellen
-        </button>
-      )}
+      {!isEmpty && <ClearModel />}
     </div>
   )
 }

@@ -4,7 +4,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import {
   countSame,
   groupCount,
-  purchaseList,
+  materialList,
   stockDims,
   stockNoun,
   type CutPlan,
@@ -419,14 +419,14 @@ function drawCutPlan(doc: jsPDF, input: DrawingPdfInput, plan: CutPlan) {
   intro.forEach((s, i) => text(doc, s, mx, y + i * 4.4, 3.2, { gray: 34 }))
   y += (intro.length - 1) * 4.4 + 4
 
-  // Att köpa: en rad per lagermått, med en ruta att bocka av i bygghandeln. Löpmetern står efter
-  // måttet, och en notis om hyvling på en egen rad under.
-  const purchases = purchaseList(plan)
-  if (purchases.length > 0) {
+  // Materialet som behövs: en rad per lagermått, med en ruta att bocka av i förrådet eller
+  // bygghandeln. Löpmetern står efter måttet, och en notis om hyvling på en egen rad under.
+  const materials = materialList(plan)
+  if (materials.length > 0) {
     y += 6
-    text(doc, 'ATT KÖPA', mx, y + 3, 2.6, { bold: true, gray: 51 })
+    text(doc, 'MATERIAL SOM BEHÖVS', mx, y + 3, 2.6, { bold: true, gray: 51 })
     y += 5
-    for (const p of purchases) {
+    for (const p of materials) {
       doc.setLineWidth(0.3)
       doc.setDrawColor(0)
       doc.rect(mx, y + 1.2, 3.4, 3.4)

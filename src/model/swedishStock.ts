@@ -1,7 +1,7 @@
 /**
  * Svenska handelsmått för virke och skivor, i mm. Kapschemat föreslår lagermått
- * härifrån, och tjockleken man köper är den närmaste standardtjockleken som
- * räcker för delen (en del ritad 20 tjock köps som 22 och hyvlas ner).
+ * härifrån, och tjockleken på virket är den närmaste standardtjockleken som
+ * räcker för delen (en del ritad 20 tjock tas ur 22 och hyvlas ner).
  *
  * Källor (september 2026):
  * - Längder: Träguiden, "Dimensioner": virke kapas i 1 800, 2 100 och 2 400–5 400 mm,

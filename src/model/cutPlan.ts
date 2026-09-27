@@ -4,7 +4,7 @@ import { fitsBin, packGuillotine, type PackItem } from './guillotine'
 import { BOARD, PANEL, panelThicknesses, SHEET, standardThickness } from './swedishStock'
 import type { Body, StockSettings, StockSize } from './types'
 
-/** Material som köps som skivor. Övriga köps som brädor eller limfogsskivor av massivt trä. */
+/** Material som finns som skivor. Övriga finns som brädor eller limfogsskivor av massivt trä. */
 export const SHEET_MATERIALS: readonly string[] = ['plywood']
 
 export const DEFAULT_KERF = 3
@@ -15,7 +15,7 @@ const SHEET_SIZE: StockSize = { length: SHEET.length, width: SHEET.width }
 
 const MAX_BOARD_WIDTH = BOARD.widths.at(-1)!
 
-/** Köps som skiva (skivmaterial eller limfogsskiva, bredare än någon bräda) eller som bräda. */
+/** Tas ur en skiva (skivmaterial eller limfogsskiva, bredare än någon bräda) eller som bräda. */
 export const isPanel = (sheet: boolean, stock: StockSize) => sheet || stock.width > MAX_BOARD_WIDTH
 
 /**
@@ -85,9 +85,9 @@ export interface PlacedPiece {
 export interface StockLayout {
   /** Lagermåttet, med trim alltid satt (inställt eller standard). */
   stock: StockSize & { trim: number }
-  /** Köps som skiva, inte som bräda (isPanel). */
+  /** Tas ur en skiva, inte ur en bräda (isPanel). */
   panel: boolean
-  /** Tjockleken man köper: den minsta svenska standardtjockleken som räcker för delarna. */
+  /** Virkets tjocklek: den minsta svenska standardtjockleken som räcker för delarna. */
   thickness: number
   /** En lista per skiva eller bräda. */
   boards: PlacedPiece[][]
@@ -146,7 +146,7 @@ const MAX_MOVES = 200
  * plats på (vid lika bredd det kortaste), så att smala delar tas ur brädor och
  * breda ur skivor. Sedan flyttas delarna på en bräda eller skiva, en i taget
  * med den minst fyllda först, till ett annat mått om det minskar ytan som
- * behöver köpas: en sockel kapas hellre ur spillet på en skiva man ändå köper
+ * går åt: en sockel kapas hellre ur spillet på en skiva som ändå behövs
  * än ur en egen bräda. Ytan, inte priset, eftersom priserna inte är kända.
  * Användaren kan välja bort det per grupp (noLeftover); moved säger vilka delar det gäller.
  */
@@ -208,7 +208,7 @@ export function buildCutPlan(bodies: readonly Body[], settings: StockSettings = 
         kerf,
       )
 
-    // I ett förslag får brädor och limfogsskivor den standardlängd som ger minst att köpa:
+    // I ett förslag får brädor och limfogsskivor den standardlängd som ger minst material:
     // fyra ben om 720 ryms på en bräda om 3000 i stället för två om 2400. Vid lika den kortaste.
     if (!saved && !sheet) {
       stocks.forEach((stock, i) => {
@@ -228,7 +228,7 @@ export function buildCutPlan(bodies: readonly Body[], settings: StockSettings = 
     let packed = stocks.map((_, i) => pack(i, assign))
     const first = { assign, packed }
 
-    // Flytta delarna på en bräda eller skiva till ett annat mått, om det minskar ytan att köpa.
+    // Flytta delarna på en bräda eller skiva till ett annat mått, om det minskar ytan som går åt.
     const fill = (board: readonly { width: number; height: number }[]) =>
       board.reduce((sum, p) => sum + p.width * p.height, 0)
     let moves = 0
@@ -337,7 +337,7 @@ export function countSame(texts: readonly string[]): string[] {
 const mm = numberFormat(1, true)
 const meters = numberFormat(1, true)
 
-export interface Purchase {
+export interface MaterialLine {
   key: string
   material: string
   /** Antal skivor eller brädor. */
@@ -346,19 +346,19 @@ export interface Purchase {
   text: string
   /** Löpmeter för brädor ("4,8 m"); saknas för skivor. */
   length?: string
-  /** När man köper tjockare än delarna är ritade (thicknessNote). */
+  /** När virket är tjockare än delarna är ritade (thicknessNote). */
   note?: string
 }
 
 /**
- * När man köper tjockare än delarna är ritade. Brädor hyvlas ner. En limfogsskiva
+ * När virket är tjockare än delarna är ritade. Brädor hyvlas ner. En limfogsskiva
  * hyvlar få hemma, och plywood går inte: där står i stället tjocklekarna som finns,
  * så att man kan rita om delarna.
  */
 function thicknessNote(g: CutPlanGroup, l: StockLayout): string {
   const drawn = `delarna ${mm.format(g.thickness)} mm`
   if (!l.panel) return `${drawn}, hyvlas ner`
-  // De två närmaste som finns: den tunnare och den man köper.
+  // De två närmaste som finns: den tunnare och den som används.
   const list = g.sheet ? SHEET.thicknesses : panelThicknesses(g.material)
   const thinner = list.filter((t) => t < g.thickness).at(-1)
   const near = [thinner, l.thickness].filter((t) => t !== undefined).map((t) => mm.format(t))
@@ -369,8 +369,8 @@ function thicknessNote(g: CutPlanGroup, l: StockLayout): string {
 export const stockDims = (l: StockLayout) =>
   [l.thickness, l.stock.width, l.stock.length].map((n) => mm.format(n)).join(' × ')
 
-/** Det som ska köpas: antal skivor och brädor per material, tjocklek och lagermått. */
-export function purchaseList(plan: CutPlan): Purchase[] {
+/** Materialet som behövs: antal skivor och brädor per material, tjocklek och lagermått. */
+export function materialList(plan: CutPlan): MaterialLine[] {
   return plan.groups.flatMap((g) =>
     g.stocks
       .filter((l) => l.boards.length > 0)
