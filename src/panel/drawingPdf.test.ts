@@ -44,6 +44,19 @@ describe('buildDrawingPdf', () => {
     expect(pages.slice(1).every((p) => p === 'stående')).toBe(true)
   })
 
+  it('säger till före varje blad och när alla är klara, med lika många blad som i titelrutan', async () => {
+    const calls: [number, number][] = []
+    const one = { ...input(3), sheets: 3, cutPlan: buildCutPlan(bodiesOf(3)) }
+    await buildDrawingPdf(one, (done, total) => void calls.push([done, total]))
+    // Sammanställningen, kaplistan och kapschemat (inga SVG-blad i testet).
+    expect(calls).toEqual([
+      [0, 3],
+      [1, 3],
+      [2, 3],
+      [3, 3],
+    ])
+  })
+
   it('kapschemat sist, liggande, och fler sidor när brädorna inte ryms', async () => {
     const one = { ...input(3), sheets: 4, cutPlan: buildCutPlan(bodiesOf(3)) }
     expect(await pageSizes(await buildDrawingPdf(one))).toEqual(['liggande', 'stående', 'liggande'])

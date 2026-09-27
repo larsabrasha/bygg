@@ -1,4 +1,3 @@
-import { Loader2 } from 'lucide-react'
 import { useEffect, useEffectEvent, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import type { PDFDocumentProxy } from 'pdfjs-dist'
 import { loadPdfjs } from './pdfjs'
@@ -51,9 +50,11 @@ interface Props {
   onPrint: () => void
   /** Dela (pekskärm) eller ladda ner (dator), med ikon och text. */
   share: { label: string; icon: ReactNode; onClick: () => void }
+  /** Det som visas medan PDF:en läses, innan första sidan kan ritas. */
+  loading: ReactNode
 }
 
-export default function PdfViewer({ file, onClose, onPrint, share }: Props) {
+export default function PdfViewer({ file, onClose, onPrint, share, loading }: Props) {
   const [doc, setDoc] = useState<PDFDocumentProxy | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [pages, setPages] = useState<{ w: number; h: number }[]>([])
@@ -280,10 +281,8 @@ export default function PdfViewer({ file, onClose, onPrint, share }: Props) {
         {error ? (
           <p className="p-6 text-sm text-danger">Kunde inte visa ritningen: {error}</p>
         ) : !doc ? (
-          // Samma text som medan PDF:en skapas (Drawing): för den som tittar är det ett och samma steg.
-          <p className="flex h-full items-center justify-center gap-2 p-6 text-sm text-ink/70">
-            <Loader2 size={18} className="animate-spin" aria-hidden /> Laddar…
-          </p>
+          // Samma förlopp som medan PDF:en skapas (Drawing): för den som tittar är det ett och samma steg.
+          <div className="flex h-full items-center justify-center p-6 text-sm text-ink/70">{loading}</div>
         ) : (
           <div ref={content} className="flex w-max min-w-full flex-col items-center" style={{ gap: GAP, padding: GAP }}>
             {pages.map((p, i) => (

@@ -68,17 +68,36 @@ const OY = (PAGE.h - SHEET.height) / 2
 /** jsPDF tar textens storlek i punkter; här anges den i mm. */
 const PT = 72 / 25.4
 
-export async function buildDrawingPdf(input: DrawingPdfInput): Promise<Blob> {
+/**
+ * onSheet(klara, alla) före varje blad och när alla är klara: för en förloppsstapel. Den
+ * som anropar kan vänta in att stapeln ritats (bladen räknas annars utan paus emellan).
+ */
+export async function buildDrawingPdf(
+  input: DrawingPdfInput,
+  onSheet?: (done: number, total: number) => Promise<void> | void,
+): Promise<Blob> {
   const doc = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'landscape', compress: true })
   doc.setProperties({ title: `${input.name} – ritning` })
+  // Sammanställningen, SVG-bladen, kaplistan (en eller flera sidor) och kapschemat.
+  const total = 1 + input.svgSheets.length + 1 + (input.cutPlan ? 1 : 0)
+  let done = 0
+  const next = async () => void (await onSheet?.(done++, total))
+  await next()
   drawAssembly(doc, input)
   for (const sheet of input.svgSheets) {
+    await next()
     doc.addPage('a4', 'landscape')
     await drawSvg(doc, sheet)
   }
+  await next()
   drawCutList(doc, input)
-  if (input.cutPlan) drawCutPlan(doc, input, input.cutPlan)
-  return doc.output('blob')
+  if (input.cutPlan) {
+    await next()
+    drawCutPlan(doc, input, input.cutPlan)
+  }
+  const blob = doc.output('blob')
+  await next()
+  return blob
 }
 
 /** Text i mm; färgen som gråskala (0 svart). */

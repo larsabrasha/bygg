@@ -1,5 +1,6 @@
-import { FileDown, Loader2, Share } from 'lucide-react'
+import { FileDown, Share } from 'lucide-react'
 import { lazy, Suspense, useEffect, useEffectEvent, useMemo, useRef, useState, type ReactNode } from 'react'
+import { flushSync } from 'react-dom'
 import { buildCutList } from '../model/cutlist'
 import { overallSize } from '../model/drawing'
 import { explodeOffsets } from '../model/explode'
@@ -18,6 +19,7 @@ import { MainViewsSheet } from './MainViewsSheet'
 import { useCutPlan } from './useCutPlan'
 import { PartSheet } from './PartSheet'
 import { DrawingBar } from './DrawingBar'
+import { ProgressBar } from './ProgressBar'
 import { ICON, primaryButton } from './ui'
 
 const num = numberFormat(1, true)
@@ -42,6 +44,21 @@ const SETTLE_MS = 400
 
 /** Den hopsatta modellen: inget flyttat. */
 const ASSEMBLED = new Map<string, Vec3>()
+
+/**
+ * Förloppsstapelns delar: bilderna, väntan på att de står still (SETTLE_MS) och bladen i
+ * PDF:en. Resten är visaren, som läser PDF:en och ritar första sidan. Ungefär som tiden
+ * fördelade sig för en bokhylla med 150 delar, på dator och med fyra gånger långsammare
+ * processor (som en mobil): bilderna drygt hälften, bladen en tredjedel, visaren resten.
+ */
+const SHARE = { images: 0.35, settle: 0.2, sheets: 0.3 }
+
+/** Till nästa gång skärmen ritats om, eller högst 100 ms (en dold flik ritas inte om). */
+const nextPaint = () =>
+  new Promise<void>((resolve) => {
+    requestAnimationFrame(() => setTimeout(resolve))
+    setTimeout(resolve, 100)
+  })
 
 /** Hur skarp JPEG:en i PDF:en blir (0–1). Vid 0,92 syns JPEG-fläckar vid kanterna först vid stor förstoring. */
 const JPEG_QUALITY = 0.92
@@ -139,6 +156,8 @@ function DrawingView() {
   const [file, setFile] = useState<File | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [attempt, setAttempt] = useState(0)
+  // Bladen i PDF:en: hur många som är klara, av hur många.
+  const [sheetsDone, setSheetsDone] = useState<{ done: number; total: number } | null>(null)
   // Visaren och pdf.js laddas medan PDF:en skapas, så att den visas direkt när den är klar.
   useEffect(() => {
     void import('./PdfViewer')
@@ -179,52 +198,55 @@ function DrawingView() {
   const sheets = (size ? 2 : 1) + details.length + 1 + (cutPlan ? 1 : 0)
   const date = new Date().toLocaleDateString('sv-SE')
 
-  /** PDF:en för modellen, med bilderna som de ritats. */
-  const buildPdfFile = async (): Promise<File> => {
+  /** PDF:en för modellen, med bilderna som de ritats. onSheet: se buildDrawingPdf. */
+  const buildPdfFile = async (onSheet: (done: number, total: number) => Promise<void>): Promise<File> => {
     const { buildDrawingPdf } = await import('./drawingPdf')
     const picture = (c: HTMLCanvasElement | undefined, w?: number, h?: number) =>
       c && c.width > 0 ? { url: jpegOnWhite(c), width: w ?? c.width, height: h ?? c.height } : undefined
     // Ballongerna ligger i bildens CSS-pixlar (layout), canvasen i skärmens pixlar: samma form.
     const exploded = picture(canvases.current.exploded, layout?.width, layout?.height)
-    const blob = await buildDrawingPdf({
-      name,
-      date,
-      sheets,
-      size: size ? `${num.format(size.width)} × ${num.format(size.depth)} × ${num.format(size.height)}` : '–',
-      positions,
-      cutList,
-      cutPlan,
-      exploded: exploded && { ...exploded, layout },
-      assembled: picture(canvases.current.assembled),
-      svgSheets: [
-        ...(size
-          ? [
-              <MainViewsSheet
-                key="main"
-                size={size}
-                images={mainImages}
-                modelName={name}
-                date={date}
-                count={cutList.totalCount}
-                sheet={2}
-                sheets={sheets}
-              />,
-            ]
-          : []),
-        ...details.map(({ row, geometry }, i) => (
-          <PartSheet
-            key={row.key}
-            pos={i + 1}
-            row={row}
-            geometry={geometry}
-            modelName={name}
-            date={date}
-            sheet={(size ? 3 : 2) + i}
-            sheets={sheets}
-          />
-        )),
-      ],
-    })
+    const blob = await buildDrawingPdf(
+      {
+        name,
+        date,
+        sheets,
+        size: size ? `${num.format(size.width)} × ${num.format(size.depth)} × ${num.format(size.height)}` : '–',
+        positions,
+        cutList,
+        cutPlan,
+        exploded: exploded && { ...exploded, layout },
+        assembled: picture(canvases.current.assembled),
+        svgSheets: [
+          ...(size
+            ? [
+                <MainViewsSheet
+                  key="main"
+                  size={size}
+                  images={mainImages}
+                  modelName={name}
+                  date={date}
+                  count={cutList.totalCount}
+                  sheet={2}
+                  sheets={sheets}
+                />,
+              ]
+            : []),
+          ...details.map(({ row, geometry }, i) => (
+            <PartSheet
+              key={row.key}
+              pos={i + 1}
+              row={row}
+              geometry={geometry}
+              modelName={name}
+              date={date}
+              sheet={(size ? 3 : 2) + i}
+              sheets={sheets}
+            />
+          )),
+        ],
+      },
+      onSheet,
+    )
     return new File([blob], `${name.replace(/[\\/:*?"<>|]/g, '').trim() || 'Modell'} – ritning.pdf`, {
       type: 'application/pdf',
     })
@@ -245,7 +267,13 @@ function DrawingView() {
     if (!ready || file) return
     let live = true
     const timer = setTimeout(() => {
-      build().then(
+      // Stapeln ritas om mellan bladen; annars syns den först när PDF:en är klar.
+      const onSheet = async (done: number, total: number) => {
+        if (!live) return
+        flushSync(() => setSheetsDone({ done, total }))
+        await nextPaint()
+      }
+      build(onSheet).then(
         (f) => live && setFile(f),
         (e: unknown) => {
           console.error('[bygg] Kunde inte skapa PDF', e)
@@ -265,13 +293,36 @@ function DrawingView() {
   const ShareIcon = TOUCH ? Share : FileDown
 
   const shareButton = { label: TOUCH ? 'Dela PDF' : 'Ladda ner PDF', icon: <ShareIcon {...ICON} /> }
+  // Förloppet: först bilderna (de som är klara av dem PDF:en väntar på), sedan bladen, sist visaren.
+  const imagesReady = [
+    layout !== null,
+    Object.keys(mainImages).length === shots.length,
+    !needsManifold || manifold !== null,
+    plan !== null && !planStale,
+  ]
+  const progress = file
+    ? { label: 'Visar ritningen…', value: SHARE.images + SHARE.settle + SHARE.sheets }
+    : sheetsDone
+      ? {
+          label: `Blad ${Math.min(sheetsDone.done + 1, sheetsDone.total)} av ${sheetsDone.total}`,
+          value: SHARE.images + SHARE.settle + (SHARE.sheets * sheetsDone.done) / sheetsDone.total,
+        }
+      : ready
+        ? // Väntan har en känd längd: stapeln glider fram under den.
+          { label: 'Ritar bilderna…', value: SHARE.images + SHARE.settle, glide: SETTLE_MS }
+        : {
+            label: 'Ritar bilderna…',
+            value: (SHARE.images * imagesReady.filter(Boolean).length) / imagesReady.length,
+          }
   const waiting = (
     <Waiting
       onClose={close}
       share={shareButton}
       error={error}
+      progress={progress}
       onRetry={() => {
         setError(null)
+        setSheetsDone(null)
         setAttempt((a) => a + 1)
       }}
     />
@@ -312,6 +363,7 @@ function DrawingView() {
           <Suspense fallback={waiting}>
             <PdfViewer
               file={file}
+              loading={<ProgressBar {...progress} />}
               onClose={close}
               onPrint={() => print(file)}
               share={{ ...shareButton, onClick: () => share(file) }}
@@ -326,18 +378,20 @@ function DrawingView() {
 }
 
 /**
- * Medan ritningen skapas: samma verktygsrad som visaren (knapparna gråa) och en snurra,
- * eller felet och Försök igen.
+ * Medan ritningen skapas: samma verktygsrad som visaren (knapparna gråa) och hur långt
+ * det har kommit, eller felet och Försök igen.
  */
 function Waiting({
   onClose,
   error,
   onRetry,
   share,
+  progress,
 }: {
   onClose: () => void
   error: string | null
   onRetry: () => void
+  progress: { label: string; value: number; glide?: number }
   share: { label: string; icon: ReactNode }
 }) {
   const onKey = useEffectEvent((e: KeyboardEvent) => {
@@ -360,9 +414,7 @@ function Waiting({
             </button>
           </>
         ) : (
-          <p className="flex items-center gap-2">
-            <Loader2 size={18} className="animate-spin" aria-hidden /> Laddar…
-          </p>
+          <ProgressBar {...progress} />
         )}
       </div>
     </div>
