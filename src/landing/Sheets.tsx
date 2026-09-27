@@ -4,12 +4,12 @@ import { MainViewsSheet } from '../panel/MainViewsSheet'
 import { PartSheet } from '../panel/PartSheet'
 import type { OrthoShot } from '../scene/OrthoRenderer'
 import { bord, bordCutList, bordDrawing } from './models'
-import { useInView } from './useInView'
+import { useInView, useMedia } from './useInView'
 
 /**
  * Riktiga blad ur ritningen av bordet, som en bunt papper: huvudvyerna och
- * två detaljblad. Bunten bläddras av sig själv medan den syns, och ett tryck tar
- * nästa blad. Bladen är appens egna (panel/MainViewsSheet och PartSheet).
+ * två detaljblad. Bunten bläddras av sig själv medan den syns (inte för den som bett om
+ * minskad rörelse), och ett tryck tar nästa blad. Bladen är appens egna (panel/MainViewsSheet och PartSheet).
  */
 
 // Bilderna i huvudvyerna tas med three.js, som laddas först när bunten närmar sig.
@@ -63,6 +63,7 @@ export function Sheets() {
   const [paused, setPaused] = useState(false)
   // Har man bläddrat själv bläddrar bunten inte längre av sig själv.
   const [manual, setManual] = useState(false)
+  const reduced = useMedia('(prefers-reduced-motion: reduce)')
 
   const shots = useMemo((): OrthoShot[] => {
     const views = layoutMainViews(size)
@@ -96,7 +97,7 @@ export function Sheets() {
   }
 
   useEffect(() => {
-    if (!near || paused || manual) return
+    if (!near || paused || manual || reduced) return
     const t = setTimeout(() => goTo((top + 1) % PAGES.length), NEXT_MS)
     return () => clearTimeout(t)
   })
