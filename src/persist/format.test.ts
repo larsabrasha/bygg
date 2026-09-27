@@ -111,7 +111,12 @@ describe('lagermått', () => {
         kerf: 2.5,
         lengthAllowance: 20,
         noLeftover: ['ek|22'],
-        sizes: { 'ek|22': [{ length: 2400, width: 145, trim: 25 }, { length: 2400, width: 600 }] },
+        sizes: {
+          'ek|22': [
+            { length: 2400, width: 145, trim: 25 },
+            { length: 2400, width: 600 },
+          ],
+        },
       },
     }
     expect(migrate(JSON.parse(JSON.stringify(serialize(withStock))))).toEqual({ ok: true, doc: withStock })
@@ -135,7 +140,10 @@ describe('lagermått', () => {
         sizes: {
           'ek|22': { length: 'lång', width: 145 },
           'ek|28': { length: 2400, width: 145, trim: -5 },
-          'ek|18': [{ length: 2400, width: 600 }, { length: 0, width: 95 }],
+          'ek|18': [
+            { length: 2400, width: 600 },
+            { length: 0, width: 95 },
+          ],
         },
       },
     }
@@ -144,5 +152,32 @@ describe('lagermått', () => {
       doc: { ...doc, stock: { sizes: { 'ek|18': [{ length: 2400, width: 600 }] } } },
     })
     expect(migrate({ version: FORMAT_VERSION, savedAt: '', doc: { ...doc, stock: 'x' } })).toEqual({ ok: true, doc })
+  })
+
+  it('version 7: tappar från länkade ben in i samma skiva får en grupp, andra inte', () => {
+    const at = (x: number, y: number, z: number) => ({ ...GROUND_FRAME, origin: [x, y, z] as [number, number, number] })
+    const part = (id: string) => ({ ...doc.defs[0]!, id, name: id })
+    const joint = (host: string, into = 'skiva') => ({ op: 'joint' as const, host, into })
+    const old: ModelDocument = {
+      ...doc,
+      defs: [part('ben'), part('skiva'), part('t1'), part('t2'), part('t3')],
+      instances: [
+        { id: 'ben1', defId: 'ben', frame: at(0, 0, 0) },
+        { id: 'ben2', defId: 'ben', frame: at(500, 0, 0) },
+        { id: 'skiva', defId: 'skiva', frame: at(0, 700, 0) },
+        // Samma ställe på var sitt ben: en grupp. Den tredje sitter på ett annat ställe.
+        { id: 'a', defId: 't1', frame: at(10, 700, 5), combine: joint('ben1') },
+        { id: 'b', defId: 't2', frame: at(510, 700, 5), combine: joint('ben2') },
+        { id: 'c', defId: 't3', frame: at(520, 700, 5), combine: joint('ben2') },
+      ],
+    }
+    const r = migrate({ version: 7, doc: old })
+    if (!r.ok) throw new Error(r.reason)
+    const group = (id: string) => r.doc.instances.find((i) => i.id === id)!.combine!.group
+    expect(group('a')).toBeDefined()
+    expect(group('b')).toBe(group('a'))
+    expect(group('c')).toBeUndefined()
+    // En fil i nuvarande format ändras inte: där är grupperna uttryckliga.
+    expect(migrate({ version: FORMAT_VERSION, doc: old })).toEqual({ ok: true, doc: old })
   })
 })

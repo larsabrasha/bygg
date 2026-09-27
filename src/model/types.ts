@@ -1,3 +1,4 @@
+import type { MaterialSpec } from './materials'
 /** Alla mått i millimeter. */
 export type Vec3 = [number, number, number]
 export type Vec2 = [number, number]
@@ -55,6 +56,15 @@ export interface Sketch {
 }
 
 /**
+ * Färgen en del målas i. color är den som ritas (#rrggbb); code är det man
+ * beställer färgen efter, som man skrev den ("NCS S 0502-Y", "RAL 9010").
+ */
+export interface Paint {
+  color: string
+  code?: string
+}
+
+/**
  * Delens form, delad av alla kopior (som en komponent i SketchUp).
  * Profilen (rektangel, eller cirkel inskriven i den) i u/v, utdragen längs n
  * från z0 till z1, i lokala koordinater. En utdragen cirkel är en cylinder.
@@ -72,6 +82,8 @@ export interface PartDef {
   z0: number
   z1: number
   dims?: DimExprs
+  /** Delen målas: färgen ersätter materialets i 3D-vyn och på ritningen. Måtten påverkas inte. */
+  paint?: Paint
 }
 
 /** Världens axlar: x åt höger, y uppåt, z mot betraktaren (som axelkorset i 3D-vyn). */
@@ -92,6 +104,11 @@ export interface Combine {
   host: string
   /** Bara för joint: delen tappen går in i. */
   into?: string
+  /**
+   * Bara för joint: tappar med samma group hör ihop. De sitter på var sin länkad kopia (fyra ben)
+   * och går in i samma del (skivan); det man gör med en görs med alla (se syncJointTwins).
+   */
+  group?: string
 }
 
 /** En placerad kopia av en PartDef. */
@@ -145,6 +162,8 @@ export interface ModelDocument {
   instances: Instance[]
   params: Param[]
   stock?: StockSettings
+  /** Kopior av de egna material delarna använder (se catalog.embedMaterials). */
+  materials?: MaterialSpec[]
 }
 
 /**
@@ -169,6 +188,7 @@ export interface Body {
   defId: string
   name: string
   material: string
+  paint?: Paint
   grainAxis: Axis
   thicknessAxis: Axis
   frame: Frame
@@ -187,8 +207,6 @@ export interface Body {
 /** Kroppens sex sidor, i samma ordning som three.js BoxGeometry numrerar dem. */
 export type Face = 'u+' | 'u-' | 'v+' | 'v-' | 'n+' | 'n-'
 export const FACES: readonly Face[] = ['u+', 'u-', 'v+', 'v-', 'n+', 'n-']
-
-export const MATERIALS = ['furu', 'gran', 'ek', 'björk', 'ask', 'plywood'] as const
 
 /** Materialet en ny del får. */
 export const DEFAULT_MATERIAL = 'furu'

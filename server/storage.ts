@@ -1,11 +1,19 @@
 import { mkdir, readdir, readFile, rename, stat, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import type { SavedFile } from '../src/persist/format'
-import type { ModelMeta, ServerModel } from '../src/sync/protocol'
+import type { Catalog } from '../src/model/catalog'
+import type { ModelMeta, ServerCatalog, ServerModel } from '../src/sync/protocol'
 import { MODEL_ID_PATTERN } from '../src/sync/protocol'
 import { SUB_PATTERN } from './auth'
 
-export type PutResult = { ok: true; revision: number; updatedAt: string } | { ok: false; current: ServerModel | null }
+export type PutResult =
+  | { ok: true; revision: number; updatedAt: string }
+  | { ok: false; current: ServerModel | null }
+  /** En ny modell, men användaren har redan så många som hen får ha. */
+  | { ok: false; full: true }
+
+export type PutCatalogResult =
+  { ok: true; revision: number; updatedAt: string } | { ok: false; current: ServerCatalog | null }
 
 export type DeleteResult = { ok: true } | { ok: false; current: ServerModel | null }
 
@@ -19,7 +27,15 @@ export class FileStorage {
   private readonly modelsDir: string
   private readonly trashDir: string
   private readonly thumbsDir: string
+  private readonly catalogFile: string
   private readonly locks = new Map<string, Promise<unknown>>()
+  /**
+   * Namn och revision per fil, så att listan inte behöver läsa varje modell varje gång
+   * (appen synkar när något ändras, se events.ts). En fil läses om när dess tid eller
+   * storlek ändrats, så att också filer som ändrats utanför servern (en återställd
+   * säkerhetskopia) syns.
+   */
+  private readonly metas = new Map<string, { mtimeMs: number; size: number; meta: ModelMeta | null }>()
 
   constructor(
     dataDir: string,
@@ -28,6 +44,34 @@ export class FileStorage {
     this.modelsDir = path.join(dataDir, 'models')
     this.trashDir = path.join(dataDir, 'trash')
     this.thumbsDir = path.join(dataDir, 'thumbs')
+    this.catalogFile = path.join(dataDir, 'catalog.json')
+  }
+
+  /** Användarens material och färger, eller null om de aldrig sparats. */
+  async getCatalog(): Promise<ServerCatalog | null> {
+    try {
+      return JSON.parse(await readFile(this.catalogFile, 'utf8')) as ServerCatalog
+    } catch (e) {
+      if ((e as NodeJS.ErrnoException).code === 'ENOENT') return null
+      throw e
+    }
+  }
+
+  /** Sparar listan om baseRevision stämmer med serverns (null = ingen lista än). Samma kö som en modell. */
+  putCatalog(baseRevision: number | null, catalog: Catalog): Promise<PutCatalogResult> {
+    return this.withLock('catalog', async () => {
+      const current = await this.getCatalog()
+      if ((current?.revision ?? null) !== baseRevision) return { ok: false, current }
+      const next: ServerCatalog = {
+        revision: (current?.revision ?? 0) + 1,
+        updatedAt: this.now().toISOString(),
+        catalog,
+      }
+      const tmp = `${this.catalogFile}.${process.pid}.tmp`
+      await writeFile(tmp, JSON.stringify(next, null, 2) + '\n', 'utf8')
+      await rename(tmp, this.catalogFile)
+      return { ok: true, revision: next.revision, updatedAt: next.updatedAt }
+    })
   }
 
   async init() {
@@ -80,13 +124,25 @@ export class FileStorage {
   }
 
   async list(): Promise<ModelMeta[]> {
-    const names = await readdir(this.modelsDir)
+    const names = (await readdir(this.modelsDir)).filter((n) => n.endsWith('.json'))
     const metas: ModelMeta[] = []
     for (const name of names) {
-      if (!name.endsWith('.json')) continue
-      const m = await this.read(name.slice(0, -5)).catch(() => null)
-      if (m) metas.push({ id: m.id, name: m.name, revision: m.revision, updatedAt: m.updatedAt })
+      const info = await stat(path.join(this.modelsDir, name)).catch(() => null)
+      if (!info) continue
+      let hit = this.metas.get(name)
+      if (!hit || hit.mtimeMs !== info.mtimeMs || hit.size !== info.size) {
+        const m = await this.read(name.slice(0, -5)).catch(() => null)
+        hit = {
+          mtimeMs: info.mtimeMs,
+          size: info.size,
+          meta: m && { id: m.id, name: m.name, revision: m.revision, updatedAt: m.updatedAt },
+        }
+        this.metas.set(name, hit)
+      }
+      if (hit.meta) metas.push(hit.meta)
     }
+    const present = new Set(names)
+    for (const name of this.metas.keys()) if (!present.has(name)) this.metas.delete(name)
     return metas.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
   }
 
@@ -109,23 +165,50 @@ export class FileStorage {
     // Indenterad JSON: läsbar och diffbar vid felsökning och säkerhetskopiering.
     await writeFile(tmp, JSON.stringify(model, null, 2) + '\n', 'utf8')
     await rename(tmp, target)
+    // Egna skrivningar läses om nästa gång, även om tiden inte hunnit ändras.
+    this.metas.delete(path.basename(target))
   }
 
-  /** Sparar om baseRevision stämmer med serverns (null = ny modell som inte får finnas). */
-  put(id: string, name: string, baseRevision: number | null, file: SavedFile): Promise<PutResult> {
-    return this.withLock(id, async () => {
-      const current = await this.read(id)
-      if ((current?.revision ?? null) !== baseRevision) return { ok: false, current }
-      const model: ServerModel = {
-        id,
-        name,
-        revision: (current?.revision ?? 0) + 1,
-        updatedAt: this.now().toISOString(),
-        file,
-      }
-      await this.write(model)
-      return { ok: true, revision: model.revision, updatedAt: model.updatedAt }
-    })
+  /** Antal modeller (utan papperskorgen). */
+  async count(): Promise<number> {
+    return (await readdir(this.modelsDir)).filter((n) => n.endsWith('.json')).length
+  }
+
+  /**
+   * Sparar om baseRevision stämmer med serverns (null = ny modell som inte får finnas).
+   * En ny modell sparas bara om det finns färre än maxModels; nya modeller skapas en i taget,
+   * så att två samtidiga anrop inte båda får den sista platsen.
+   */
+  put(
+    id: string,
+    name: string,
+    baseRevision: number | null,
+    file: SavedFile,
+    maxModels = Infinity,
+  ): Promise<PutResult> {
+    const save = () => this.withLock(id, () => this.save(id, name, baseRevision, file, maxModels))
+    return baseRevision === null ? this.withLock('create', save) : save()
+  }
+
+  private async save(
+    id: string,
+    name: string,
+    baseRevision: number | null,
+    file: SavedFile,
+    maxModels: number,
+  ): Promise<PutResult> {
+    const current = await this.read(id)
+    if ((current?.revision ?? null) !== baseRevision) return { ok: false, current }
+    if (!current && (await this.count()) >= maxModels) return { ok: false, full: true }
+    const model: ServerModel = {
+      id,
+      name,
+      revision: (current?.revision ?? 0) + 1,
+      updatedAt: this.now().toISOString(),
+      file,
+    }
+    await this.write(model)
+    return { ok: true, revision: model.revision, updatedAt: model.updatedAt }
   }
 
   /** Flyttar modellen till papperskorgen om baseRevision stämmer. Redan borttagen räknas som klart. */

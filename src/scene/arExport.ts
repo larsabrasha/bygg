@@ -15,13 +15,14 @@ import {
 import { USDZExporter } from 'three/examples/jsm/exporters/USDZExporter.js'
 import { bodyExtents } from '../model/geometry'
 import type { Body } from '../model/types'
+import { materialSpec } from '../model/materials'
 import { materialColor } from './colors'
 import { loadManifold, solidGeometry } from './csg'
 import { cylinderGeometry } from './cylinder'
 import { DARKER } from './endGrain'
 import { frameQuaternion } from './frameTransform'
 import { grainUvs, hash01 } from './grainUv'
-import { loadWood, woodTone, type Wood } from './woodTexture'
+import { hasWoodTexture, loadWood, woodTone, type Wood } from './woodTexture'
 
 /** Appen ritar i millimeter, USDZ-filen är i meter. */
 const MM_TO_M = 0.001
@@ -39,7 +40,7 @@ export interface ArAssets {
 }
 
 export async function loadArAssets(bodies: readonly Body[]): Promise<ArAssets> {
-  const materials = [...new Set(bodies.map((b) => b.material))]
+  const materials = [...new Set(bodies.map((b) => b.material))].filter(hasWoodTexture)
   const [manifold, woods] = await Promise.all([
     bodies.some((b) => b.tools) ? loadManifold() : null,
     Promise.all(materials.map(async (m) => [m, await loadWood(m)] as const)),
@@ -103,7 +104,7 @@ export function buildArScene(bodies: readonly Body[], { manifold, woods }: ArAss
     const solid = manifold && b.tools ? solidGeometry(manifold, b, b.tools).clone() : null
     const geometry = solid ?? (b.shape === 'circle' ? cylinderGeometry(w, d) : new BoxGeometry(w, h, d))
 
-    const wood = woods?.get(b.material)
+    const wood = b.paint ? undefined : woods?.get(b.material)
     let material: MeshStandardMaterial | MeshStandardMaterial[]
     if (wood) {
       let t = textures.get(b.material)
@@ -133,10 +134,18 @@ export function buildArScene(bodies: readonly Body[], { manifold, woods }: ArAss
           }),
       )
     } else {
-      let m = flat.get(b.material)
+      // Målade delar av samma material och färg delar yta.
+      const key = b.paint ? `${b.material} ${b.paint.color}` : b.material
+      let m = flat.get(key)
       if (!m) {
-        m = new MeshStandardMaterial({ name: b.material, color: materialColor(b.material), roughness: 0.8 })
-        flat.set(b.material, m)
+        const { opacity } = materialSpec(b.material)
+        m = new MeshStandardMaterial({
+          name: b.paint?.code ?? b.material,
+          color: b.paint?.color ?? materialColor(b.material),
+          roughness: opacity ? 0.05 : 0.8,
+          ...(opacity && { transparent: true, opacity }),
+        })
+        flat.set(key, m)
       }
       material = m
     }
@@ -144,6 +153,9 @@ export function buildArScene(bodies: readonly Body[], { manifold, woods }: ArAss
     const mesh = new Mesh(geometry, material)
     mesh.name = b.name
     mesh.userData.material = b.material
+    // Färgen i 3MF-filen: den målade, annars materialets.
+    mesh.userData.color = b.paint?.color ?? materialColor(b.material)
+    if (b.paint?.code) mesh.userData.paintCode = b.paint.code
     // Lådan och cylindern har mitten i origo, resultatet från manifold-3d delens origo.
     const q = frameQuaternion(b.frame)
     const center = solid ? new Vector3() : new Vector3((x0 + x1) / 2, (y0 + y1) / 2, (b.z0 + b.z1) / 2)

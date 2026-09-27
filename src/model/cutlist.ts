@@ -1,6 +1,7 @@
 import { bodyExtents } from './box'
-import { partDims } from './partAxes'
-import type { Body } from './types'
+import { compareMaterials } from './materials'
+import { cutAxes, extent } from './partAxes'
+import type { Body, Paint } from './types'
 
 export interface CutListRow {
   key: string
@@ -15,6 +16,8 @@ export interface CutListRow {
    */
   round?: { diameter: number; length: number }
   material: string
+  /** Delarna på raden målas i den här färgen. Olika färg blir olika rader. */
+  paint?: Paint
   bodyIds: string[]
   /** Volymen för alla delar på raden, i kubikmeter. */
   volumeM3: number
@@ -32,8 +35,9 @@ const round01 = (n: number) => Math.round(n * 10) / 10
 
 /**
  * Kaplista: L×B×T mäts i varje dels egen riktning (L längs fibern, T tjockleken),
- * så en roterad eller stående del får samma mått som en liggande.
- * Identiska delar (material + mått) blir en rad med antal.
+ * så en roterad eller stående del får samma mått som en liggande. Material utan
+ * fiber (MDF, glas) har L som det längre av de två måtten som inte är tjockleken.
+ * Identiska delar (material, färg och mått) blir en rad med antal.
  */
 export function buildCutList(bodies: readonly Body[]): CutList {
   const groups = new Map<string, CutListRow>()
@@ -43,17 +47,19 @@ export function buildCutList(bodies: readonly Body[]): CutList {
     // Ett verktyg är ingen egen bit: det skärs ut ur eller sitter på en annan del.
     if (b.tool) continue
     // Med något tillagt (en tapp) kapas ämnet större än formens låda.
-    const d = partDims({ ...(b.blank ?? b), grainAxis: b.grainAxis, thicknessAxis: b.thicknessAxis })
-    const length = round01(d.length)
-    const width = round01(d.width)
-    const thickness = round01(d.thickness)
+    const blank = { ...(b.blank ?? b), grainAxis: b.grainAxis, thicknessAxis: b.thicknessAxis, material: b.material }
+    const axes = cutAxes(blank)
+    const length = round01(extent(blank, axes.length))
+    const width = round01(extent(blank, axes.width))
+    const thickness = round01(extent(blank, b.thicknessAxis))
     const [du, , dn] = bodyExtents(b)
     const round = b.shape === 'circle' && !b.blank ? { diameter: round01(du), length: round01(dn) } : undefined
     // En cylinder fyller π/4 av sin fyrkant.
-    const volumeM3 = ((round ? Math.PI / 4 : 1) * d.length * d.width * d.thickness) / 1e9
+    const volumeM3 = ((round ? Math.PI / 4 : 1) * length * width * thickness) / 1e9
     totalVolumeM3 += volumeM3
 
-    const key = `${b.material}|${length}|${width}|${thickness}|${round ? 'rund' : ''}`
+    const paint = b.paint ? `${b.paint.color}|${b.paint.code ?? ''}` : ''
+    const key = `${b.material}|${length}|${width}|${thickness}|${round ? 'rund' : ''}|${paint}`
     const row = groups.get(key)
     if (row) {
       row.count++
@@ -70,6 +76,7 @@ export function buildCutList(bodies: readonly Body[]): CutList {
         thickness,
         ...(round && { round }),
         material: b.material,
+        ...(b.paint && { paint: b.paint }),
         bodyIds: [b.id],
         volumeM3,
       })
@@ -78,10 +85,7 @@ export function buildCutList(bodies: readonly Body[]): CutList {
 
   const rows = [...groups.values()].sort(
     (a, b) =>
-      a.material.localeCompare(b.material, 'sv') ||
-      b.thickness - a.thickness ||
-      b.length - a.length ||
-      b.width - a.width,
+      compareMaterials(a.material, b.material) || b.thickness - a.thickness || b.length - a.length || b.width - a.width,
   )
 
   return { rows, totalCount: bodies.filter((b) => !b.tool).length, totalVolumeM3 }
@@ -109,3 +113,6 @@ export function groupByMaterial(rows: readonly CutListRow[]): MaterialGroup[] {
   }
   return groups
 }
+
+/** "färg NCS S 0502-Y", eller bara "färg" när koden inte är skriven. */
+export const paintText = (paint: Paint) => (paint.code ? `färg ${paint.code}` : 'färg')

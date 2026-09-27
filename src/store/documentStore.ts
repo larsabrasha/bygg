@@ -12,15 +12,28 @@ import {
   uniqueCopyName,
 } from '../model/geometry'
 import { rotateFrame } from '../model/frame'
-import { carryTools, combineError, detachOrphans, jointError, sketchCombine, type SketchMode } from '../model/combine'
+import {
+  carryTools,
+  combineError,
+  detachOrphans,
+  jointError,
+  jointTwins,
+  relativeFrame,
+  sketchCombine,
+  syncJointTwins,
+  type SketchMode,
+} from '../model/combine'
 import { refitJoints, tenonFor } from '../model/joint'
 import { newId } from '../model/id'
+import { embedMaterials } from '../model/catalog'
+import { limitError } from '../model/limits'
 import { applyParams, evaluateParams, isNameUsed, paramScope, setBoxExtent } from '../model/params'
 import { defaultAxes, withAxes } from '../model/partAxes'
 import { minCorner, placeAlong, WORLD_AXES, withoutPos } from '../model/placement'
 import { resolveBodies } from '../model/resolve'
 import type {
   Axis,
+  Body,
   Combine,
   DimExpr,
   DimExprs,
@@ -39,6 +52,7 @@ import type {
 import { DEFAULT_MATERIAL } from '../model/types'
 import { anglesOf, restOf, withAngles } from '../model/orientation'
 import { add, scale } from '../model/vec'
+import { useLibraryStore } from './libraryStore'
 
 /** Det valda. För en del också ytan man tryckte på; den får pilen för push/pull. */
 export type Selection = { kind: 'sketch'; id: string } | { kind: 'body'; id: string; face?: Face }
@@ -56,7 +70,7 @@ interface Snapshot {
   future: HistoryEntry[]
 }
 
-export type PartPatch = Partial<Pick<PartDef, 'name' | 'material' | 'grainAxis' | 'thicknessAxis'>>
+export type PartPatch = Partial<Pick<PartDef, 'name' | 'material' | 'grainAxis' | 'thicknessAxis' | 'paint'>>
 
 interface DocumentState extends Snapshot {
   /**
@@ -92,12 +106,16 @@ interface DocumentState extends Snapshot {
   setExtent: (instanceId: string, axis: Axis, text: string) => string | null
   /** Sätter läget för delens hörn närmast origo längs en världsaxel, från ett tal eller ett uttryck. */
   setPosition: (instanceId: string, axis: WorldAxis, text: string) => string | null
-  addParam: () => string
+  /** Null om modellen redan har så många parametrar den får ha. */
+  addParam: () => string | null
   /** Returnerar felmeddelande eller null. */
   updateParam: (id: string, patch: { name?: string; expr?: string }) => string | null
   /** False om parametern används någonstans. */
   deleteParam: (id: string) => boolean
-  /** Tar bort det valda. En del som har verktyg tar dem med sig. */
+  /**
+   * Tar bort det valda. En del som har verktyg tar dem med sig. Ett verktyg: delen det satt på blir vald.
+   * En tapp tar sina tvillingar med sig (se jointTwins).
+   */
   /** Lagermåtten för ett material och en tjocklek (stockKey); null (eller tom) går tillbaka till standardmåtten. */
   setStockSizes: (key: string, sizes: StockSize[] | null) => void
   /** Om delar i en grupp (stockKey) får kapas ur spill på ett annat mått. */
@@ -110,7 +128,7 @@ interface DocumentState extends Snapshot {
    * Värden blir vald. Returnerar felmeddelande eller null.
    */
   combine: (toolId: string, op: Combine['op'], hostId: string) => string | null
-  /** Lossar ett verktyg: det blir en vanlig del igen, där det står, och blir valt. */
+  /** Lossar ett verktyg (en tapp med sina tvillingar): det blir en vanlig del igen, där det står, och blir valt. */
   detach: (toolId: string) => void
   /**
    * En tapp på hostId (t.ex. en sarg) in i intoId (ett ben), med tapphål i
@@ -122,6 +140,11 @@ interface DocumentState extends Snapshot {
   clearDocument: () => void
   /** Ersätter dokumentet, t.ex. vid inläsning. Rensar historiken. */
   load: (doc: ModelDocument) => void
+  /**
+   * Uppdaterar modellens kopior av egna material när användarens lista ändrats.
+   * Inget ångra-steg: det är inte en ändring av modellen.
+   */
+  refreshMaterials: () => void
   /** Sätter tillbaka historiken som sparades med dokumentet (se sync/history). Dokumentet rörs inte. */
   setHistory: (past: HistoryEntry[], future: HistoryEntry[]) => void
   undo: () => void
@@ -133,6 +156,15 @@ interface DocumentState extends Snapshot {
  * lite plats, också när historiken sparas (sync/history).
  */
 export const HISTORY_LIMIT = 500
+/** Felet från en action som stoppades av gränserna; själva skälet har redan visats (se refused). */
+export const LIMIT_REFUSED = 'Modellen blir för stor'
+
+/** Visar varför en ändring stoppades. Samma meddelande visas en gång åt gången. */
+function refused(text: string) {
+  const lib = useLibraryStore.getState()
+  if (!lib.notices.some((n) => n.text === text)) lib.notify(text)
+}
+
 /** Avstånd mellan original och ny kopia, i mm. */
 const DUPLICATE_GAP = 50
 
@@ -184,19 +216,39 @@ const initial: Snapshot =
       }
     : emptySnapshot()
 
+/** En tapps form och läge på sin värd, avrundat: lika för kopior som ligger an på samma sätt. */
+function roundedTenon(t: Exclude<ReturnType<typeof tenonFor>, string>, host: Body) {
+  const r = (x: number) => Math.round(x * 1000) / 1000
+  const rel = relativeFrame(host.frame, t.frame)
+  return [t.profile, t.shape ?? null, t.depth, rel.origin, rel.u, rel.v, rel.n].map((x) =>
+    typeof x === 'object' && x !== null ? Object.values(x).map((v) => (typeof v === 'number' ? r(v) : v)) : x,
+  )
+}
+
 export const useDocumentStore = create<DocumentState>()((set, get) => {
-  /** Sparar nuvarande dokument i historiken och byter till next (med parametrar omräknade). */
-  const commit = (next: ModelDocument, selection: Selection | null = get().selection) => {
+  /**
+   * Sparar nuvarande dokument i historiken och byter till next (med parametrar omräknade).
+   * Blir modellen större än gränserna (se model/limits) ändras inget: false, och ett meddelande.
+   */
+  const commit = (next: ModelDocument, selection: Selection | null = get().selection): boolean => {
     const { doc, past, selection: before } = get()
-    // Verktyg följer sin värd när den flyttas, och tappar räknas om när sargen eller benet ändras;
-    // verktyg utan värd blir vanliga delar.
-    const applied = pruneDefs(detachOrphans(refitJoints(doc, carryTools(doc, applyParams(next)))))
+    // Verktyg följer sin värd när den flyttas, en ändrad tapp ändrar sina tvillingar (samma tapp från
+    // länkade ben), och tappar räknas om när sargen eller benet ändras; verktyg utan värd blir vanliga delar.
+    // Modellen har kopior av de egna material den använder, som följer med när den sparas.
+    const carried = syncJointTwins(doc, carryTools(doc, applyParams(next)))
+    const applied = embedMaterials(pruneDefs(detachOrphans(refitJoints(doc, carried))))
+    const error = limitError(applied, doc)
+    if (error) {
+      refused(error)
+      return false
+    }
     set({
       doc: applied,
       selection: selectionExists(applied, selection),
       past: [...past, { doc, selection: before }].slice(-HISTORY_LIMIT),
       future: [],
     })
+    return true
   }
 
   /**
@@ -210,7 +262,7 @@ export const useDocumentStore = create<DocumentState>()((set, get) => {
     const after = minCorner(next, def)
     const moved = WORLD_AXES.filter((_, k) => Math.abs(after[k]! - before[k]!) > 1e-6)
     const { doc } = get()
-    commit({ ...doc, instances: doc.instances.map((i) => (i.id === inst.id ? withoutPos(next, moved) : i)) })
+    return commit({ ...doc, instances: doc.instances.map((i) => (i.id === inst.id ? withoutPos(next, moved) : i)) })
   }
 
   const findInstance = (id: string) => {
@@ -239,8 +291,9 @@ export const useDocumentStore = create<DocumentState>()((set, get) => {
         ...(on && { on }),
         ...(dims && Object.keys(dims).length ? { dims } : {}),
       }
-      commit({ ...doc, sketches: [...doc.sketches, sketch] }, { kind: 'sketch', id: sketch.id })
-      return sketch.id
+      return commit({ ...doc, sketches: [...doc.sketches, sketch] }, { kind: 'sketch', id: sketch.id })
+        ? sketch.id
+        : null
     },
 
     pushPullSketch: (sketchId, distance, depthExpr, mode) => {
@@ -259,7 +312,7 @@ export const useDocumentStore = create<DocumentState>()((set, get) => {
       )
       if (!part) return null
       const instance = combine ? { ...part.instance, combine } : part.instance
-      commit(
+      const ok = commit(
         {
           ...doc,
           sketches: doc.sketches.filter((s) => s.id !== sketchId),
@@ -270,7 +323,7 @@ export const useDocumentStore = create<DocumentState>()((set, get) => {
         // tillägg: delen det sitter på, så att man ser resultatet (och verktyget som spöke).
         host ? { kind: 'body', id: host } : { kind: 'body', id: part.instance.id, face: distance >= 0 ? 'n+' : 'n-' },
       )
-      return instance.id
+      return ok ? instance.id : null
     },
 
     pushPullBody: (instanceId, face, distance, dim) => {
@@ -293,8 +346,7 @@ export const useDocumentStore = create<DocumentState>()((set, get) => {
           WORLD_AXES.filter((_, k) => Math.abs(after[k]! - before[k]!) > 1e-6),
         )
       })
-      commit({ ...doc, instances }, { kind: 'body', id: instanceId, face })
-      return true
+      return commit({ ...doc, instances }, { kind: 'body', id: instanceId, face })
     },
 
     moveInstance: (instanceId, delta) => {
@@ -331,8 +383,7 @@ export const useDocumentStore = create<DocumentState>()((set, get) => {
       if (angles[i] === r.value) return null
       angles[i] = r.value
       const body = resolveBodies(get().doc).find((b) => b.id === instanceId)!
-      reorient(inst, def, withAngles(inst.frame, rest, bodyCenter(body), angles))
-      return null
+      return reorient(inst, def, withAngles(inst.frame, rest, bodyCenter(body), angles)) ? null : LIMIT_REFUSED
     },
 
     addCopies: (sourceId, frames) => {
@@ -342,8 +393,8 @@ export const useDocumentStore = create<DocumentState>()((set, get) => {
       const rest = restOf(found.inst)
       const copies = frames.map((frame) => ({ id: newId(), defId: found.def.id, frame, rest }))
       const { doc } = get()
-      commit({ ...doc, instances: [...doc.instances, ...copies] }, { kind: 'body', id: copies.at(-1)!.id })
-      return copies.map((c) => c.id)
+      const ok = commit({ ...doc, instances: [...doc.instances, ...copies] }, { kind: 'body', id: copies.at(-1)!.id })
+      return ok ? copies.map((c) => c.id) : []
     },
 
     duplicateLinked: (instanceId) => {
@@ -359,8 +410,7 @@ export const useDocumentStore = create<DocumentState>()((set, get) => {
         ...(inst.rest && { rest: inst.rest }),
       }
       const { doc } = get()
-      commit({ ...doc, instances: [...doc.instances, copy] }, { kind: 'body', id: copy.id })
-      return copy.id
+      return commit({ ...doc, instances: [...doc.instances, copy] }, { kind: 'body', id: copy.id }) ? copy.id : null
     },
 
     makeUnique: (instanceId) => {
@@ -379,7 +429,10 @@ export const useDocumentStore = create<DocumentState>()((set, get) => {
       const found = findInstance(instanceId)
       if (!found || Object.entries(patch).every(([k, v]) => found.def[k as keyof PartDef] === v)) return
       // Fiber och tjocklek måste ligga på olika axlar; withAxes löser krockar.
-      commit(replaceDef(get().doc, { ...found.def, ...patch, ...withAxes(found.def, patch) }))
+      const def = { ...found.def, ...patch, ...withAxes(found.def, patch) }
+      // paint: undefined tar bort färgen; nyckeln ska inte ligga kvar i dokumentet.
+      if (def.paint === undefined) delete def.paint
+      commit(replaceDef(get().doc, def))
     },
 
     setExtent: (instanceId, axis, text) => {
@@ -396,8 +449,7 @@ export const useDocumentStore = create<DocumentState>()((set, get) => {
       // Bara uttryck med parametrar sparas; ett rent tal är bara ett tal.
       const rest = withoutAxis(found.def.dims, axis, found.def)
       const dims = isConstant(text) ? rest : { ...rest, [axis]: { expr: text.trim(), anchor } }
-      commit(replaceDef(doc, withDims(resized, dims)))
-      return null
+      return commit(replaceDef(doc, withDims(resized, dims))) ? null : LIMIT_REFUSED
     },
 
     setPosition: (instanceId, axis, text) => {
@@ -410,8 +462,9 @@ export const useDocumentStore = create<DocumentState>()((set, get) => {
       const placed = placeAlong(withoutPos(found.inst, [axis]), found.def, axis, r.value)
       // Bara uttryck med parametrar sparas; ett rent tal är bara ett läge.
       const inst = isConstant(text) ? placed : { ...placed, pos: { ...placed.pos, [axis]: text.trim() } }
-      commit({ ...doc, instances: doc.instances.map((i) => (i.id === instanceId ? inst : i)) })
-      return null
+      return commit({ ...doc, instances: doc.instances.map((i) => (i.id === instanceId ? inst : i)) })
+        ? null
+        : LIMIT_REFUSED
     },
 
     setStockSizes: (key, list) => {
@@ -442,8 +495,7 @@ export const useDocumentStore = create<DocumentState>()((set, get) => {
       let n = 1
       while (used.has(`mått${n}`)) n++
       const param = { id: newId(), name: `mått${n}`, expr: '100', value: 100 }
-      commit({ ...doc, params: [...doc.params, param] })
-      return param.id
+      return commit({ ...doc, params: [...doc.params, param] }) ? param.id : null
     },
 
     updateParam: (id, patch) => {
@@ -483,7 +535,7 @@ export const useDocumentStore = create<DocumentState>()((set, get) => {
         next = { ...next, params }
       }
 
-      if (next !== doc) commit(next)
+      if (next !== doc && !commit(next)) return LIMIT_REFUSED
       return null
     },
 
@@ -500,14 +552,20 @@ export const useDocumentStore = create<DocumentState>()((set, get) => {
     deleteSelection: () => {
       const { doc, selection } = get()
       if (!selection) return
+      // Ett verktyg: delen det satt på blir vald, så att man är kvar där man arbetade.
+      const host = selection.kind === 'body' && doc.instances.find((i) => i.id === selection.id)?.combine?.host
+      // En tapp tar sina tvillingar med sig: på de länkade benen är de samma tapp.
+      const gone = new Set(
+        selection.kind === 'body' ? [selection.id, ...jointTwins(doc, selection.id).map((t) => t.id)] : [],
+      )
       commit(
         selection.kind === 'body'
           ? {
               ...doc,
-              instances: doc.instances.filter((i) => i.id !== selection.id && i.combine?.host !== selection.id),
+              instances: doc.instances.filter((i) => !gone.has(i.id) && i.combine?.host !== selection.id),
             }
           : { ...doc, sketches: doc.sketches.filter((s) => s.id !== selection.id) },
-        null,
+        host ? { kind: 'body', id: host } : null,
       )
     },
 
@@ -515,14 +573,14 @@ export const useDocumentStore = create<DocumentState>()((set, get) => {
       const { doc } = get()
       const error = combineError(doc, toolId, hostId)
       if (error) return error
-      commit(
+      const ok = commit(
         {
           ...doc,
           instances: doc.instances.map((i) => (i.id === toolId ? { ...i, combine: { op, host: hostId } } : i)),
         },
         { kind: 'body', id: hostId },
       )
-      return null
+      return ok ? null : LIMIT_REFUSED
     },
 
     joint: (hostId, intoId) => {
@@ -534,35 +592,55 @@ export const useDocumentStore = create<DocumentState>()((set, get) => {
       const into = bodies.find((b) => b.id === intoId)!
       const tenon = tenonFor(host, into)
       if (typeof tenon === 'string') return tenon
-      const box = { profile: tenon.profile, ...(tenon.shape && { shape: tenon.shape }), z0: 0, z1: tenon.depth }
-      const def: PartDef = {
-        id: newId(),
-        name: nextPartName(doc.defs, 'Tapp'),
-        material: host.material,
-        ...defaultAxes(box),
-        ...box,
+      // Länkade kopior av värden som ligger an mot samma del på samma sätt (fyra ben under en skiva)
+      // får samma tapp, i en grupp: de är en tapp på den delade formen, med ett hål för varje kopia.
+      const fits = (t: Exclude<ReturnType<typeof tenonFor>, string>, b: Body) =>
+        JSON.stringify(roundedTenon(t, b)) === JSON.stringify(roundedTenon(tenon, host))
+      const pairs = [
+        { host, tenon },
+        ...bodies.flatMap((b) => {
+          if (b.id === hostId || b.defId !== host.defId || jointError(doc, b.id, intoId)) return []
+          const t = tenonFor(b, into)
+          return typeof t !== 'string' && fits(t, b) ? [{ host: b, tenon: t }] : []
+        }),
+      ]
+      const group = pairs.length > 1 ? newId() : undefined
+      const name = nextPartName(doc.defs, 'Tapp')
+      const defs: PartDef[] = []
+      const instances: Instance[] = []
+      for (const p of pairs) {
+        const box = {
+          profile: p.tenon.profile,
+          ...(p.tenon.shape && { shape: p.tenon.shape }),
+          z0: 0,
+          z1: p.tenon.depth,
+        }
+        const def: PartDef = { id: newId(), name, material: host.material, ...defaultAxes(box), ...box }
+        defs.push(def)
+        instances.push({
+          id: newId(),
+          defId: def.id,
+          frame: p.tenon.frame,
+          combine: { op: 'joint', host: p.host.id, into: intoId, ...(group && { group }) },
+        })
       }
-      const instance: Instance = {
-        id: newId(),
-        defId: def.id,
-        frame: tenon.frame,
-        combine: { op: 'joint', host: hostId, into: intoId },
-      }
-      commit(
-        { ...doc, defs: [...doc.defs, def], instances: [...doc.instances, instance] },
+      const ok = commit(
+        { ...doc, defs: [...doc.defs, ...defs], instances: [...doc.instances, ...instances] },
         { kind: 'body', id: hostId },
       )
-      return null
+      return ok ? null : LIMIT_REFUSED
     },
 
     detach: (toolId) => {
       const { doc } = get()
       if (!doc.instances.some((i) => i.id === toolId && i.combine)) return
+      // En tapp lossas med sina tvillingar, som när den tas bort.
+      const loose = new Set([toolId, ...jointTwins(doc, toolId).map((t) => t.id)])
       commit(
         {
           ...doc,
           instances: doc.instances.map((i) => {
-            if (i.id !== toolId) return i
+            if (!loose.has(i.id)) return i
             const { combine: _gone, ...rest } = i
             void _gone
             return rest
@@ -577,6 +655,12 @@ export const useDocumentStore = create<DocumentState>()((set, get) => {
     clearDocument: () => commit(emptyDocument(), null),
 
     load: (doc) => set({ doc: applyParams(doc), selection: null, past: [], future: [] }),
+
+    refreshMaterials: () => {
+      const { doc } = get()
+      const next = embedMaterials(doc)
+      if (next !== doc) set({ doc: next })
+    },
 
     setHistory: (past, future) => set({ past: past.slice(-HISTORY_LIMIT), future }),
 

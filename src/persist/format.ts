@@ -1,8 +1,12 @@
+import { cleanMaterialSpec } from '../model/catalog'
+import { groupLegacyJoints } from '../model/combine'
+import { newId } from '../model/id'
+import { isBuiltInMaterial, type MaterialSpec } from '../model/materials'
 import { axesFromLegacyGrain } from '../model/partAxes'
-import type { ModelDocument, StockSettings } from '../model/types'
+import type { ModelDocument, Paint, PartDef, StockSettings } from '../model/types'
 
 /** Höj när formatet ändras, och lägg till en konvertering i migrate. */
-export const FORMAT_VERSION = 7
+export const FORMAT_VERSION = 8
 
 export interface SavedFile {
   version: number
@@ -65,7 +69,8 @@ function isModelDocument(x: unknown): x is ModelDocument {
           (isObj(i.combine) &&
             (i.combine.op === 'add' || i.combine.op === 'subtract' || i.combine.op === 'joint') &&
             typeof i.combine.host === 'string' &&
-            (i.combine.into === undefined || typeof i.combine.into === 'string'))),
+            (i.combine.into === undefined || typeof i.combine.into === 'string') &&
+            (i.combine.group === undefined || typeof i.combine.group === 'string'))),
     ) &&
     Array.isArray(params) &&
     params.every(
@@ -103,6 +108,30 @@ function cleanStock(x: unknown): StockSettings | undefined {
   return Object.keys(out).length ? out : undefined
 }
 
+/** Färgen om den ser rimlig ut (#rrggbb, koden en text), annars ingen: delen blir omålad. */
+function cleanPaint(x: unknown): Paint | undefined {
+  if (!isObj(x) || typeof x.color !== 'string' || !/^#[0-9a-f]{6}$/i.test(x.color)) return undefined
+  const code = typeof x.code === 'string' && x.code.trim() ? x.code.trim() : undefined
+  return { color: x.color.toLowerCase(), ...(code && { code }) }
+}
+
+function cleanDefPaint(d: PartDef): PartDef {
+  if (d.paint === undefined) return d
+  const { paint, ...rest } = d
+  const clean = cleanPaint(paint)
+  return clean ? { ...rest, paint: clean } : rest
+}
+
+/** Modellens kopior av egna material, de som ser rimliga ut. Inga kvar: fältet tas bort. */
+function cleanDocMaterials(doc: ModelDocument): ModelDocument {
+  if (doc.materials === undefined) return doc
+  const { materials, ...rest } = doc
+  const clean = Array.isArray(materials)
+    ? materials.map(cleanMaterialSpec).filter((m): m is MaterialSpec => m !== null && !isBuiltInMaterial(m.id))
+    : []
+  return clean.length ? { ...rest, materials: clean } : rest
+}
+
 export type LoadResult = { ok: true; doc: ModelDocument } | { ok: false; reason: string }
 
 /**
@@ -137,9 +166,19 @@ export function migrate(raw: unknown): LoadResult {
   // 6 → 7: combine kan vara en tapp (op 'joint', into). Äldre appar skulle avvisa den.
   // (7) dokumentet kan ha stock (kapschemats lagermått). Frivilligt och ofarligt att tappa, så
   // versionen höjs inte: en server med äldre kod skulle annars neka att spara.
+  // (7) former kan ha paint (färgen delen målas i). Frivilligt och ofarligt att tappa, som stock.
+  // 7 → 8: tappar kan ha group (de som hör ihop). Äldre filer får grupper för tappar som
+  // uppenbart hör ihop (groupLegacyJoints), en gång, när de läses.
   if (!isModelDocument(doc)) return { ok: false, reason: 'Trasigt dokument' }
-  if (doc.stock === undefined) return { ok: true, doc }
-  const { stock, ...rest } = doc
+  const grouped = raw.version < 8 ? groupLegacyJoints(doc, newId) : doc
+  // (7) dokumentet kan ha materials (kopior av egna material). Frivilligt: utan det ritas delarna
+  // som okänt trä, men måtten stämmer. En äldre app behåller fältet när den sparar.
+  const painted = grouped.defs.some((d) => d.paint !== undefined)
+    ? { ...grouped, defs: grouped.defs.map(cleanDefPaint) }
+    : grouped
+  const withMaterials = cleanDocMaterials(painted)
+  if (withMaterials.stock === undefined) return { ok: true, doc: withMaterials }
+  const { stock, ...rest } = withMaterials
   const clean = cleanStock(stock)
   return { ok: true, doc: clean ? { ...rest, stock: clean } : rest }
 }

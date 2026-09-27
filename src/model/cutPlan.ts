@@ -1,17 +1,17 @@
-import { buildCutList } from './cutlist'
+import { buildCutList, type CutListRow } from './cutlist'
 import { numberFormat } from './numberFormat'
 import { fitsBin, packGuillotine, type PackItem } from './guillotine'
-import { BOARD, PANEL, panelThicknesses, SHEET, standardThickness } from './swedishStock'
+import { compareMaterials, isOrdered, isSheetMaterial, materialSpec } from './materials'
+import { BOARD, PANEL, panelThicknesses, standardThickness } from './swedishStock'
 import type { Body, StockSettings, StockSize } from './types'
 
-/** Material som finns som skivor. Övriga finns som brädor eller limfogsskivor av massivt trä. */
-export const SHEET_MATERIALS: readonly string[] = ['plywood']
+/** Skivornas tjocklekar som finns att köpa. */
+const sheetThicknesses = (material: string) => materialSpec(material).thicknesses ?? []
 
 export const DEFAULT_KERF = 3
 
 /** En vanlig bräda när inget annat talar för en längd. */
 const BOARD_LENGTH = 2400
-const SHEET_SIZE: StockSize = { length: SHEET.length, width: SHEET.width }
 
 const MAX_BOARD_WIDTH = BOARD.widths.at(-1)!
 
@@ -42,12 +42,16 @@ type Dims = { length: number; width: number }
 
 /**
  * Lagermåtten när inget är inställt, för delarnas färdiga mått. Skivmaterial:
- * en hel skiva. Massivt trä: en bräda för delarna som ryms på en (den smalaste
+ * en hel skiva i det vanligaste måttet, som får vridas om materialet saknar fiber. Massivt trä: en bräda för delarna som ryms på en (den smalaste
  * som räcker för den bredaste av dem), och en limfogsskiva i vanligt mått för
  * de bredare. Längden räcker för den längsta delen med kapmån och kapade ändar.
  */
 export function defaultStocks(material: string, parts: readonly Dims[], allowance = 0): StockSize[] {
-  if (SHEET_MATERIALS.includes(material)) return [SHEET_SIZE]
+  if (isSheetMaterial(material)) {
+    const spec = materialSpec(material)
+    const [size] = spec.sheets ?? [{ length: 2440, width: 1220 }]
+    return [{ ...size!, ...(!spec.grain && { rotate: true }) }]
+  }
   const narrow = parts.filter((p) => p.width <= MAX_BOARD_WIDTH)
   const wide = parts.filter((p) => p.width > MAX_BOARD_WIDTH)
   const longest = (list: readonly Dims[]) => Math.max(...list.map((p) => p.length)) + allowance
@@ -121,6 +125,8 @@ export interface CutPlan {
   kerf: number
   /** Kapmån på längden, i mm: varje del kapas så mycket längre och kapas till sist. */
   lengthAllowance: number
+  /** Kaplistans rader som beställs tillskurna (glas), i kaplistans ordning. */
+  ordered: CutListRow[]
 }
 
 interface Part {
@@ -140,7 +146,8 @@ const MAX_MOVES = 200
 /**
  * Kapschemat: kaplistans delar utlagda på skivor och brädor, en grupp per
  * material och tjocklek. Delens längd (L, längs fibern) ligger längs skivans
- * längd, utom där skivan får vridas.
+ * längd, utom där skivan får vridas. Glas och annat som beställs tillskuret
+ * är inte med: det sågas inte.
  *
  * Har en grupp flera lagermått kapas varje del först ur det smalaste den får
  * plats på (vid lika bredd det kortaste), så att smala delar tas ur brädor och
@@ -155,9 +162,14 @@ export function buildCutPlan(bodies: readonly Body[], settings: StockSettings = 
   const allowance = settings.lengthAllowance ?? 0
   const names = new Map(bodies.map((b) => [b.id, b.name]))
   const byKey = new Map<string, { material: string; thickness: number; parts: Part[] }>()
+  const ordered: CutListRow[] = []
 
   for (const row of buildCutList(bodies).rows) {
     if (row.length <= 0 || row.width <= 0) continue
+    if (isOrdered(row.material)) {
+      ordered.push(row)
+      continue
+    }
     const key = stockKey(row.material, row.thickness)
     let group = byKey.get(key)
     if (!group) byKey.set(key, (group = { material: row.material, thickness: row.thickness, parts: [] }))
@@ -173,7 +185,7 @@ export function buildCutPlan(bodies: readonly Body[], settings: StockSettings = 
 
   const groups: CutPlanGroup[] = []
   for (const [key, { material, thickness, parts }] of byKey) {
-    const sheet = SHEET_MATERIALS.includes(material)
+    const sheet = isSheetMaterial(material)
     // Bara en lista räknas: ett ensamt mått från förr (kvar i minnet efter hot reload) har också length.
     const list = settings.sizes?.[key]
     const saved = Array.isArray(list) && list.length > 0 ? list : undefined
@@ -290,7 +302,7 @@ export function buildCutPlan(bodies: readonly Body[], settings: StockSettings = 
       used += boards.flat().reduce((sum, p) => sum + p.length * p.width, 0)
       total += boards.length * area[i]!
       const panel = isPanel(sheet, stock)
-      const standard = sheet ? SHEET.thicknesses : panel ? panelThicknesses(material) : BOARD.thicknesses
+      const standard = sheet ? sheetThicknesses(material) : panel ? panelThicknesses(material) : BOARD.thicknesses
       return { stock, panel, thickness: standardThickness(standard, thickness), boards }
     })
 
@@ -313,8 +325,8 @@ export function buildCutPlan(bodies: readonly Body[], settings: StockSettings = 
   }
 
   // Samma ordning som kaplistan: material, sedan tjockast först.
-  groups.sort((a, b) => a.material.localeCompare(b.material, 'sv') || b.thickness - a.thickness)
-  return { groups, kerf, lengthAllowance: allowance }
+  groups.sort((a, b) => compareMaterials(a.material, b.material) || b.thickness - a.thickness)
+  return { groups, kerf, lengthAllowance: allowance, ordered }
 }
 
 /** "1 skiva · 2 brädor": antalet per slag i gruppen, eller "0 brädor" om inget behövs. */
@@ -359,19 +371,29 @@ function thicknessNote(g: CutPlanGroup, l: StockLayout): string {
   const drawn = `delarna ${mm.format(g.thickness)} mm`
   if (!l.panel) return `${drawn}, hyvlas ner`
   // De två närmaste som finns: den tunnare och den som används.
-  const list = g.sheet ? SHEET.thicknesses : panelThicknesses(g.material)
+  const list = g.sheet ? sheetThicknesses(g.material) : panelThicknesses(g.material)
   const thinner = list.filter((t) => t < g.thickness).at(-1)
   const near = [thinner, l.thickness].filter((t) => t !== undefined).map((t) => mm.format(t))
-  return `${drawn}; ${g.sheet ? g.material : 'limfog'} finns i ${near.join(' och ')}`
+  return `${drawn}; ${g.sheet ? materialSpec(g.material).name : 'limfog'} finns i ${near.join(' och ')}`
 }
 
 /** "22 × 95 × 2 400": tjocklek × bredd × längd, som virke märks i Sverige. */
 export const stockDims = (l: StockLayout) =>
   [l.thickness, l.stock.width, l.stock.length].map((n) => mm.format(n)).join(' × ')
 
-/** Materialet som behövs: antal skivor och brädor per material, tjocklek och lagermått. */
+/**
+ * Materialet som behövs: antal skivor och brädor per material, tjocklek och
+ * lagermått. Sist det som beställs tillskuret (rutor av glas), en rad per mått.
+ */
 export function materialList(plan: CutPlan): MaterialLine[] {
-  return plan.groups.flatMap((g) =>
+  const ordered = plan.ordered.map((row) => ({
+    key: row.key,
+    material: row.material,
+    count: row.count,
+    text: `${row.count} ${row.count === 1 ? 'ruta' : 'rutor'} ${materialSpec(row.material).name} ${[row.thickness, row.width, row.length].map((n) => mm.format(n)).join(' × ')}`,
+    note: 'beställs tillskuret',
+  }))
+  const sawn = plan.groups.flatMap((g) =>
     g.stocks
       .filter((l) => l.boards.length > 0)
       .map((l, i) => {
@@ -380,12 +402,13 @@ export function materialList(plan: CutPlan): MaterialLine[] {
           key: `${g.key}|${i}`,
           material: g.material,
           count,
-          text: `${count} ${stockNoun(l.panel, count)} ${g.material} ${stockDims(l)}`,
+          text: `${count} ${stockNoun(l.panel, count)} ${materialSpec(g.material).name} ${stockDims(l)}`,
           ...(!l.panel && { length: `${meters.format((count * l.stock.length) / 1000)} m` }),
           ...(l.thickness !== g.thickness && { note: thicknessNote(g, l) }),
         }
       }),
   )
+  return [...sawn, ...ordered]
 }
 
 /**

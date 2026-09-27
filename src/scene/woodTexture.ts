@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Color, RepeatWrapping, SRGBColorSpace, TextureLoader, type Texture } from 'three'
 import { hash01, UV_MM } from './grainUv'
+import { materialSpec } from '../model/materials'
 import { WOOD_SOURCES, woodFile } from './woodSources'
 
 /** Bilderna i src/assets/wood, med Vites adress (med hash, så att en ny bild inte fastnar i cachen). */
@@ -20,6 +21,13 @@ interface Entry {
 }
 const cache = new Map<string, Entry>()
 const loader = new TextureLoader()
+
+/**
+ * Materialet ritas med ett trämönster: träslagen och plywood. Ett okänt material
+ * räknas som massivt trä och får furuns. MDF, glas och andra skivor ritas i sin färg.
+ */
+export const hasWoodTexture = (material: string) =>
+  WOOD_SOURCES[material] !== undefined || materialSpec(material).kind === 'wood'
 
 /** Trätexturerna för ett material: foton (se woodSources), en uppsättning per material och delad av alla delar av det. */
 function entry(material: string): Entry {
@@ -59,7 +67,7 @@ export async function loadWood(material: string): Promise<Wood> {
  * Laddas först när de behövs, alltså när man väljer det realistiska utseendet.
  */
 export function useWoodTexture(material: string, enabled: boolean): Wood | null {
-  const e = enabled ? entry(material) : null
+  const e = enabled && hasWoodTexture(material) ? entry(material) : null
   const [, setLoaded] = useState<Wood | null>(null)
   useEffect(() => {
     if (!e || e.loaded) return

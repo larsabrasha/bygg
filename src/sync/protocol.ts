@@ -1,3 +1,5 @@
+import type { Catalog } from '../model/catalog'
+import type { LIMITS } from '../model/limits'
 import type { SavedFile } from '../persist/format'
 
 /**
@@ -37,11 +39,44 @@ export interface ConflictResponse {
   current: ServerModel | null
 }
 
+/**
+ * Användarens material och färger (data/users/<sub>/catalog.json). Samma
+ * revisioner som modellerna; vid 409 slår klienten ihop och försöker igen.
+ */
+export interface ServerCatalog {
+  revision: number
+  updatedAt: string
+  catalog: Catalog
+}
+
+export interface PutCatalogRequest {
+  /** Revisionen klienten utgick från, eller null om servern inte har någon lista än. */
+  baseRevision: number | null
+  catalog: Catalog
+}
+
+/** Svar vid 409 för listan: vad servern har nu. */
+export interface CatalogConflictResponse {
+  current: ServerCatalog | null
+}
+
 /** Svar från /auth/me: den inloggade användaren. dev = ingen inloggning (dev-servern). */
 export interface MeResponse {
   sub: string
   name: string
   dev: boolean
+}
+
+/** Svar från /api/me: vem nyckeln eller sessionen gäller, och vad som gäller för kontot. */
+export interface MeApiResponse {
+  sub: string
+  name: string
+  via: 'token' | 'session'
+  /** Antal modeller på servern. */
+  models: number
+  limits: typeof LIMITS
+  /** Hur många anrop en nyckel får göra (per minut, och ändringar per dygn). */
+  rate: { perMinute: number; writesPerDay: number }
 }
 
 /** Modell-id är UUID:er. Kontrolleras på servern så att id aldrig kan bli en sökväg. */

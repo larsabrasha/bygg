@@ -25,7 +25,7 @@ export function MainViewsSheet({ size, images, modelName, date, count, sheet, sh
       label={`Huvudvyer för ${modelName}`}
       note="Mått i mm. Projektion enligt E-metoden: vy från vänster till höger, vy ovanifrån under."
       cells={[
-        { dx: 0, dy: 0, w: 95, h: 12, label: 'Benämning', value: modelName, size: 4, bold: true },
+        { dx: 0, dy: 0, w: 95, h: 12, label: 'Namn', value: modelName, size: 4, bold: true },
         { dx: 95, dy: 0, w: 30, h: 12, label: 'Blad', value: `${sheet} (${sheets})`, size: 4 },
         { dx: 0, dy: 12, w: 65, h: 9, label: 'Innehåll', value: 'Huvudvyer' },
         {

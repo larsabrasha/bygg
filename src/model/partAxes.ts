@@ -1,4 +1,5 @@
 import type { Box } from './box'
+import { materialSpec } from './materials'
 import type { Axis, PartDef } from './types'
 
 /**
@@ -49,6 +50,19 @@ export function withAxes(current: PartAxes, patch: Partial<PartAxes>): PartAxes 
   return patch.grainAxis !== undefined
     ? { grainAxis, thicknessAxis: current.grainAxis }
     : { grainAxis: current.thicknessAxis, thicknessAxis }
+}
+
+/**
+ * Axlarna för L och B i kaplistan och på delritningen. Med fiber går L längs
+ * fibern. Utan fiber (MDF, glas) går L längs det längre av de två måtten som
+ * inte är tjockleken; vid lika mått längs fiberaxeln.
+ */
+export function cutAxes(part: Box & PartAxes & { material: string }): { length: Axis; width: Axis } {
+  const width = widthAxis(part)
+  if (materialSpec(part.material).grain || extent(part, part.grainAxis) >= extent(part, width)) {
+    return { length: part.grainAxis, width }
+  }
+  return { length: width, width: part.grainAxis }
 }
 
 export interface PartDims {

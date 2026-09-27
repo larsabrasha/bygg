@@ -38,7 +38,7 @@ export function ModelTitle() {
         >
           <ChevronLeft size={24} strokeWidth={1.75} aria-hidden className="hidden narrow:block" />
           <span className="narrow:hidden">
-            <Logo height={24} />
+            <Logo />
           </span>
         </button>
       </Tip>

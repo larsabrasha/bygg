@@ -315,7 +315,7 @@ function CutListCard() {
         <thead className="sr-only">
           <tr>
             <th>Antal</th>
-            <th>Del</th>
+            <th>Namn</th>
             <th>Mått</th>
           </tr>
         </thead>

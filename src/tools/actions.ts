@@ -824,6 +824,8 @@ export function extendCopies(total: number): boolean {
     applyStep(source.frame, last.step, last.count + 1 + i),
   )
   const ids = docs().addCopies(source.id, frames)
+  // Stoppad av gränserna (se model/limits); skälet visas redan.
+  if (ids.length === 0) return false
   tools().setLastCopy({ ...last, count: n, lastId: ids.at(-1)! })
   tools().setMeasure(0, '')
   return true

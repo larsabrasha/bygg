@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { buildCutList, groupByMaterial, type CutListRow } from '../model/cutlist'
+import { buildCutList, groupByMaterial, paintText, type CutListRow } from '../model/cutlist'
 import { compactNames } from '../model/cutlistExport'
 import { numberFormat } from '../model/numberFormat'
 import { materialColor } from '../scene/colors'
@@ -8,11 +8,10 @@ import { EmptyState } from './EmptyState'
 import { CutPlanView } from './CutPlanView'
 import { CutListPicture } from './pictures'
 import { groupTitle, sectionTitle } from './ui'
+import { firstUpper, isOrdered, materialTitle } from '../model/materials'
 
 const num = numberFormat(1, true)
 const volume = numberFormat(4, true)
-
-const capitalize = (s: string) => s.charAt(0).toLocaleUpperCase('sv') + s.slice(1)
 
 // Kolumnerna för L, B och T har fast bredd, så att måtten står i linje mellan materialen.
 const dimCol = 'w-12 text-right tabular-nums'
@@ -61,16 +60,17 @@ export function CutList() {
                     style={{ background: materialColor(g.material) }}
                     aria-hidden
                   />
-                  <h3 className="text-[13px] font-semibold">{capitalize(g.material)}</h3>
+                  <h3 className="text-[13px] font-semibold">{materialTitle(g.material)}</h3>
                   <span className="ml-auto text-xs text-muted tabular-nums">
-                    {g.count} st · {volume.format(g.volumeM3)} m³
+                    {/* Glas köps per ruta, inte per kubikmeter. */}
+                    {g.count} st · {isOrdered(g.material) ? 'beställs tillskuret' : `${volume.format(g.volumeM3)} m³`}
                   </span>
                 </div>
                 <table className="w-full border-collapse text-[13px]">
                   <thead className={groupTitle}>
                     <tr className="border-b border-line [&_th]:px-1.5 [&_th]:py-1.5 [&_th]:font-semibold">
                       <th className="w-8 text-right">St</th>
-                      <th className="text-left">Del</th>
+                      <th className="text-left">Namn</th>
                       <th className={dimCol}>L</th>
                       <th className={dimCol}>B</th>
                       <th className={`${dimCol} w-10`}>T</th>
@@ -119,6 +119,19 @@ function Row({ row }: { row: CutListRow }) {
         {/* L×B×T är ämnet; en rund del får sin diameter under namnet. */}
         {row.round && (
           <span className="block text-xs text-muted tabular-nums">Rund, Ø {num.format(row.round.diameter)}</span>
+        )}
+        {/* Kulören får gå ut under måtten, där raden är tom, i stället för att brytas i den smala kolumnen. */}
+        {row.paint && (
+          <span className="relative block h-4">
+            <span className="absolute inset-y-0 left-0 flex items-center gap-1.5 text-xs whitespace-nowrap text-muted">
+              <span
+                className="size-2.5 shrink-0 rounded-full ring-1 ring-black/15 ring-inset"
+                style={{ background: row.paint.color }}
+                aria-hidden
+              />
+              {firstUpper(paintText(row.paint))}
+            </span>
+          </span>
         )}
       </td>
       <td className={dimCol}>{num.format(row.length)}</td>

@@ -3,6 +3,9 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
+  "bin": {
+    "bygg": "cli/bygg.mjs"
+  },
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
@@ -14,6 +17,7 @@
     "dev:vr": "vite --host --mode vr",
     "preview:vr": "vite build --mode vr && vite preview --host --mode vr",
     "start": "tsx server/index.ts",
+    "bygg": "node cli/bygg.mjs",
     "format": "prettier --write src server",
     "icons": "pwa-assets-generator",
     "textures": "tsx scripts/woodTextures.ts"

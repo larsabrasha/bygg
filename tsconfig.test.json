@@ -17,5 +17,5 @@
     "noUnusedParameters": true,
     "noUncheckedIndexedAccess": true
   },
-  "include": ["src/**/*.test.ts", "server/**/*.test.ts"]
+  "include": ["src/**/*.test.ts", "server/**/*.test.ts", "cli/**/*.test.ts"]
 }

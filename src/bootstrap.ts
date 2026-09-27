@@ -1,3 +1,4 @@
+import { useCatalogStore } from './store/catalogStore'
 import { useDocumentStore } from './store/documentStore'
 import { useLibraryStore } from './store/libraryStore'
 import { useToolStore } from './store/toolStore'
@@ -24,7 +25,9 @@ if (import.meta.env.PROD) void import('./pwa').then((m) => m.startPwa())
 
 // Bara i dev: gör storarna åtkomliga från konsolen för felsökning och webbläsartester.
 if (import.meta.env.DEV)
-  Object.assign(window, { __bygg: { docs: useDocumentStore, tools: useToolStore, library: useLibraryStore } })
+  Object.assign(window, {
+    __bygg: { docs: useDocumentStore, tools: useToolStore, library: useLibraryStore, catalog: useCatalogStore },
+  })
 
 if (import.meta.hot) {
   import.meta.hot.accept()

@@ -1,5 +1,13 @@
 import { autoUpdate, flip, offset, shift, size, useFloating } from '@floating-ui/react-dom'
-import { useEffect, useLayoutEffect, useRef, useState, type InputHTMLAttributes, type KeyboardEvent } from 'react'
+import {
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type InputHTMLAttributes,
+  type KeyboardEvent,
+  type ReactNode,
+} from 'react'
 import { createPortal } from 'react-dom'
 import { useDocumentStore } from '../store/documentStore'
 import { insertName, segments, suggestions, wordAt } from './paramSuggest'
@@ -37,6 +45,11 @@ type Props = Omit<InputHTMLAttributes<HTMLInputElement>, 'value' | 'onChange'> &
    */
   fillOnFocus?: string
   onFill?: (text: string) => void
+  /**
+   * Visas i stället för texten när fältet inte har fokus, t.ex. det beräknade måttet
+   * för ett uttryck som inte ryms i ett smalt fält. Med fokus syns uttrycket.
+   */
+  display?: ReactNode
 }
 
 /**
@@ -59,6 +72,7 @@ export function ExprInput({
   onStep,
   fillOnFocus,
   onFill,
+  display,
   className = '',
   onKeyDown,
   onFocus,
@@ -227,7 +241,8 @@ export function ExprInput({
   }
 
   const byName = new Map(params.map((p) => [p.name, p.value]))
-  const parts = badges && !focused && value ? segments(value, new Set(byName.keys())) : null
+  const showDisplay = display !== undefined && !focused
+  const parts = badges && !focused && !showDisplay && value ? segments(value, new Set(byName.keys())) : null
   const showBadges = !!parts?.some((p) => p.param)
 
   return (
@@ -242,9 +257,9 @@ export function ExprInput({
         role="combobox"
         aria-expanded={open}
         aria-autocomplete="list"
-        className={`${className} ${showBadges ? 'text-transparent' : ''}`}
+        className={`${className} ${showBadges || showDisplay ? 'text-transparent' : ''}`}
         // Badges klipps i smala fält; hela uttrycket syns som tooltip.
-        title={showBadges ? value : rest.title}
+        title={showBadges || showDisplay ? value : rest.title}
         onChange={(e) => {
           onChange(e.target.value)
           const at = e.target.selectionStart ?? e.target.value.length
@@ -293,6 +308,14 @@ export function ExprInput({
           onBlur?.(e)
         }}
       />
+      {showDisplay && (
+        <span
+          aria-hidden
+          className={`pointer-events-none absolute inset-0 flex items-center overflow-hidden whitespace-pre ${padX}`}
+        >
+          {display}
+        </span>
+      )}
       {showBadges && (
         <span
           aria-hidden

@@ -6,8 +6,9 @@ import './index.css'
 const render = (node: ReactNode) => createRoot(document.getElementById('root')!).render(<StrictMode>{node}</StrictMode>)
 
 // Utan inloggning visas startsidan; appen (och allt den läser in) laddas bara för den som är inloggad.
-// I dev finns ingen inloggning; där visar ?startsida den.
-const preview = import.meta.env.DEV && new URLSearchParams(location.search).has('startsida')
+// ?startsida visar den ändå: i dev och i förhandsvisningen av bygget finns ingen inloggning.
+// Sidan är öppen för alla, så det gör inget att den går att nå inloggad.
+const preview = new URLSearchParams(location.search).has('startsida')
 if (preview || (await startAuth()) === 'landing') {
   const { Landing } = await import('./landing/Landing')
   render(<Landing />)

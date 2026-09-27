@@ -1,6 +1,7 @@
-import { isPanel, SHEET_MATERIALS } from './cutPlan'
+import { isPanel } from './cutPlan'
+import { materialSpec, materialTitle } from './materials'
 import { numberFormat } from './numberFormat'
-import { BOARD, panelThicknesses, SHEET } from './swedishStock'
+import { BOARD, panelThicknesses } from './swedishStock'
 
 /**
  * Snäpp mot tjocklekar som finns att köpa, under push/pull. Svagare än snäpp
@@ -22,14 +23,13 @@ const MAX_ZONE = 2
 
 /** Tjocklekarna för en del i material med bredden width, och vad det är man köper. */
 export function stockThicknesses(material: string, width: number): { thicknesses: readonly number[]; source: string } {
-  if (SHEET_MATERIALS.includes(material)) return { thicknesses: SHEET.thicknesses, source: capitalize(material) }
+  const spec = materialSpec(material)
+  if (spec.kind !== 'wood') return { thicknesses: spec.thicknesses ?? [], source: materialTitle(material) }
   if (isPanel(false, { length: 0, width })) {
-    return { thicknesses: panelThicknesses(material), source: `Limfog av ${material}` }
+    return { thicknesses: panelThicknesses(material), source: `Limfog av ${spec.name}` }
   }
   return { thicknesses: BOARD.thicknesses, source: 'Hyvlat virke' }
 }
-
-const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
 
 /**
  * Målen för en tjocklek som blir base + distance (en dels sida dras längs

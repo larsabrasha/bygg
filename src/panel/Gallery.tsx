@@ -1,4 +1,17 @@
-import { Box, Copy, Ellipsis, FolderOpen, LoaderCircle, LogIn, LogOut, Pencil, Plus, Trash2, X } from 'lucide-react'
+import {
+  Box,
+  Copy,
+  Ellipsis,
+  FolderOpen,
+  LoaderCircle,
+  LogIn,
+  LogOut,
+  Palette,
+  Pencil,
+  Plus,
+  Trash2,
+  X,
+} from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useLibraryStore, type ModelListItem } from '../store/libraryStore'
 import { nameFromFileName, readModelFile } from '../persist/modelFile'
@@ -172,7 +185,8 @@ async function importFile(file: File) {
     useLibraryStore.getState().notify(`${file.name} gick inte att öppna: ${r.reason}.`)
     return
   }
-  await openFromGallery(await importModel(r.name, r.doc))
+  const id = await importModel(r.name, r.doc)
+  if (id) await openFromGallery(id)
 }
 
 /** I gästens databas när rutan om provläget stängts. */
@@ -277,14 +291,25 @@ export function Gallery() {
 
   return (
     <div className="fixed inset-0 z-40 flex flex-col bg-canvas print:hidden">
-      <header className="flex items-center gap-3 border-b border-line bg-panel px-4 py-2 pt-[max(8px,env(safe-area-inset-top))]">
-        <h1 className="flex items-center">
-          <Logo height={30} />
+      {/* Samma höjd och luft som verktygslisten i modellen (Toolbar), och loggan på samma ställe. */}
+      <header className="flex items-center gap-3 border-b border-line bg-panel px-2 py-1.5 pt-[max(6px,env(safe-area-inset-top))]">
+        <h1 className="flex h-10 items-center px-1.5 narrow:h-11">
+          <Logo />
         </h1>
         <div className="min-w-0 flex-1">
           <SyncBadge />
         </div>
         <LogoutButton />
+        <Tip label="Egna material och standardfärger">
+          <button
+            className={secondaryButton}
+            aria-label="Material och färger"
+            onClick={() => useLibraryStore.getState().set({ catalogOpen: 'materials' })}
+          >
+            <Palette size={18} aria-hidden />
+            <span className="narrow:hidden">Material och färger</span>
+          </button>
+        </Tip>
         <ImportButton />
         <button className={primaryButton} onClick={() => void openFromGallery('new')}>
           <Plus size={18} aria-hidden />

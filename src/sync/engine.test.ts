@@ -6,6 +6,7 @@ import { createApp } from '../../server/app'
 import { devAuth } from '../../server/auth'
 import { UserStorages } from '../../server/storage'
 import { newId } from '../model/id'
+import { LIMITS } from '../model/limits'
 import { serialize, type SavedFile } from '../persist/format'
 import { ApiError, httpApi, type SyncApi } from './api'
 import { syncOnce } from './engine'
@@ -176,6 +177,37 @@ describe('synk mellan två enheter', () => {
     }
     await syncOnce({ api: racing, repo, newId })
     expect(await repo.get(m.id)).toMatchObject({ baseRevision: 1, dirty: true })
+  })
+
+  it('en modell som servern nekar (för stor) stoppar inte synken av de andra', async () => {
+    const a = device()
+    const big = localModel({
+      name: 'Stor',
+      file: serialize({
+        sketches: [],
+        defs: [],
+        instances: [],
+        params: Array.from({ length: LIMITS.params + 1 }, (_, i) => ({
+          id: `p${i}`,
+          name: `p${i}`,
+          expr: '1',
+          value: 1,
+        })),
+      }),
+    })
+    const ok = localModel()
+    await a.repo.put(big)
+    await a.repo.put(ok)
+    const r = await a.sync()
+    expect(r.events).toContainEqual({ kind: 'pushed', id: ok.id, revision: 1 })
+    expect(r.events).toContainEqual({
+      kind: 'rejected',
+      id: big.id,
+      name: 'Stor',
+      reason: expect.stringMatching(/parametrar/),
+    })
+    // Ligger kvar osynkad, så att inget försvinner.
+    expect(await a.repo.get(big.id)).toMatchObject({ dirty: true, baseRevision: null })
   })
 
   it('hoppar över modeller i ett nyare format och säger till', async () => {

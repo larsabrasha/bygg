@@ -13,7 +13,10 @@ export function CommitField({
   prefix,
   suffix,
   label,
+  placeholder,
   expr = false,
+  quiet = false,
+  display,
 }: {
   value: string
   /** Returnerar felmeddelande, eller null om värdet sparades. */
@@ -26,8 +29,18 @@ export function CommitField({
   suffix?: string
   /** Namn för skärmläsare när fältet saknar synlig etikett. */
   label?: string
+  /** Blek text i ett tomt fält, t.ex. ett exempel. */
+  placeholder?: string
   /** Fältet tar uttryck: föreslå parametrar och visa dem som badges. */
   expr?: boolean
+  /**
+   * Ser ut som text tills man pekar på fältet eller trycker i det: för tal som
+   * man läser oftare än ändrar (mått, placering, vinkel). Lägre än ett vanligt fält,
+   * men minst 36 px med fingrar. Kräver prefix eller suffix.
+   */
+  quiet?: boolean
+  /** Visas i stället för texten när fältet inte har fokus (se ExprInput). Bara med expr. */
+  display?: ReactNode
 }) {
   const [text, setText] = useDraft(value)
   const [error, setError] = useState<string | null>(null)
@@ -46,6 +59,7 @@ export function CommitField({
   const common = {
     'aria-label': label,
     'aria-invalid': !!error,
+    placeholder,
     inputMode,
     onBlur: save,
     onKeyDown: (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -64,6 +78,8 @@ export function CommitField({
       // Ett steg med piltangenterna sparas direkt, så att delen ändras medan man stegar.
       onStep={(t) => setError(onCommit(t))}
       badges
+      // Ett utkast som inte gick att spara syns som det är, inte som det gamla värdet.
+      display={text === value ? display : undefined}
       className={inputClass}
       // Utan ram räknas kanten (1 px) med i fältets utfyllnad.
       padX={boxed ? 'px-0' : 'px-[11px]'}
@@ -87,7 +103,7 @@ export function CommitField({
       {prefix || suffix ? (
         <span
           data-field-box
-          className={`flex h-10 items-center gap-1.5 rounded-lg border bg-field px-2.5 focus-within:border-accent focus-within:ring-2 focus-within:ring-accent-soft narrow:h-11 ${error ? 'border-danger' : 'border-line'}`}
+          className={`flex items-center gap-1.5 rounded-lg border px-2.5 focus-within:border-accent focus-within:ring-2 focus-within:ring-accent-soft ${quiet ? 'h-8 cursor-text focus-within:bg-field hover:not-focus-within:bg-hover pointer-coarse:h-9 narrow:h-10' : 'h-10 bg-field narrow:h-11'} ${error ? 'border-danger' : quiet ? 'border-transparent' : 'border-line'}`}
         >
           {prefix}
           {input}

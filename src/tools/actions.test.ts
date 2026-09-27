@@ -290,7 +290,7 @@ describe('push/pull', () => {
 
   it('hela måttet som en parameter styr sedan måttet', () => {
     const b = extrude(drawGroundRect(), '22')
-    const id = docs().addParam()
+    const id = docs().addParam()!
     docs().updateParam(id, { name: 'langd', expr: '800' })
     tools().setTool('pushpull')
     tap({ point: [600, 11, -200], target: { kind: 'body', id: b.id, face: 'u+' } }, 0)
@@ -655,7 +655,7 @@ describe('flyttpilarna', () => {
 
 describe('uttryck i måttfälten', () => {
   it('sparar uttryck med parametrar och följer parametern', () => {
-    const id = docs().addParam()
+    const id = docs().addParam()!
     docs().updateParam(id, { name: 't', expr: '22' })
     const b = extrude(drawGroundRect(), 't')
     expect(b.z1).toBe(22)
@@ -664,7 +664,7 @@ describe('uttryck i måttfälten', () => {
   })
 
   it('förra djupet följer parametern om det var ett uttryck', () => {
-    const id = docs().addParam()
+    const id = docs().addParam()!
     docs().updateParam(id, { name: 't', expr: '22' })
     extrude(drawGroundRect(), 't')
     const s = drawGroundRect(1000, 0, 1400, -400)
@@ -676,7 +676,7 @@ describe('uttryck i måttfälten', () => {
   })
 
   it('rektangelns mått kan vara uttryck', () => {
-    const id = docs().addParam()
+    const id = docs().addParam()!
     docs().updateParam(id, { name: 'bredd', expr: '500' })
     tools().setTool('rect')
     tap({ point: [0, 0, 0], target: { kind: 'ground' } }, 0)

@@ -1,6 +1,6 @@
 import type { Box } from './box'
 import { toLocal, toWorld } from './frame'
-import type { Combine, Frame, Instance, ModelDocument, Rect, Sketch, ToolShape, Vec3 } from './types'
+import type { Combine, Frame, Instance, ModelDocument, PartDef, Rect, Sketch, ToolShape, Vec3 } from './types'
 import { dot, sub } from './vec'
 
 /**
@@ -94,6 +94,10 @@ export function jointError(doc: ModelDocument, hostId: string, intoId: string): 
   if (hostId === intoId) return 'Tryck på en annan del'
   if (host.defId === into.defId) return 'Länkade kopior av samma del kan inte tappas i varandra'
   if (host.combine || into.combine) return 'Ett verktyg kan inte få en tapp'
+  if (doc.instances.some((i) => i.combine?.op === 'joint' && i.combine.host === hostId && i.combine.into === intoId)) {
+    const name = (id: string) => doc.defs.find((d) => d.id === id)?.name ?? 'delen'
+    return `${name(host.defId)} har redan en tapp i ${name(into.defId)}`
+  }
   return null
 }
 
@@ -106,7 +110,7 @@ export function combineError(doc: ModelDocument, toolId: string, hostId: string)
   if (tool.defId === host.defId) return 'Länkade kopior av samma del kan inte skära i varandra'
   // Ett verktyg har bara sin egen enkla form, så kedjor av verktyg tillåts inte.
   if (host.combine) return 'Delen är redan ett verktyg på en annan del'
-  if (isHost(doc, toolId)) return 'Delen har egna urskärningar eller tillägg'
+  if (isHost(doc, toolId)) return 'Delen har egna urtag eller tillägg'
   return null
 }
 
@@ -146,5 +150,131 @@ export function detachOrphans(doc: ModelDocument): ModelDocument {
       const { combine, ...rest } = i
       return ids.has(combine.host) ? { ...rest, combine: { op: 'add', host: combine.host } } : rest
     }),
+  }
+}
+
+/** Talen avrundade till en tusendels mm, så att två likadana känns igen (som i resolve). */
+const rounded = (x: unknown) =>
+  JSON.stringify(x, (_, v: unknown) => (typeof v === 'number' ? Math.round(v * 1000) / 1000 : v))
+
+/** Tapparna i samma grupp (Combine.group) som tappen id, utom den själv. */
+export function jointTwins(doc: ModelDocument, id: string): Instance[] {
+  const group = doc.instances.find((i) => i.id === id)?.combine?.group
+  if (!group) return []
+  return doc.instances.filter((i) => i.id !== id && i.combine?.op === 'joint' && i.combine.group === group)
+}
+
+/**
+ * Format 7 → 8: tappar sparades utan grupp, och gjordes en och en för varje ben. De som
+ * uppenbart hör ihop får en grupp: tappar från länkade kopior av samma del in i samma del,
+ * med samma form och på samma ställe på sin kopia. Görs bara när en äldre fil läses.
+ */
+export function groupLegacyJoints(doc: ModelDocument, newGroup: () => string): ModelDocument {
+  const key = (t: Instance) => {
+    if (t.combine?.op !== 'joint' || !t.combine.into || t.combine.group) return null
+    const host = doc.instances.find((i) => i.id === t.combine!.host)
+    const d = doc.defs.find((x) => x.id === t.defId)
+    if (!host || !d) return null
+    const { profile, shape, z0, z1 } = d
+    return rounded([host.defId, t.combine.into, profile, shape ?? null, z0, z1, relativeFrame(host.frame, t.frame)])
+  }
+  const groups = new Map<string, Instance[]>()
+  for (const t of doc.instances) {
+    const k = key(t)
+    // En tapp per kopia: två likadana på samma kopia är inte tvillingar.
+    if (k && !groups.get(k)?.some((x) => x.combine!.host === t.combine!.host))
+      groups.set(k, [...(groups.get(k) ?? []), t])
+  }
+  const ids = new Map<string, string>()
+  for (const list of groups.values()) {
+    if (list.length < 2) continue
+    const g = newGroup()
+    for (const t of list) ids.set(t.id, g)
+  }
+  if (ids.size === 0) return doc
+  return {
+    ...doc,
+    instances: doc.instances.map((i) =>
+      ids.has(i.id) ? { ...i, combine: { ...i.combine!, group: ids.get(i.id)! } } : i,
+    ),
+  }
+}
+
+/**
+ * Har en tapp ändrats (mått, läge, vinkel, namn) görs samma ändring på de andra i dess grupp
+ * (jointTwins i before): samma form, och samma läge på sin kopia. Annars skulle en av
+ * fyra tappar i en skiva ändras, och benen, som är länkade, få två tappar på varandra.
+ * Ändras flera tvillingar samtidigt (en parameter) räknas var och en för sig.
+ */
+export function syncJointTwins(before: ModelDocument, after: ModelDocument): ModelDocument {
+  const byId = (doc: ModelDocument) => new Map(doc.instances.map((i) => [i.id, i]))
+  const oldInst = byId(before)
+  const newInst = byId(after)
+  const oldDefs = new Map(before.defs.map((d) => [d.id, d]))
+  const newDefs = new Map(after.defs.map((d) => [d.id, d]))
+  // Det i en tapp som ska vara lika för tvillingarna: formen, namnet, uttrycken och läget på värden.
+  const state = (inst: Map<string, Instance>, defs: Map<string, PartDef>, id: string) => {
+    const t = inst.get(id)
+    const host = t?.combine && inst.get(t.combine.host)
+    const d = t && defs.get(t.defId)
+    if (!t || !host || !d) return null
+    const { name, profile, shape, z0, z1, dims, grainAxis, thicknessAxis } = d
+    return rounded([name, profile, shape, z0, z1, dims, grainAxis, thicknessAxis, relativeFrame(host.frame, t.frame)])
+  }
+  const changed = (id: string) => state(oldInst, oldDefs, id) !== state(newInst, newDefs, id)
+
+  const instances = new Map(newInst)
+  const defs = new Map(newDefs)
+  let touched = false
+  const done = new Set<string>()
+  for (const t of after.instances) {
+    if (t.combine?.op !== 'joint' || done.has(t.id) || !oldInst.has(t.id) || !changed(t.id)) continue
+    const host = newInst.get(t.combine.host)
+    const d = newDefs.get(t.defId)
+    if (!host || !d) continue
+    const rel = relativeFrame(host.frame, t.frame)
+    const restRel = t.rest && relativeFrame(host.frame, { origin: host.frame.origin, ...t.rest })
+    for (const twin of jointTwins(before, t.id)) {
+      done.add(twin.id)
+      const now = instances.get(twin.id)
+      const twinHost = now?.combine && instances.get(now.combine.host)
+      if (!now || !twinHost || changed(twin.id)) continue
+      const { pos: _pos, rest: _rest, ...plain } = now
+      void _pos
+      void _rest
+      let rest: Instance['rest']
+      if (restRel) {
+        const { u, v, n } = composeFrame(twinHost.frame, restRel)
+        rest = { u, v, n }
+      }
+      // Läget på värden, inte i världen: ett uttryck för läget (pos) gäller bara tappen man ändrade.
+      instances.set(twin.id, { ...plain, frame: composeFrame(twinHost.frame, rel), ...(rest && { rest }) })
+      const own = defs.get(now.defId)
+      if (own && own.id !== d.id) {
+        const { name, profile, shape, z0, z1, dims, grainAxis, thicknessAxis } = d
+        const { shape: _s, dims: _d, ...base } = own
+        void _s
+        void _d
+        defs.set(own.id, {
+          ...base,
+          name,
+          profile,
+          z0,
+          z1,
+          grainAxis,
+          thicknessAxis,
+          ...(shape && { shape }),
+          ...(dims && { dims }),
+        })
+      }
+      touched = true
+    }
+    done.add(t.id)
+  }
+  if (!touched) return after
+  return {
+    ...after,
+    defs: after.defs.map((x) => defs.get(x.id)!),
+    instances: after.instances.map((i) => instances.get(i.id)!),
   }
 }

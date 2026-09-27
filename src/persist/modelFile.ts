@@ -1,4 +1,5 @@
 import type { ModelDocument } from '../model/types'
+import { limitError } from '../model/limits'
 import { migrate, serialize, type SavedFile } from './format'
 
 /**
@@ -38,6 +39,9 @@ export function readModelFile(text: string, fallbackName: string): ReadResult {
   if (!isObj(saved) || !('doc' in saved)) return { ok: false, reason: 'Filen är inte en modellfil' }
   const result = migrate(saved)
   if (!result.ok) return result
+  // Samma gränser som när man ritar: det som inte går att ändra i appen ska inte heller komma in.
+  const tooBig = limitError(result.doc)
+  if (tooBig) return { ok: false, reason: tooBig.replace(/\.$/, '') }
   const name = typeof raw.name === 'string' && raw.name.trim() ? raw.name.trim() : fallbackName
   return { ok: true, name, doc: result.doc }
 }
