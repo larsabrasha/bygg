@@ -82,7 +82,12 @@ export function PaintField({ instanceId, def }: { instanceId: string; def: PartD
           </button>
         </Tip>
         {builtIn.map((c) => swatch(c, false))}
-        <Tip label="Egen färg">
+      </SwatchRow>
+      {own.length > 0 && <SwatchRow title="Egna färger">{own.map((c) => swatch(c, false))}</SwatchRow>}
+      {/* + ger delen en egen färg, som sedan står här; standardfärgerna ändras i Redigera färglistan. */}
+      <SwatchRow title="I modellen">
+        {model.map((c) => swatch(c, true))}
+        <Tip label="Egen färg för delen">
           <button
             aria-label="Egen färg"
             aria-expanded={custom === 'new'}
@@ -93,8 +98,6 @@ export function PaintField({ instanceId, def }: { instanceId: string; def: PartD
           </button>
         </Tip>
       </SwatchRow>
-      {own.length > 0 && <SwatchRow title="Egna färger">{own.map((c) => swatch(c, false))}</SwatchRow>}
-      {model.length > 0 && <SwatchRow title="I modellen">{model.map((c) => swatch(c, true))}</SwatchRow>}
       {custom && (
         <CustomColor
           // En ny ruta för varje del och läge: utkastet börjar om.
