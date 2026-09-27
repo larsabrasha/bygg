@@ -156,10 +156,14 @@ function GrainControls({ body, def }: { body: Body; def: PartDef }) {
     updatePart(body.id, { thicknessAxis: axis, grainAxis })
   }
   return (
-    <div className="grid grid-cols-2 items-end gap-2">
-      <label className={fieldLabel}>
+    <div className="flex flex-wrap items-center gap-2">
+      <label className="flex items-center gap-2 text-xs text-muted">
         Tjockleken är
-        <select className={field} value={def.thicknessAxis} onChange={(e) => setThickness(e.target.value as Axis)}>
+        <select
+          className={`${field} w-auto!`}
+          value={def.thicknessAxis}
+          onChange={(e) => setThickness(e.target.value as Axis)}
+        >
           {AXES.map((a) => (
             <option key={a} value={a}>
               {fmt.format(extent(body, a))} mm-måttet

@@ -34,7 +34,8 @@ export function CommitField({
   expr?: boolean
   /**
    * Ser ut som text tills man pekar på fältet eller trycker i det: för tal som
-   * man läser oftare än ändrar (mått, placering, vinkel). Kräver prefix eller suffix.
+   * man läser oftare än ändrar (mått, placering, vinkel). Lägre än ett vanligt fält,
+   * men minst 36 px med fingrar. Kräver prefix eller suffix.
    */
   quiet?: boolean
 }) {
@@ -97,7 +98,7 @@ export function CommitField({
       {prefix || suffix ? (
         <span
           data-field-box
-          className={`flex h-10 items-center gap-1.5 rounded-lg border px-2.5 focus-within:border-accent focus-within:ring-2 focus-within:ring-accent-soft narrow:h-11 ${quiet ? 'cursor-text focus-within:bg-field hover:not-focus-within:bg-hover' : 'bg-field'} ${error ? 'border-danger' : quiet ? 'border-transparent' : 'border-line'}`}
+          className={`flex items-center gap-1.5 rounded-lg border px-2.5 focus-within:border-accent focus-within:ring-2 focus-within:ring-accent-soft ${quiet ? 'h-8 cursor-text focus-within:bg-field hover:not-focus-within:bg-hover pointer-coarse:h-9 narrow:h-10' : 'h-10 bg-field narrow:h-11'} ${error ? 'border-danger' : quiet ? 'border-transparent' : 'border-line'}`}
         >
           {prefix}
           {input}
