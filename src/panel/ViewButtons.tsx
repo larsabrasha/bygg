@@ -7,12 +7,15 @@ import {
   Glasses,
   Maximize2,
   Minimize2,
+  Rotate3d,
   RulerDimensionLine,
   Scan,
   Sparkles,
   type LucideIcon,
 } from 'lucide-react'
 import { useCallback, useRef, useState } from 'react'
+import { useAr } from './ar'
+import { ArButton } from './ArButton'
 import { MenuItem } from './MenuItem'
 import { useDismiss } from './useDismiss'
 import { LOOKS, useViewStore, type Look } from '../store/viewStore'
@@ -34,7 +37,7 @@ const MENU_CHEVRON = { size: 12, strokeWidth: 2, 'aria-hidden': true, className:
  * Knappar ovanpå 3D-vyn för kameran. Uppe till höger, så att de inte krockar med måttfältet på mobil.
  * Visa allt har text på desktop, så att den inte ser ut som fullskärm; på smal skärm bara ikonen (hörnen).
  * I tre grupper med luft emellan: kameran (Visa allt), det som visas (utseendet V, måtten D,
- * sprängskissen E) och lägena som byter hela vyn (VR, bara där webbläsaren kan visa det, och
+ * sprängskissen E) och lägena som byter hela vyn (VR och AR, bara där webbläsaren kan visa dem, och
  * fokusläget Tab längst ut).
  * Knapparna behövs där det inte finns något tangentbord. På smal skärm ligger de i menyn Vy under Visa allt (ViewMenu).
  */
@@ -80,6 +83,7 @@ export function ViewButtons() {
       </div>
       <div role="group" aria-label="Lägen" className={`${group} narrow:hidden`}>
         <VrButton />
+        <ArButton />
         <Tip label={focusMode ? 'Visa panelerna igen' : 'Fokusläge: bara 3D-vyn'} keys="Tab">
           <button
             aria-label={focusMode ? 'Avsluta fokusläge' : 'Fokusläge'}
@@ -147,7 +151,7 @@ function LookMenu() {
 }
 
 /**
- * Utseende, mått, sprängskiss, VR och fokusläge på smal skärm: en knapp med en meny, så att
+ * Utseende, mått, sprängskiss, VR, AR och fokusläge på smal skärm: en knapp med en meny, så att
  * kameraknapparna och verktygslisten får plats ovanför varandra vid högerkanten
  * också när vyn är låg (bladet öppet).
  */
@@ -164,6 +168,7 @@ function ViewMenu() {
   const look = useViewStore((s) => s.look)
   const setLook = useViewStore((s) => s.setLook)
   const vr = useVrAvailable()
+  const ar = useAr()
   const pick = (fn: () => void) => () => {
     close()
     fn()
@@ -198,6 +203,12 @@ function ViewMenu() {
           {vr && (
             <MenuItem Icon={Glasses} onClick={pick(() => void enterVr())}>
               Visa i VR
+            </MenuItem>
+          )}
+          {/* Menyn står kvar medan AR förbereds, så att det syns att något händer. */}
+          {ar.supported && (
+            <MenuItem Icon={Rotate3d} disabled={ar.busy || !ar.available} onClick={() => void ar.open(close)}>
+              {ar.busy ? 'Förbereder AR…' : 'Visa i AR'}
             </MenuItem>
           )}
           <MenuItem Icon={focusMode ? Minimize2 : Maximize2} checked={focusMode} onClick={pick(toggleFocusMode)}>
