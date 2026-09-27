@@ -21,7 +21,8 @@
     "format": "prettier --write src server",
     "icons": "pwa-assets-generator",
     "textures": "tsx scripts/woodTextures.ts",
-    "stills": "tsx scripts/landingStills.ts"
+    "stills": "tsx scripts/landingStills.ts",
+    "appshots": "tsx scripts/landingAppShots.ts"
   },
   "dependencies": {
     "@hono/node-server": "^2.1.1",

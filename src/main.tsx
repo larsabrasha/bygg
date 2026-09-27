@@ -13,6 +13,10 @@ if (import.meta.env.DEV && params.has('stillbilder')) {
   // Möblerna på startsidan att fotografera till stillbilderna (npm run stills).
   const { Stills } = await import('./landing/Stills')
   render(<Stills />)
+} else if (import.meta.env.DEV && params.has('delningsbild')) {
+  // Bilden för delade länkar, att fotografera (npm run stills).
+  const { ShareImage } = await import('./landing/ShareImage')
+  render(<ShareImage />)
 } else if (intro) {
   const [{ Landing }, open] = await Promise.all([import('./landing/Landing'), canOpenApp()])
   render(<Landing openApp={open} />)

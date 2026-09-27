@@ -2,6 +2,8 @@
  * Tar stillbilderna av möblerna på startsidan (src/landing/stills), i ljust och mörkt
  * tema. Startsidan visar dem medan 3D-vyn laddas. De tas med appens egen 3D-vy
  * (?stillbilder, src/landing/Stills.tsx) i Chrome, som måste vara installerat.
+ * Sist tas bilden för delade länkar (public/delningsbild.jpg, ?delningsbild), som
+ * visar bordets stillbild.
  * Körs med `npm run stills` när en möbel eller studioljuset ändras; bilderna checkas in.
  */
 import { mkdir, writeFile } from 'node:fs/promises'
@@ -11,6 +13,7 @@ import { createServer } from 'vite'
 
 const OUT = new URL('../src/landing/stills/', import.meta.url)
 const QUALITY = 80
+const SHARE = new URL('../public/delningsbild.jpg', import.meta.url)
 
 const server = await createServer({
   configLoader: 'runner',
@@ -41,6 +44,18 @@ try {
       console.log(file.pathname)
     }
   }
+  // Nyckeln för möblerna, som src/landing/stillsKey.test.ts jämför med.
+  const key = await page.evaluate('document.querySelector("[data-key]").dataset.key')
+  await writeFile(new URL('stills.json', OUT), JSON.stringify({ key }, null, 2) + '\n')
+
+  // Delningsbilden i ljust tema, i exakt 1200 × 630: förhandsvisningarna skalar den själva.
+  await page.setViewport({ width: 1300, height: 700, deviceScaleFactor: 1 })
+  await page.emulateMediaFeatures([{ name: 'prefers-color-scheme', value: 'light' }])
+  await page.goto('http://localhost:5390/?delningsbild', { waitUntil: 'networkidle0' })
+  await page.waitForFunction('[...document.images].every((i) => i.complete && i.naturalWidth > 0)')
+  const png = await (await page.$('[data-share]'))!.screenshot()
+  await writeFile(SHARE, await sharp(png).jpeg({ quality: 86, mozjpeg: true }).toBuffer())
+  console.log(SHARE.pathname)
 } finally {
   await browser.close()
   await server.close()

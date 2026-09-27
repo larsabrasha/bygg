@@ -36,6 +36,7 @@ import { bordBoards, bordCutList, bordDrawing, bordView, nattduksbordView, type 
 import { Sheets } from './Sheets'
 import type { StageControl } from './Stage'
 import { useInView, useMedia } from './useInView'
+import { Wood } from './Wood'
 
 /**
  * Startsidan för den som inte är inloggad: vad appen gör, visat med riktiga
@@ -182,15 +183,6 @@ function Eyebrow({ children }: { children: ReactNode }) {
   return <p className="mb-4 text-[12px] font-semibold tracking-[0.18em] text-muted uppercase">{children}</p>
 }
 
-/** Ordet i trä: en gradient i ekens färger. */
-function Wood({ children }: { children: ReactNode }) {
-  return (
-    <span className="bg-linear-to-br from-[#9a6a3a] via-[#c4955e] to-[#7d5129] bg-clip-text text-transparent dark:from-[#e0b27c] dark:via-[#f1cf9f] dark:to-[#c48e55]">
-      {children}
-    </span>
-  )
-}
-
 function Header() {
   const [scrolled, setScrolled] = useState(false)
   useEffect(() => {
@@ -286,10 +278,13 @@ const STEPS = [
  * Nattduksbordet går isär när avsnittet kommer in i bild, och vrids sakta medan man läser.
  * Sidan scrollar som vanligt; ingen scroll går åt till att bara driva animationen. Stegen
  * står bredvid som en vanlig lista. På smal skärm står de under, och bilden stannar under
- * sidhuvudet medan de scrollar förbi, så att möbeln syns hela tiden.
+ * sidhuvudet medan de scrollar förbi, så att möbeln syns hela tiden (inte på låga skärmar,
+ * som en liggande telefon: där scrollar bilden med).
  */
 function Explode() {
   const wide = useMedia('(min-width: 900px)')
+  // Bilden stannar bara på smal skärm som är hög nog: liggande telefon har inte plats för både bild och text.
+  const sticky = useMedia('(max-width: 899px) and (min-height: 500px)')
   const section = useRef<HTMLElement>(null)
   const text = useRef<HTMLDivElement>(null)
   const stage = useRef<HTMLDivElement>(null)
@@ -305,7 +300,7 @@ function Explode() {
       const clamp = (x: number) => Math.min(1, Math.max(0, x))
       let apart: number
       let turn: number
-      if (wide) {
+      if (!sticky) {
         // Hur långt avsnittets överkant har kommit upp från skärmens underkant, i pixlar.
         const entered = innerHeight - r.top
         // Ihop när avsnittet kommer in, helt isär när överkanten är en fjärdedel från toppen.
@@ -334,7 +329,7 @@ function Explode() {
       removeEventListener('resize', on)
       cancelAnimationFrame(frame)
     }
-  }, [wide])
+  }, [sticky])
 
   return (
     <section
@@ -365,7 +360,7 @@ function Explode() {
       {/* Smal skärm: stannar under sidhuvudet (64 px), med bakgrund så att texten glider in under den. */}
       <div
         ref={stage}
-        className="h-[min(78svh,720px)] min-h-[440px] max-[899px]:sticky max-[899px]:top-[calc(env(safe-area-inset-top)+64px)] max-[899px]:z-10 max-[899px]:-mx-6 max-[899px]:h-[min(38svh,calc(100vw-48px))] max-[899px]:min-h-[200px] max-[899px]:bg-studio max-[899px]:px-6"
+        className="h-[min(78svh,720px)] min-h-[440px] [@media(max-width:899px)_and_(min-height:500px)]:sticky [@media(max-width:899px)_and_(min-height:500px)]:top-[calc(env(safe-area-inset-top)+64px)] max-[899px]:z-10 max-[899px]:-mx-6 max-[899px]:h-[min(38svh,calc(100vw-48px))] max-[899px]:min-h-[200px] max-[899px]:bg-studio max-[899px]:px-6"
       >
         <Stage
           view={nattduksbordView}
@@ -380,9 +375,57 @@ function Explode() {
         />
         <div
           aria-hidden
-          className="pointer-events-none absolute inset-x-0 top-full h-6 bg-linear-to-b from-studio to-transparent min-[900px]:hidden"
+          className="pointer-events-none absolute inset-x-0 top-full h-6 bg-linear-to-b from-studio to-transparent min-[900px]:hidden [@media(max-height:499px)]:hidden"
         />
       </div>
+    </section>
+  )
+}
+
+/** Bilderna av appen (npm run appshots), i ljust och mörkt tema. */
+const APP = import.meta.glob<string>('./app/*.webp', { eager: true, query: '?url', import: 'default' })
+
+function AppShot({ name, alt, className }: { name: 'dator' | 'mobil'; alt: string; className: string }) {
+  const light = APP[`./app/${name}-ljus.webp`]
+  const dark = APP[`./app/${name}-mork.webp`]
+  if (!light || !dark) return null
+  return (
+    <picture>
+      <source srcSet={dark} media="(prefers-color-scheme: dark)" />
+      <img src={light} alt={alt} loading="lazy" className={className} />
+    </picture>
+  )
+}
+
+/** Hur appen ser ut, på datorn och i mobilen: bordet ovanför, med en bräda vald. */
+function AppView() {
+  return (
+    <section className="mx-auto max-w-6xl px-6 py-24 max-[899px]:py-16">
+      <Reveal className="mb-14 max-w-[640px] max-[899px]:mb-10">
+        <Eyebrow>Appen</Eyebrow>
+        <h2 className="text-[clamp(32px,4.4vw,54px)] leading-[1.02] font-semibold tracking-[-0.03em] text-balance">
+          Samma app på datorn <Wood>och i mobilen.</Wood>
+        </h2>
+        <p className="mt-6 max-w-[480px] text-[17px] leading-relaxed text-muted text-pretty">
+          Välj en del och dra i pilen, eller skriv måttet. På datorn står egenskaperna bredvid, i mobilen i ett blad som
+          du drar upp.
+        </p>
+      </Reveal>
+      <Reveal delay={120}>
+        {/* Mobilen överlappar datorn nere till höger; utrymmet för den står som marginal. */}
+        <div className="relative pr-[10%] pb-[10%] max-[560px]:pr-[22%] max-[560px]:pb-[22%]">
+          <AppShot
+            name="dator"
+            alt="Bygg på datorn: bordet i ek med en bräda i skivan vald, en pil att dra i, måttrutan och egenskaperna i en panel till höger."
+            className="w-full rounded-xl shadow-[0_30px_80px_-30px_rgba(40,25,10,0.5),0_0_0_1px_rgba(0,0,0,0.06)]"
+          />
+          <AppShot
+            name="mobil"
+            alt="Bygg i mobilen: samma bord med brädan vald, verktygen längs kanten och bladet med egenskaperna längst ner."
+            className="absolute right-0 bottom-0 w-[23%] rounded-[2rem] border-[6px] border-[#1c1a18] shadow-[0_30px_60px_-20px_rgba(40,25,10,0.6)] max-[560px]:w-[32%] max-[560px]:rounded-[1.4rem] max-[560px]:border-4"
+          />
+        </div>
+      </Reveal>
     </section>
   )
 }
@@ -723,11 +766,13 @@ export function Landing({ openApp = false }: { openApp?: boolean }) {
   useWebPage()
   return (
     <OpenApp value={openApp}>
-      <div className="min-h-full bg-studio text-ink">
+      {/* clip: bladen i ritningen och bunten sticker ut åt sidan; sidan ska inte bli bredare (och går inte att dra i sidled). */}
+      <div className="min-h-full overflow-x-clip bg-studio text-ink">
         <Header />
         <main>
           <Hero />
           <Explode />
+          <AppView />
           <CutList />
           <CutPlan />
           <Drawing />
@@ -737,7 +782,7 @@ export function Landing({ openApp = false }: { openApp?: boolean }) {
         <footer className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-6 pt-6 pb-[max(32px,env(safe-area-inset-bottom))] text-[12px] text-faint">
           <Logo height={18} />
           <div className="flex items-center gap-3">
-            <span>Mått i millimeter. Data på din egen server.</span>
+            <span>Mått i millimeter. Kan köras på din egen server.</span>
             <a
               href={REPO_URL}
               target="_blank"

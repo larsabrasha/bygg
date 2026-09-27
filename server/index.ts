@@ -1,7 +1,10 @@
 import { serve } from '@hono/node-server'
 import { serveStatic } from '@hono/node-server/serve-static'
+import { existsSync, readFileSync } from 'node:fs'
+import type { Context } from 'hono'
 import { createApp } from './app'
 import { noAuth, oidcAuth } from './auth'
+import { withAppUrl } from './indexHtml'
 import { UserStorages } from './storage'
 import { TokenStore } from './tokens'
 
@@ -65,11 +68,17 @@ app.use('/*', async (c, next) => {
   const immutable = c.req.path.startsWith('/assets/') && c.res.status === 200
   c.header('Cache-Control', immutable ? 'public, max-age=31536000, immutable' : 'no-cache')
 })
+// index.html med delningsbildens adress absolut (se indexHtml.ts). Utan bygge (ingen fil) som förut.
+const indexFile = `${staticDir}/index.html`
+const indexHtml = existsSync(indexFile) ? withAppUrl(readFileSync(indexFile, 'utf8'), appUrl) : null
+const sendIndex = indexHtml === null ? serveStatic({ path: indexFile }) : (c: Context) => c.html(indexHtml)
+app.get('/', sendIndex)
+app.get('/index.html', sendIndex)
 app.use('/*', serveStatic({ root: staticDir }))
 // En asset som saknas (t.ex. gammal hash efter uppdatering) ska ge 404, inte index.html.
 app.get('/assets/*', (c) => c.text('Finns inte', 404))
 // Appen har en enda sida; övriga okända sökvägar får index.html.
-app.get('*', serveStatic({ path: `${staticDir}/index.html` }))
+app.get('*', sendIndex)
 
 serve({ fetch: app.fetch, port }, (info) => {
   console.log(`[bygg] Lyssnar på port ${info.port}. Data i ${dataDir}.`)
