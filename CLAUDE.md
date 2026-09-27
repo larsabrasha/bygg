@@ -25,7 +25,7 @@ and generating cut lists. Self-hosted, runs in the browser (PWA).
 - Without an account (guest mode, "Prova utan konto" on the landing page): its own IndexedDB database,
   no sync, the server is never asked. Signing in removes the choice.
 - Signed out, the user sees the landing page (src/landing) with real models, cut list and cutting plan
-  computed with the app's own code. On /intro it is shown to everyone, also when signed in (link in Settings, page "Om Bygg");
+  computed with the app's own code. On /intro it is shown to everyone, also when signed in (the logo in the gallery links there);
   then the buttons lead into the app.
   While the 3D view loads, still images of the furniture are shown (src/landing/stills, retaken with `npm run stills`
   when a piece of furniture or the studio lighting changes; a test says when the furniture has changed). The same script takes

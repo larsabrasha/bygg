@@ -10,11 +10,12 @@ import {
   LogOut,
   Pencil,
   Plus,
+  Presentation,
   Settings,
   Trash2,
   X,
 } from 'lucide-react'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState, type MouseEvent } from 'react'
 import type { Example } from '../examples'
 import { useLibraryStore, type ModelListItem } from '../store/libraryStore'
 import { nameFromFileName, readModelFile } from '../persist/modelFile'
@@ -195,6 +196,15 @@ async function importFile(file: File) {
   if (id) await openFromGallery(id)
 }
 
+/** Startsidan, också för den som redan är i appen (se main.tsx). */
+const INTRO_URL = `${import.meta.env.BASE_URL}intro`
+
+/** Till startsidan i samma flik. Sparar först, som innan man loggar in. */
+function goToIntro(e: MouseEvent) {
+  e.preventDefault()
+  void saveNow().finally(() => location.assign(INTRO_URL))
+}
+
 /** I gästens databas när rutan om provläget stängts. */
 const INTRO_KEY = 'bygg:guest-intro-closed'
 
@@ -214,7 +224,8 @@ function GuestIntro() {
   }, [guest])
   if (!guest || closed) return null
   return (
-    <div className="mb-5 flex items-start gap-3 rounded-xl bg-panel p-4 shadow-[0_6px_20px_-12px_rgba(40,25,10,0.35)] ring-1 ring-line narrow:flex-wrap">
+    // Inte bredare än texten och knapparna: på en bred skärm hamnar annars Logga in långt från texten.
+    <div className="mb-5 flex max-w-[820px] items-start gap-3 rounded-xl bg-panel p-4 shadow-[0_6px_20px_-12px_rgba(40,25,10,0.35)] ring-1 ring-line narrow:flex-wrap">
       <div className="min-w-0 flex-1 basis-64">
         <p className="font-medium">Du provar Bygg utan konto</p>
         <p className="mt-1 max-w-[620px] text-[13px] leading-relaxed text-muted">
@@ -224,6 +235,11 @@ function GuestIntro() {
         </p>
       </div>
       <div className="flex items-center gap-1">
+        {/* Startsidan (/intro) med möblerna, kaplistan och resten: för den som vill läsa mer innan hen bestämmer sig. */}
+        <a href={INTRO_URL} className={`${ghostButton} text-accent`} onClick={goToIntro}>
+          <Presentation size={16} aria-hidden />
+          Läs om Bygg
+        </a>
         {canLogIn() && (
           <button className={primaryButton} onClick={() => void saveNow().finally(() => location.assign(loginUrl()))}>
             <LogIn size={16} aria-hidden />
@@ -358,8 +374,17 @@ function Models() {
     <div className="fixed inset-0 z-40 flex flex-col bg-canvas print:hidden">
       {/* Samma höjd och luft som verktygslisten i modellen (Toolbar), och loggan på samma ställe. */}
       <header className="flex items-center gap-3 border-b border-line bg-panel px-2 py-1.5 pt-[max(6px,env(safe-area-inset-top))]">
-        <h1 className="flex h-10 items-center px-1.5 narrow:h-11">
-          <Logo />
+        {/* Loggan leder till startsidan, som på en webbplats: där står vad Bygg är och kan. */}
+        <h1>
+          <Tip label="Om Bygg: introsidan">
+            <a
+              href={INTRO_URL}
+              className="flex h-10 items-center rounded-lg px-1.5 hover:bg-hover narrow:h-11"
+              onClick={goToIntro}
+            >
+              <Logo />
+            </a>
+          </Tip>
         </h1>
         <div className="min-w-0 flex-1">
           <SyncBadge />
