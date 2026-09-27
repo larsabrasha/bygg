@@ -1,5 +1,6 @@
 node_modules
 dist
+dist-server
 data
 .git
 # Only what identifies the commit, for "Om Bygg" (About, scripts/buildInfo.ts): not the history.
