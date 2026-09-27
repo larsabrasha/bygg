@@ -8,6 +8,7 @@ import {
   GreaterDepth,
   MeshPhysicalMaterial,
   MeshStandardMaterial,
+  Vector2,
   Vector3,
   type LineSegments,
 } from 'three'
@@ -32,6 +33,8 @@ import type { Look } from '../store/viewStore'
 /** Formens låda, för att räkna ut vilken sida en träff på resultatet ligger på (faceOnBox). */
 /** Hur synlig en del är när en annan är isolerad. */
 const FADED_OPACITY = 0.18
+/** Hur mycket av ådringens relief som syns genom täckfärg på massivt trä: en tredjedel. */
+const PAINTED_GRAIN = new Vector2(0.35, 0.35)
 
 const boxOf = (b: Body): Box => ({ profile: b.profile, ...(b.shape && { shape: b.shape }), z0: b.z0, z1: b.z1 })
 
@@ -105,7 +108,9 @@ function BodyMeshImpl({
   const wire = look === 'wireframe'
   const real = look === 'realistic' && !ghost
   // Medan texturen laddas ritas trät i sin färg.
-  const wood = useWoodTexture(body.material, real && !painted)
+  // Målat massivt trä: färgen täcker, men ådringen syns igenom som relief. Målade skivor blir släta.
+  const grainUnderPaint = painted && materialSpec(body.material).kind === 'wood'
+  const wood = useWoodTexture(body.material, real && (!painted || grainUnderPaint))
   const grain = AXIS_INDEX[body.grainAxis]
 
   // Cylinderns axel längs n (three.js lägger den längs y). Ändarnas kanter blir cirklar;
@@ -175,14 +180,17 @@ function BodyMeshImpl({
       }
       // Trä i det realistiska utseendet: ett tunt lager lack eller olja som glänser svagt i ljuset.
       const material = new (real ? MeshPhysicalMaterial : MeshStandardMaterial)({
-        color: ghost ? ACCENT : wood ? tone : color,
+        color: ghost ? ACCENT : wood && !painted ? tone : color,
         ...(real &&
           (clear
             ? { roughness: 0.05, metalness: 0 }
             : painted
               ? { roughness: 0.55, metalness: 0 }
               : { roughness: 0.62, metalness: 0, clearcoat: 0.3, clearcoatRoughness: 0.35 })),
-        ...(wood && { map: wood.map, normalMap: wood.normalMap }),
+        ...(wood &&
+          (painted
+            ? { normalMap: wood.normalMap, normalScale: PAINTED_GRAIN }
+            : { map: wood.map, normalMap: wood.normalMap })),
         emissive: lit ? ACCENT : '#000000',
         emissiveIntensity: marked ? 0.45 : lit ? 0.2 : 0,
         transparent: preview || ghost || faded || !!clear,
@@ -202,7 +210,8 @@ function BodyMeshImpl({
         depthWrite: !ghost && !faded && !clear,
         depthTest: !ghost,
       })
-      if (wood && real) grainUniforms.push(withEndGrain(material, grain, plywood ? thickness : null))
+      // Ändträ och plywoodens skikt är färg i texturen; under färgen syns de inte.
+      if (wood && real && !painted) grainUniforms.push(withEndGrain(material, grain, plywood ? thickness : null))
       return material
     })
     return { materials: list, grainUniforms }
