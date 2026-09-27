@@ -38,6 +38,7 @@ import { bordBoards, bordCutList, bordDrawing, bordView, nattduksbordView, type 
 import { Sheets } from './Sheets'
 import type { StageControl } from './Stage'
 import { useInView, useMedia } from './useInView'
+import { Wood } from './Wood'
 
 /**
  * Startsidan för den som inte är inloggad: vad appen gör, visat med riktiga
@@ -182,15 +183,6 @@ function Reveal({ children, delay = 0, className = '' }: { children: ReactNode; 
 
 function Eyebrow({ children }: { children: ReactNode }) {
   return <p className="mb-4 text-[12px] font-semibold tracking-[0.18em] text-muted uppercase">{children}</p>
-}
-
-/** Ordet i trä: en gradient i ekens färger. */
-function Wood({ children }: { children: ReactNode }) {
-  return (
-    <span className="bg-linear-to-br from-[#9a6a3a] via-[#c4955e] to-[#7d5129] bg-clip-text text-transparent dark:from-[#e0b27c] dark:via-[#f1cf9f] dark:to-[#c48e55]">
-      {children}
-    </span>
-  )
 }
 
 function Header() {
