@@ -56,6 +56,30 @@ describe('tapp och tapphål', () => {
     expect(t.depth).toBe(27)
   })
 
+  it('på en kvadratisk slå står tapparna i båda ändarna längs benens fiber', () => {
+    // Två ben 40 × 40 × 700 med fibern längs höjden, och en slå 400 × 40 × 40 mellan dem.
+    const leg = { ...def('ben', 40, 40, 700), grainAxis: 'n' as const, thicknessAxis: 'v' as const }
+    docs().load({
+      sketches: [],
+      params: [],
+      defs: [leg, def('slå', 400, 40, 40)],
+      instances: [
+        { id: 'ben1', defId: 'ben', frame: identity(0, 0, 0) },
+        { id: 'ben2', defId: 'ben', frame: identity(440, 0, 0) },
+        { id: 'slå', defId: 'slå', frame: identity(40, 0, 300) },
+      ],
+    })
+    const byId = new Map(bodies().map((b) => [b.id, b]))
+    const slat = byId.get('slå')!
+    for (const id of ['ben1', 'ben2']) {
+      const t = tenonFor(slat, byId.get(id)!)
+      if (typeof t === 'string') throw new Error(t)
+      const long = t.profile.x1 - t.profile.x0 > t.profile.y1 - t.profile.y0 ? t.frame.u : t.frame.v
+      // Långsidan lodrät, längs benet: tapphålet går längs fibern.
+      expect(Math.abs(long[2])).toBeCloseTo(1)
+    }
+  })
+
   it('går inte om delarna inte ligger an', () => {
     docs().load(legAndApron(30))
     expect(docs().joint('sarg', 'ben')).toMatch(/ligga an/)

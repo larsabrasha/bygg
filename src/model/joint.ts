@@ -75,7 +75,14 @@ export function tenonFor(host: Body, into: Body): Tenon | string {
 
   // En rund del (änden av en cylinder) får en rund tapp, halva diametern.
   const round = host.shape === 'circle' && face[0] === 'n'
-  const thin = w <= h ? 'u' : 'v'
+  // Tappens tunna sida längs den kortare sidan av änden. Är änden kvadratisk (en slå
+  // 40 × 40) står tappens långsida längs fibern i delen den går in i, så att tapphålet går
+  // längs fibern och tappen står likadant i båda ändarna. Förut avgjorde ändens egna axlar,
+  // och de pekar olika i delens två ändar: tapparna blev vridna mot varandra.
+  const grain = into.frame[into.grainAxis]
+  const [gu, gv] = [Math.abs(dot(frame.u, grain)), Math.abs(dot(frame.v, grain))]
+  const square = Math.abs(w - h) < 0.5 && Math.max(gu, gv) > 0.5
+  const thin = square ? (gu >= gv ? 'v' : 'u') : w <= h ? 'u' : 'v'
   const small = Math.min(w, h)
   const large = Math.max(w, h)
   const thickness = Math.max(MIN_SIZE, Math.round(round ? small / 2 : small * THICKNESS_SHARE))
