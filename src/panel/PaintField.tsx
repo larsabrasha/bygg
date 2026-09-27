@@ -115,7 +115,7 @@ export function PaintField({ instanceId, def }: { instanceId: string; def: PartD
         className="inline-flex h-8 cursor-pointer items-center self-start text-accent narrow:h-10"
         onClick={() => useLibraryStore.getState().set({ catalogOpen: 'colors' })}
       >
-        Ändra standardfärger…
+        Redigera färglistan…
       </button>
     </div>
   )

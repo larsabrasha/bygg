@@ -302,7 +302,7 @@ export function Properties() {
                 {!choices.some((m) => m.id === def.material) && (
                   <option value={def.material}>{materialTitle(def.material)}</option>
                 )}
-                <option value={EDIT_MATERIALS}>Ändra material…</option>
+                <option value={EDIT_MATERIALS}>Redigera materiallistan…</option>
               </select>
             </label>
             <PaintField instanceId={body.id} def={def} />
