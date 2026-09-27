@@ -28,7 +28,8 @@ och generera kaplistor. Self-hostad, körs i webbläsaren (PWA).
   räknade med appens egen kod. På /intro visas den för alla, också inloggad (länk i Om Bygg);
   då leder knapparna in i appen.
   Medan 3D-vyn laddas visas stillbilder av möblerna (src/landing/stills, tas om med `npm run stills` när
-  en möbel eller studioljuset ändras).
+  en möbel eller studioljuset ändras; ett test säger till om möblerna ändrats). Samma skript tar
+  delningsbilden (public/delningsbild.jpg).
 - Ingen CSG-kärna i början; manifold-3d läggs till vid behov
 - CLI (cli/, `npm run -s bygg -- help`): ändrar modeller med operationer som körs i appens egen documentStore.
   Nycklar för CLI:t skapas på /auth/cli (server/tokens.ts). Gränser för modeller och konto i src/model/limits.ts

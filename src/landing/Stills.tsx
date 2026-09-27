@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { VIEWS, type View } from './models'
 import { Stage } from './Stage'
+import { stillsKey } from './stillsKey'
 
 /**
  * Möblerna på startsidan en och en, i kvadratiska bilder utan bakgrund, att fotografera
@@ -33,7 +34,7 @@ export function Stills() {
     document.body.style.background = 'transparent'
   }, [])
   return (
-    <div className="flex flex-wrap">
+    <div className="flex flex-wrap" data-key={stillsKey(VIEWS)}>
       {VIEWS.map((v) => (
         <Shot key={v.name} view={v} />
       ))}

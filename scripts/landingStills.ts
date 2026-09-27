@@ -44,6 +44,9 @@ try {
       console.log(file.pathname)
     }
   }
+  // Nyckeln för möblerna, som src/landing/stillsKey.test.ts jämför med.
+  const key = await page.evaluate('document.querySelector("[data-key]").dataset.key')
+  await writeFile(new URL('stills.json', OUT), JSON.stringify({ key }, null, 2) + '\n')
 
   // Delningsbilden i ljust tema, i exakt 1200 × 630: förhandsvisningarna skalar den själva.
   await page.setViewport({ width: 1300, height: 700, deviceScaleFactor: 1 })
