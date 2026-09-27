@@ -40,10 +40,17 @@ Appen och API:t nås på port 8787. Modellerna ligger som JSON-filer i volymen `
 en mapp per användare (`users/<id>/models/<id>.json`, borttagna i `trash/`). Säkerhetskopiera den volymen.
 Modellerna från före inloggningen (`models/` direkt i volymen) flyttas till den första som loggar in.
 
+Utan inställningar för inloggningen (som i `compose.yaml` nu) körs appen bara utan konto: allt sparas
+i webbläsaren, inget synkas, och API:t svarar alltid 401. Knappen "Logga in" syns inte då.
+
+Porten 8787 är öppen mot nätet i `compose.yaml`. Står Caddy på en annan maskin: låt brandväggen bara
+släppa in den maskinen på porten.
+
 ### Inloggning (Pocket ID)
 
-Appen kräver inloggning via https://id.larsabrasha.com. I dev (`npm run dev`) finns ingen inloggning;
-där gäller allt dev-användaren (`data/users/dev`).
+Med inloggning via https://id.larsabrasha.com synkas modellerna mellan enheterna. I dev (`npm run dev`)
+finns ingen inloggning; där gäller allt dev-användaren (`data/users/dev`). Modeller som gjorts utan konto
+följer inte med in i kontot; de får exporteras och importeras för hand.
 
 1. Skapa en OIDC-klient i Pocket ID:
    - Callback URL: `https://bygg.larsabrasha.com/auth/callback`
@@ -58,12 +65,14 @@ där gäller allt dev-användaren (`data/users/dev`).
    SESSION_SECRET=…   # openssl rand -hex 32
    ```
 
-Servern startar inte om något av detta saknas. Sessionen räcker i 30 dagar från inloggningen.
+3. Ta bort `#` framför OIDC-raderna i `compose.yaml`.
+
+Anges någon av inställningarna startar servern inte förrän alla finns (och `APP_URL`). Sessionen räcker i 30 dagar från inloggningen.
 
 Service worker (offline, installera som app) kräver https, så lägg en omvänd proxy som Caddy framför:
 
 ```
 bygg.larsabrasha.com {
-	reverse_proxy localhost:8787
+	reverse_proxy localhost:8787 # eller maskinen där containern körs, t.ex. 192.168.1.20:8787
 }
 ```

@@ -67,6 +67,12 @@ export interface MeResponse {
   dev: boolean
 }
 
+/** Svar från /auth/me när ingen är inloggad. login = false: servern har ingen inloggning, bara läget utan konto. */
+export interface LoggedOutResponse {
+  error: string
+  login: boolean
+}
+
 /** Svar från /api/me: vem nyckeln eller sessionen gäller, och vad som gäller för kontot. */
 export interface MeApiResponse {
   sub: string

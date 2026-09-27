@@ -1,6 +1,6 @@
 import * as idb from 'idb-keyval'
 import { selectGuest, selectUser } from './localStore'
-import type { MeResponse } from './protocol'
+import type { LoggedOutResponse, MeResponse } from './protocol'
 
 /**
  * Inloggningen sett från appen. Servern sköter själva inloggningen (se server/auth.ts);
@@ -18,13 +18,20 @@ const LAST_USER = 'bygg:last-user'
 const GUEST = 'bygg:guest'
 
 let me: MeResponse | null = import.meta.hot?.data.me ?? null
+/** Om servern har inloggning. Bara en server som svarat login: false saknar den; utan kontakt antas den finnas. */
+let loginOn: boolean = import.meta.hot?.data.loginOn ?? true
 
 type MeResult = { kind: 'user'; me: MeResponse } | { kind: 'logged-out' } | { kind: 'unknown' }
 
 async function fetchMe(): Promise<MeResult> {
   try {
     const r = await fetch('/auth/me', { headers: { accept: 'application/json' } })
-    if (r.status === 401) return { kind: 'logged-out' }
+    if (r.status === 401) {
+      const body = (await r.json().catch(() => null)) as Partial<LoggedOutResponse> | null
+      loginOn = body?.login !== false
+      if (import.meta.hot) import.meta.hot.data.loginOn = loginOn
+      return { kind: 'logged-out' }
+    }
     // Utan server (statisk hosting) kommer index.html i stället för JSON.
     if (r.status !== 200 || !(r.headers.get('content-type') ?? '').includes('application/json'))
       return { kind: 'unknown' }
@@ -36,6 +43,9 @@ async function fetchMe(): Promise<MeResult> {
 
 /** Adressen till inloggningen, med vägen tillbaka hit. */
 export const loginUrl = () => `/auth/login?return=${encodeURIComponent(location.pathname + location.search)}`
+
+/** Om det går att logga in. Annars finns bara läget utan konto, och ingen inloggning ska visas. */
+export const canLogIn = () => loginOn
 
 /** Inloggad användare, eller den som senast var inloggad här om servern inte svarar. */
 export const currentUser = () => me
