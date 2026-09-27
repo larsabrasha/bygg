@@ -15,7 +15,7 @@ import { compactNames, compactNumbers } from '../model/cutlistExport'
 import { numberFormat } from '../model/numberFormat'
 import { SHEET } from '../model/partSheet'
 import type { DrawingLayout } from '../scene/DrawingCanvas'
-import { materialTitle } from '../model/materials'
+import { isOrdered, materialTitle } from '../model/materials'
 
 /**
  * Ritningen som PDF, byggd i webbläsaren i stället för via utskriften: varje
@@ -179,19 +179,41 @@ function drawAssembly(doc: jsPDF, input: DrawingPdfInput) {
   const listTop = ty - fixed - rows.length * rowH
   line(doc, rx, listTop, rx + rw, listTop, 0.35)
   text(doc, 'Stycklista', rx + 1.5, listTop + 4.2, 3, { bold: true })
-  const cols = {
-    pos: rx + 7,
-    ant: rx + 14,
-    name: rx + 16,
-    l: rx + rw - 30,
-    b: rx + rw - 22,
-    t: rx + rw - 15.5,
-    mat: rx + rw - 14,
+  // Kolumnerna räknas från höger efter det bredaste i varje: materialet ("Laminerat glas")
+  // och måtten ("382,4") får plats, benämningen får resten och kortas med … om den inte ryms.
+  // Materialet får högst en tredjedel av bredden.
+  const widest = (texts: readonly string[], textSize: number, bold = false) => {
+    doc.setFont('helvetica', bold ? 'bold' : 'normal')
+    doc.setFontSize(textSize * PT)
+    return Math.max(0, ...texts.map((t) => doc.getTextWidth(t)))
   }
+  const HEAD_SIZE = 2.1
+  const GAP = 2
+  const matW = Math.min(
+    rw / 3,
+    Math.max(
+      widest(['MATERIAL'], HEAD_SIZE, true),
+      widest(
+        rows.map((r) => materialTitle(r.material)),
+        size,
+      ),
+    ),
+  )
+  const numW = (pick: (r: (typeof rows)[number]) => number) =>
+    widest(
+      rows.map((r) => num.format(pick(r))),
+      size,
+    )
+  const mat = rx + rw - 1.5 - matW
+  const t = mat - GAP
+  const b = t - numW((r) => r.thickness) - GAP
+  const l = b - numW((r) => r.width) - GAP
+  const cols = { pos: rx + 7, ant: rx + 14, name: rx + 16, l, b, t, mat }
+  const nameW = l - numW((r) => r.length) - GAP - cols.name
   const headY = listTop + 6
   line(doc, rx, headY, rx + rw, headY, 0.2, 110)
   const head = (s: string, x: number, align: 'left' | 'right') =>
-    text(doc, s, x, headY + 3.4, 2.1, { gray: 51, bold: true, align })
+    text(doc, s, x, headY + 3.4, HEAD_SIZE, { gray: 51, bold: true, align })
   head('POS', cols.pos, 'right')
   head('ANT', cols.ant, 'right')
   head('BENÄMNING', cols.name, 'left')
@@ -208,11 +230,13 @@ function drawAssembly(doc: jsPDF, input: DrawingPdfInput) {
     doc.setFont('helvetica', 'normal')
     doc.setFontSize(size * PT)
     const name = compactNames(row.names) + (row.round ? ` (Ø ${num.format(row.round.diameter)})` : '')
-    text(doc, fitText(doc, name, cols.l - 9 - cols.name), cols.name, base, size)
+    text(doc, fitText(doc, name, nameW), cols.name, base, size)
     text(doc, num.format(row.length), cols.l, base, size, { align: 'right' })
     text(doc, num.format(row.width), cols.b, base, size, { align: 'right' })
     text(doc, num.format(row.thickness), cols.t, base, size, { align: 'right' })
-    text(doc, materialTitle(row.material), cols.mat, base, size)
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(size * PT)
+    text(doc, fitText(doc, materialTitle(row.material), matW), cols.mat, base, size)
     y += rowH
     line(doc, rx, y, rx + rw, y, 0.15, 190)
   })
@@ -359,7 +383,10 @@ function drawCutList(doc: jsPDF, input: DrawingPdfInput) {
     else if (y + 6 + captionH + headH + (rows[0]?.h ?? 0) > bottom) newPage()
     else y += 6
     const title = materialTitle(g.material)
-    caption(title, `${g.count} st · ${volume.format(g.volumeM3)} m³`)
+    caption(
+      title,
+      `${g.count} st · ${isOrdered(g.material) ? 'beställs tillskuret' : `${volume.format(g.volumeM3)} m³`}`,
+    )
     header()
     for (const r of rows) {
       if (y + r.h > bottom) {

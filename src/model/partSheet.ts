@@ -1,7 +1,7 @@
 import { buildCutList, type CutListRow } from './cutlist'
 import { toWorld } from './frame'
 import { numberFormat } from './numberFormat'
-import { widthAxis } from './partAxes'
+import { cutAxes } from './partAxes'
 import type { Axis, Body } from './types'
 
 /**
@@ -41,8 +41,10 @@ const EPS = 0.05
  * i formens koordinater; för ett snett vridet verktyg blir den större än verktyget.
  */
 export function partGeometry(b: Body): PartGeometry {
-  const axes: Axis[] = [b.grainAxis, widthAxis(b), b.thicknessAxis]
   const blank = b.blank ?? b
+  // L och B som i kaplistan: utan fiber är L det längsta måttet.
+  const cut = cutAxes({ ...blank, grainAxis: b.grainAxis, thicknessAxis: b.thicknessAxis, material: b.material })
+  const axes: Axis[] = [cut.length, cut.width, b.thicknessAxis]
   const origin = [blank.profile.x0, blank.profile.y0, blank.z0]
   const toLBT = (p: readonly number[]) => axes.map((a) => round01(p[FORM_INDEX[a]]! - origin[FORM_INDEX[a]]!)) as Triple
   // Vilken av L, B och T en axel i formen (0 = u, 1 = v, 2 = n) är.

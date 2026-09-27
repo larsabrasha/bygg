@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { buildCutList } from './cutlist'
 import { buildCutPlan, defaultStocks, materialList } from './cutPlan'
+import { partGeometry } from './partSheet'
 import { compareMaterials, MATERIAL_SPECS, materialSpec, materialTitle } from './materials'
 import { stockThicknesses } from './stockSnap'
 import { testBody } from './testFixtures'
@@ -42,6 +43,11 @@ describe('material utan fiber', () => {
     expect(row).toMatchObject({ length: 900, width: 300, thickness: 6 })
     // Trä följer fibern som förut.
     expect(buildCutList([part('Rygg', 'plywood', 300, 900, 6)]).rows[0]).toMatchObject({ length: 300, width: 900 })
+  })
+
+  it('får samma L och B på delritningen som i kaplistan', () => {
+    expect(partGeometry(part('Rygg', 'mdf', 300, 900, 6)).size).toEqual([900, 300, 6])
+    expect(partGeometry(part('Rygg', 'plywood', 300, 900, 6)).size).toEqual([300, 900, 6])
   })
 
   it('får en hel skiva som delarna får vridas på', () => {

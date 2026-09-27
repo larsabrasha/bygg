@@ -1,6 +1,6 @@
 import { bodyExtents } from './box'
-import { compareMaterials, materialSpec } from './materials'
-import { partDims } from './partAxes'
+import { compareMaterials } from './materials'
+import { cutAxes, extent } from './partAxes'
 import type { Body } from './types'
 
 export interface CutListRow {
@@ -45,15 +45,15 @@ export function buildCutList(bodies: readonly Body[]): CutList {
     // Ett verktyg är ingen egen bit: det skärs ut ur eller sitter på en annan del.
     if (b.tool) continue
     // Med något tillagt (en tapp) kapas ämnet större än formens låda.
-    const d = partDims({ ...(b.blank ?? b), grainAxis: b.grainAxis, thicknessAxis: b.thicknessAxis })
-    const flip = !materialSpec(b.material).grain && d.width > d.length
-    const length = round01(flip ? d.width : d.length)
-    const width = round01(flip ? d.length : d.width)
-    const thickness = round01(d.thickness)
+    const blank = { ...(b.blank ?? b), grainAxis: b.grainAxis, thicknessAxis: b.thicknessAxis, material: b.material }
+    const axes = cutAxes(blank)
+    const length = round01(extent(blank, axes.length))
+    const width = round01(extent(blank, axes.width))
+    const thickness = round01(extent(blank, b.thicknessAxis))
     const [du, , dn] = bodyExtents(b)
     const round = b.shape === 'circle' && !b.blank ? { diameter: round01(du), length: round01(dn) } : undefined
     // En cylinder fyller π/4 av sin fyrkant.
-    const volumeM3 = ((round ? Math.PI / 4 : 1) * d.length * d.width * d.thickness) / 1e9
+    const volumeM3 = ((round ? Math.PI / 4 : 1) * length * width * thickness) / 1e9
     totalVolumeM3 += volumeM3
 
     const key = `${b.material}|${length}|${width}|${thickness}|${round ? 'rund' : ''}`
