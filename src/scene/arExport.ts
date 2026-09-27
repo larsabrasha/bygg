@@ -100,7 +100,7 @@ export function buildArScene(bodies: readonly Body[], { manifold, woods }: ArAss
   for (const b of bodies.filter((x) => !x.tool)) {
     const [w, h, d] = bodyExtents(b)
     const { x0, x1, y0, y1 } = b.profile
-    // Med verktyg: resultatet i formens koordinater. Cachen äger den, så den kopieras innan den ändras.
+    // Med verktyg: resultatet i formens koordinater. Talföljderna delas med cachen, så den kopieras innan den ändras.
     const solid = manifold && b.tools ? solidGeometry(manifold, b, b.tools).clone() : null
     const geometry = solid ?? (b.shape === 'circle' ? cylinderGeometry(w, d) : new BoxGeometry(w, h, d))
 

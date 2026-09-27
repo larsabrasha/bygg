@@ -216,8 +216,13 @@ export function Viewport() {
 
   return (
     // frameloop="demand": ritar bara om när något ändras. Sparar batteri på mobil.
-    // shadows: skuggkartor finns, men bara ljuset i RealisticLight kastar skugga.
-    <Canvas shadows frameloop="demand" camera={{ position: [...HOME.position], fov: 45, near: 1, far: 50000 }}>
+    // shadows: skuggkartor finns, men bara ljuset i RealisticLight kastar skugga. "percentage" =
+    // PCFShadowMap: med bara shadows väljs PCFSoftShadowMap, som three.js har tagit bort (varning i konsolen).
+    <Canvas
+      shadows="percentage"
+      frameloop="demand"
+      camera={{ position: [...HOME.position], fov: 45, near: 1, far: 50000 }}
+    >
       <XR store={xrStore}>
         {/* Realistiskt tonmappas bakgrunden med resten av bilden; färgen räknas fram så att den blir colors.studio. */}
         <color attach="background" args={[realistic ? studio : colors.background]} />

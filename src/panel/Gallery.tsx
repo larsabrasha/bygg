@@ -5,6 +5,7 @@ import {
   FolderOpen,
   LoaderCircle,
   LogIn,
+  Info,
   LogOut,
   Palette,
   Pencil,
@@ -324,6 +325,16 @@ export function Gallery() {
             <ModelTile key={m.id} model={m} thumb={thumbs[m.id]} isCurrent={m.id === currentId} />
           ))}
         </ul>
+        {/* Längst ner och diskret: det letar man efter någon gång, inte varje dag. */}
+        <footer className="mt-10 flex justify-center">
+          <button
+            className={`${ghostButton} text-muted`}
+            onClick={() => useLibraryStore.getState().set({ aboutOpen: true })}
+          >
+            <Info size={16} aria-hidden />
+            Om Bygg
+          </button>
+        </footer>
       </main>
     </div>
   )

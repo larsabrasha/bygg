@@ -31,7 +31,11 @@ const volume = numberFormat(4, true)
 const stretchFormat = new Intl.NumberFormat('sv-SE', { maximumFractionDigits: 1 })
 const capitalize = (s: string) => s.charAt(0).toLocaleUpperCase('sv') + s.slice(1)
 
-/** En bild i pixlar (bara förhållandet mellan bredd och höjd räknas) och som data-URL. */
+/**
+ * En bild i pixlar (bara förhållandet mellan bredd och höjd räknas) och som data-URL,
+ * i JPEG: en PNG packar jsPDF upp och packar om, vilket tog en halv sekund för
+ * sprängskissen. En JPEG läggs in som den är.
+ */
 export interface PdfPicture {
   url: string
   width: number
@@ -64,17 +68,36 @@ const OY = (PAGE.h - SHEET.height) / 2
 /** jsPDF tar textens storlek i punkter; här anges den i mm. */
 const PT = 72 / 25.4
 
-export async function buildDrawingPdf(input: DrawingPdfInput): Promise<Blob> {
+/**
+ * onSheet(klara, alla) före varje blad och när alla är klara: för en förloppsstapel. Den
+ * som anropar kan vänta in att stapeln ritats (bladen räknas annars utan paus emellan).
+ */
+export async function buildDrawingPdf(
+  input: DrawingPdfInput,
+  onSheet?: (done: number, total: number) => Promise<void> | void,
+): Promise<Blob> {
   const doc = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'landscape', compress: true })
   doc.setProperties({ title: `${input.name} – ritning` })
+  // Sammanställningen, SVG-bladen, kaplistan (en eller flera sidor) och kapschemat.
+  const total = 1 + input.svgSheets.length + 1 + (input.cutPlan ? 1 : 0)
+  let done = 0
+  const next = async () => void (await onSheet?.(done++, total))
+  await next()
   drawAssembly(doc, input)
   for (const sheet of input.svgSheets) {
+    await next()
     doc.addPage('a4', 'landscape')
     await drawSvg(doc, sheet)
   }
+  await next()
   drawCutList(doc, input)
-  if (input.cutPlan) drawCutPlan(doc, input, input.cutPlan)
-  return doc.output('blob')
+  if (input.cutPlan) {
+    await next()
+    drawCutPlan(doc, input, input.cutPlan)
+  }
+  const blob = doc.output('blob')
+  await next()
+  return blob
 }
 
 /** Text i mm; färgen som gråskala (0 svart). */
@@ -160,7 +183,7 @@ function drawAssembly(doc: jsPDF, input: DrawingPdfInput) {
   text(doc, 'SPRÄNGSKISS, EJ SKALENLIG', fx + 2.5, fy + 4.5, 2.1, { gray: 68 })
   if (input.exploded) {
     const p = contain(input.exploded, fx + 2, fy + 7, rx - fx - 4, fh - 9)
-    doc.addImage(input.exploded.url, 'PNG', p.x, p.y, p.w, p.h, undefined, 'FAST')
+    doc.addImage(input.exploded.url, 'JPEG', p.x, p.y, p.w, p.h)
     if (input.exploded.layout) drawBalloons(doc, input.exploded.layout, p)
   }
 
@@ -252,7 +275,7 @@ function drawAssembly(doc: jsPDF, input: DrawingPdfInput) {
   text(doc, 'HOPSATT', rx + 2.5, fy + 4.5, 2.1, { gray: 68 })
   if (input.assembled) {
     const p = contain(input.assembled, rx + 2, fy + 6, rw - 4, listTop - fy - 7)
-    doc.addImage(input.assembled.url, 'PNG', p.x, p.y, p.w, p.h, undefined, 'FAST')
+    doc.addImage(input.assembled.url, 'JPEG', p.x, p.y, p.w, p.h)
   }
 }
 

@@ -14,9 +14,55 @@
     <meta name="apple-mobile-web-app-title" content="Bygg" />
     <meta name="mobile-web-app-capable" content="yes" />
     <title>Bygg</title>
+    <style>
+      /* Startbilden medan appen laddas: i #root, så att React byter ut den när den ritar första
+         gången. Färgerna från index.css, med värdena som reserv: i dev laddas index.css av
+         JavaScript, efter att startbilden visats. Tonas in först efter en stund, så att den
+         inte blinkar till när appen laddas fort. */
+      .splash {
+        position: fixed;
+        inset: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 14px;
+        background: var(--color-canvas, #f2f1ee);
+        color: var(--color-ink, #2a2724);
+        font:
+          14px system-ui,
+          -apple-system,
+          'Segoe UI',
+          sans-serif;
+        animation: splash-in 200ms ease-out 150ms both;
+      }
+      .splash p {
+        margin: 0;
+        color: var(--color-muted, #6b655c);
+      }
+      @media (prefers-color-scheme: dark) {
+        .splash {
+          background: var(--color-canvas, #1b1a18);
+          color: var(--color-ink, #ebe7e0);
+        }
+        .splash p {
+          color: var(--color-muted, #a8a196);
+        }
+      }
+      @keyframes splash-in {
+        from {
+          opacity: 0;
+        }
+      }
+    </style>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <div class="splash" role="status">
+        <!-- wordmark: ordet Bygg som SVG, insatt av vite.config.ts (splashWordmark) -->
+        <p>Laddar…</p>
+      </div>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

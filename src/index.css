@@ -44,6 +44,18 @@
       opacity: 1;
     }
   }
+
+  /* Glansen på förloppsstapelns fyllnad (panel/ProgressBar.tsx): en tredjedel bred, från vänster
+     om fyllnaden till höger om den. */
+  --animate-sweep: sweep 1.4s ease-in-out infinite;
+  @keyframes sweep {
+    from {
+      transform: translateX(-100%);
+    }
+    to {
+      transform: translateX(300%);
+    }
+  }
 }
 
 /* Mörkt tema följer systemets inställning. Samma namn, andra värden, så att

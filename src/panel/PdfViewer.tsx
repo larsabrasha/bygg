@@ -1,5 +1,4 @@
-import { Loader2 } from 'lucide-react'
-import { useEffect, useEffectEvent, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useEffectEvent, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import type { PDFDocumentProxy } from 'pdfjs-dist'
 import { loadPdfjs } from './pdfjs'
 import { DrawingBar } from './DrawingBar'
@@ -35,6 +34,8 @@ const MAX_CANVAS_SIDE = 4096
 
 const clampZoom = (z: number) => Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, z))
 const GAP = 16
+/** Hur länge visaren väntar på att de första sidorna ritats innan den visar dem ändå. */
+const SHOW_ANYWAY_MS = 10_000
 
 /** En punkt på en sida (läget i den, 0–1) och var i visarens ruta den ska stå. */
 interface Anchor {
@@ -51,14 +52,35 @@ interface Props {
   onPrint: () => void
   /** Dela (pekskärm) eller ladda ner (dator), med ikon och text. */
   share: { label: string; icon: ReactNode; onClick: () => void }
+  /** Det som visas medan PDF:en läses, innan första sidan kan ritas. */
+  loading: ReactNode
 }
 
-export default function PdfViewer({ file, onClose, onPrint, share }: Props) {
+export default function PdfViewer({ file, onClose, onPrint, share, loading }: Props) {
   const [doc, setDoc] = useState<PDFDocumentProxy | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [pages, setPages] = useState<{ w: number; h: number }[]>([])
   const [zoom, setZoom] = useState(MIN_ZOOM)
   const [width, setWidth] = useState(0)
+  // Sidorna visas först när de som ritas från början är klara; till dess står förloppet kvar.
+  // Annars syns vita sidor en stund (på en telefon flera sekunder).
+  const [shown, setShown] = useState(false)
+  const rendering = useRef(0)
+  const busy = useCallback(() => {
+    rendering.current++
+    let done = false
+    return () => {
+      if (done) return
+      done = true
+      if (--rendering.current === 0) setShown(true)
+    }
+  }, [])
+  // Skyddsnät: börjar ingen sida ritas (bredden okänd) visas sidorna ändå efter en stund.
+  useEffect(() => {
+    if (!doc || shown) return
+    const t = setTimeout(() => setShown(true), SHOW_ANYWAY_MS)
+    return () => clearTimeout(t)
+  }, [doc, shown])
   const scroller = useRef<HTMLDivElement>(null)
   const content = useRef<HTMLDivElement>(null)
   /** Punkten som ska stå still när sidorna ritats i den nya storleken. */
@@ -247,7 +269,7 @@ export default function PdfViewer({ file, onClose, onPrint, share }: Props) {
       />
       <div
         ref={scroller}
-        className={`min-h-0 flex-1 overflow-auto overscroll-contain ${
+        className={`relative min-h-0 flex-1 overflow-auto overscroll-contain ${
           zoom > MIN_ZOOM ? `select-none ${panning ? 'cursor-grabbing' : 'cursor-grab'}` : ''
         }`}
         // Musen: dra i vyn för att panorera när man zoomat in. Inte på rullningslisterna,
@@ -279,17 +301,33 @@ export default function PdfViewer({ file, onClose, onPrint, share }: Props) {
       >
         {error ? (
           <p className="p-6 text-sm text-danger">Kunde inte visa ritningen: {error}</p>
-        ) : !doc ? (
-          // Samma text som medan PDF:en skapas (Drawing): för den som tittar är det ett och samma steg.
-          <p className="flex h-full items-center justify-center gap-2 p-6 text-sm text-ink/70">
-            <Loader2 size={18} className="animate-spin" aria-hidden /> Laddar…
-          </p>
         ) : (
-          <div ref={content} className="flex w-max min-w-full flex-col items-center" style={{ gap: GAP, padding: GAP }}>
-            {pages.map((p, i) => (
-              <Page key={i} doc={doc} index={i} width={p.w * scale} height={p.h * scale} root={scroller} />
-            ))}
-          </div>
+          <>
+            {!shown && (
+              // Samma förlopp som medan PDF:en skapas (Drawing): för den som tittar är det ett och samma steg.
+              <div className="absolute inset-0 flex items-center justify-center p-6 text-sm text-ink/70">{loading}</div>
+            )}
+            {doc && (
+              // Osynliga men på sin plats medan de ritas: de som syns från början ska ritas då.
+              <div
+                ref={content}
+                className={`flex w-max min-w-full flex-col items-center ${shown ? '' : 'invisible'}`}
+                style={{ gap: GAP, padding: GAP }}
+              >
+                {pages.map((p, i) => (
+                  <Page
+                    key={i}
+                    doc={doc}
+                    index={i}
+                    width={p.w * scale}
+                    height={p.h * scale}
+                    root={scroller}
+                    busy={shown ? undefined : busy}
+                  />
+                ))}
+              </div>
+            )}
+          </>
         )}
       </div>
     </div>
@@ -303,12 +341,15 @@ function Page({
   width,
   height,
   root,
+  busy,
 }: {
   doc: PDFDocumentProxy
   index: number
   width: number
   height: number
   root: React.RefObject<HTMLDivElement | null>
+  /** Säger att sidan ritas; ger tillbaka en funktion att anropa när den är klar (eller avbruten). */
+  busy?: () => () => void
 }) {
   const box = useRef<HTMLDivElement>(null)
   const canvas = useRef<HTMLCanvasElement>(null)
@@ -336,9 +377,11 @@ function Page({
     }
     let task: ReturnType<Awaited<ReturnType<PDFDocumentProxy['getPage']>>['render']> | null = null
     let live = true
+    // Redan innan sidan hämtats, så att visaren inte tror att allt är klart när första sidan är det.
+    const done = busy?.()
     void (async () => {
-      const page = await doc.getPage(index + 1)
-      if (!live) return
+      const page = await doc.getPage(index + 1).catch(() => null)
+      if (!live || !page) return done?.()
       // Högst 2 pixlar per CSS-pixel: skarpt nog, och en telefon med 3× får annars slut på minne.
       // Inzoomat hålls canvasen under iPhones största tillåtna storlek.
       const dpr = Math.min(
@@ -353,11 +396,15 @@ function Page({
       c.height = Math.floor(viewport.height)
       task = page.render({ canvas: c, viewport })
       await task.promise.catch(() => {})
+      done?.()
     })()
     return () => {
       live = false
       task?.cancel()
+      done?.()
     }
+    // busy följer inte med: den byts (mot undefined) när sidorna visas, och då ska inget ritas om.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [doc, index, near, width, height])
 
   return (

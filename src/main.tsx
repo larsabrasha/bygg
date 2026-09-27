@@ -13,7 +13,11 @@ if (preview || (await startAuth()) === 'landing') {
   const { Landing } = await import('./landing/Landing')
   render(<Landing />)
 } else {
+  // Appen hämtas medan bootstrap öppnar modellen: på en ny enhet väntar den på en hel synk
+  // med servern, och på långsamt nät tar båda sekunder. (Före startsidan var App en statisk
+  // import och hämtades lika tidigt.)
+  const app = import('./App')
   await import('./bootstrap')
-  const { App } = await import('./App')
+  const { App } = await app
   render(<App />)
 }

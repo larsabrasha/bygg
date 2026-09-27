@@ -1,6 +1,10 @@
 import { migrate } from '../persist/format'
 import { ApiError, type PutResult, type SyncApi } from './api'
 import { fromServer, type LocalRepo } from './localRepo'
+import { prefetched } from './prefetch'
+
+/** Hur många modeller (och bilder) som hämtas från servern samtidigt. */
+export const PREFETCH = 6
 
 export type SyncEvent =
   /** Vår ändring laddades upp. */
@@ -99,11 +103,15 @@ export async function syncOnce({ api, repo, newId, now = () => new Date() }: Syn
   // 2. Hämta.
   const remote = await api.list()
   const locals = new Map((await repo.list()).map((m) => [m.id, m]))
-  for (const meta of remote) {
+  const wanted = remote.filter((meta) => {
     const local = locals.get(meta.id)
-    if (local?.deleted || local?.dirty) continue
-    if (local && (local.baseRevision ?? 0) >= meta.revision) continue
-    const full = await api.get(meta.id)
+    if (local?.deleted || local?.dirty) return false
+    return !local || (local.baseRevision ?? 0) < meta.revision
+  })
+  // Flera hämtningar på väg samtidigt: en ny enhet hämtar alla modeller, och en i taget
+  // kostade en resa fram och tillbaka per modell innan appen kunde visas.
+  for await (const [meta, full] of prefetched(wanted, PREFETCH, (meta) => api.get(meta.id))) {
+    const local = locals.get(meta.id)
     if (!full) continue
     if (!migrate(full.file).ok) {
       events.push({ kind: 'incompatible', id: meta.id, name: meta.name })

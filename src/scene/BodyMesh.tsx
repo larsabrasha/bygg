@@ -100,6 +100,8 @@ function BodyMeshImpl({
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [manifold, body.profile, body.shape, body.z0, body.z1, body.tools, segments],
   )
+  // En egen geometri per del (formen räknas bara en gång per länkad form, se csg.ts).
+  useEffect(() => () => solid?.dispose(), [solid])
 
   // Ett eget material som ändras (färg, genomskinlighet) ritas om, fast delen är densamma.
   useCatalogStore((s) => s.version)

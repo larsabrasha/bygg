@@ -2,5 +2,9 @@ node_modules
 dist
 data
 .git
+# Bara det som pekar ut commiten, till Om Bygg (scripts/buildInfo.ts): inte historiken.
+!.git/HEAD
+!.git/refs
+!.git/packed-refs
 *.tsbuildinfo
 .env
