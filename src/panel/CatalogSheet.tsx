@@ -43,7 +43,7 @@ const KIND_LABEL: Record<MaterialKind, string> = {
 const KIND_HINT: Record<MaterialKind, string> = {
   wood: 'Kapas ur brädor, hyvlas vid behov',
   sheet: 'Läggs ut på hela skivor',
-  ordered: 'Glas, sten – bara i kaplistan',
+  ordered: 'Glas, sten – varje del för sig',
 }
 
 /** Ett nytt eget material: en skiva, som de flesta egna material i en verkstad är. */
