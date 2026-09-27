@@ -15,7 +15,17 @@ import { ColorInput } from './ColorInput'
 import { CommitField } from './CommitField'
 import { Switch } from './Switch'
 import { Tip } from './Tip'
-import { field, fieldLabel, groupTitle, iconAction, primaryButton, quietDangerButton, secondaryButton } from './ui'
+import {
+  field,
+  fieldLabel,
+  groupTitle,
+  iconAction,
+  primaryButton,
+  quietDangerButton,
+  secondaryButton,
+  segment,
+  segmentGroup,
+} from './ui'
 
 const num = numberFormat(1)
 const ICON_SM = { size: 16, strokeWidth: 1.75, 'aria-hidden': true } as const
@@ -39,10 +49,6 @@ const NEW_MATERIAL = {
 
 /** Genomskinligt material (glas, akryl): så mycket syns av ytan i 3D-vyn. */
 const CLEAR_OPACITY = 0.3
-
-/** Den segmenterade knappraden överst (som Lista och Kapschema i kaplistan). */
-const segment =
-  'h-9 flex-1 cursor-pointer rounded-md text-[13px] font-medium text-muted aria-pressed:bg-accent-soft aria-pressed:text-accent narrow:h-10'
 
 /**
  * Material och färger: användarens egna material, de inbyggda som ska synas
@@ -80,7 +86,7 @@ export function CatalogSheet() {
           </Tip>
         </header>
         <div className="px-4 pt-3">
-          <div className="flex rounded-lg bg-button p-0.5" role="group" aria-label="Visa">
+          <div className={segmentGroup} role="group" aria-label="Visa">
             {(
               [
                 ['materials', 'Material'],

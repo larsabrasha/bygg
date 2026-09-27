@@ -25,6 +25,8 @@
   --color-field: #ffffff;
   /* Sekundärknappens bakgrund. */
   --color-button: #e6e2da;
+  /* Det valda segmentet i en segmenterad kontroll (ui.ts): ljusare än skenan, som på iOS. */
+  --color-segment: #ffffff;
   --color-disabled: #b5afa5;
   /* Enhetstext ("mm") inne i ett fält. */
   --color-unit: #9a9489;
@@ -78,6 +80,7 @@
     --color-danger-soft: #3d2422;
     --color-field: #1b1a18;
     --color-button: #36332e;
+    --color-segment: #5a564f;
     --color-disabled: #5d5850;
     --color-unit: #857e74;
     --color-warn: #f0b453;

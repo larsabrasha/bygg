@@ -7,7 +7,7 @@ import { useBodies, useDocumentStore } from '../store/documentStore'
 import { EmptyState } from './EmptyState'
 import { CutPlanView } from './CutPlanView'
 import { CutListPicture } from './pictures'
-import { groupTitle, sectionTitle } from './ui'
+import { groupTitle, sectionTitle, segment, segmentGroup } from './ui'
 import { firstUpper, isOrdered, materialTitle } from '../model/materials'
 
 const num = numberFormat(1, true)
@@ -15,10 +15,6 @@ const volume = numberFormat(4, true)
 
 // Kolumnerna för L, B och T har fast bredd, så att måtten står i linje mellan materialen.
 const dimCol = 'w-12 text-right tabular-nums'
-
-/** En knapp i en rad där en är vald (Lista, Kapschema). */
-const segment =
-  'h-9 flex-1 cursor-pointer rounded-md text-[13px] font-medium text-muted aria-pressed:bg-accent-soft aria-pressed:text-accent narrow:h-10'
 
 export function CutList() {
   const bodies = useBodies()
@@ -36,7 +32,7 @@ export function CutList() {
         </EmptyState>
       ) : (
         <div className="flex flex-col gap-5">
-          <div className="flex rounded-lg bg-button p-0.5" role="group" aria-label="Visa">
+          <div className={segmentGroup} role="group" aria-label="Visa">
             {(
               [
                 ['list', 'Lista'],
