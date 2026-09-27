@@ -123,12 +123,16 @@ export interface StockSize {
   width: number
   /** Delarna får vridas på skivan (fibern spelar ingen roll). Bara för skivmaterial. */
   rotate?: boolean
+  /** Rensas bort i mm: alla kanter på en skiva, ändarna på massivt trä. Saknas = standard (se cutPlan). */
+  trim?: number
 }
 
 /** Inställningar för kapschemat. Saknas något gäller standardvärdena (se cutPlan). */
 export interface StockSettings {
   /** Sågbladets bredd i mm. */
   kerf?: number
+  /** Kapmån på delarnas längd i mm. */
+  lengthAllowance?: number
   /** Lagermått per material och tjocklek, med nyckel från stockKey. */
   sizes?: Record<string, StockSize>
 }

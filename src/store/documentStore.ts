@@ -31,6 +31,7 @@ import type {
   PartDef,
   Rect,
   Shape,
+  StockSettings,
   StockSize,
   Vec3,
   WorldAxis,
@@ -98,8 +99,8 @@ interface DocumentState extends Snapshot {
   /** Tar bort det valda. En del som har verktyg tar dem med sig. */
   /** Lagermåttet för ett material och en tjocklek (stockKey); null går tillbaka till standardmåttet. */
   setStockSize: (key: string, size: StockSize | null) => void
-  /** Sågbladets bredd för kapschemat, i mm. */
-  setKerf: (kerf: number) => void
+  /** Sågbladets bredd och kapmånen för kapschemat, i mm. */
+  setStockOptions: (patch: Pick<StockSettings, 'kerf' | 'lengthAllowance'>) => void
   deleteSelection: () => void
   /**
    * Gör toolId till ett verktyg som läggs till på eller skärs ut ur hostId.
@@ -418,9 +419,9 @@ export const useDocumentStore = create<DocumentState>()((set, get) => {
       commit({ ...doc, stock: { ...doc.stock, sizes } })
     },
 
-    setKerf: (kerf) => {
+    setStockOptions: (patch) => {
       const { doc } = get()
-      commit({ ...doc, stock: { ...doc.stock, kerf } })
+      commit({ ...doc, stock: { ...doc.stock, ...patch } })
     },
 
     addParam: () => {

@@ -80,13 +80,15 @@ const isStockSize = (x: unknown) =>
   isNum(x.width) &&
   x.length > 0 &&
   x.width > 0 &&
-  (x.rotate === undefined || typeof x.rotate === 'boolean')
+  (x.rotate === undefined || typeof x.rotate === 'boolean') &&
+  (x.trim === undefined || (isNum(x.trim) && x.trim >= 0))
 
 /** Lagermåtten som ser rimliga ut; resten släpps, så att standardvärdena gäller och modellen ändå läses. */
 function cleanStock(x: unknown): StockSettings | undefined {
   if (!isObj(x)) return undefined
   const out: StockSettings = {}
   if (isNum(x.kerf) && x.kerf >= 0) out.kerf = x.kerf
+  if (isNum(x.lengthAllowance) && x.lengthAllowance >= 0) out.lengthAllowance = x.lengthAllowance
   if (isObj(x.sizes)) {
     const sizes = Object.entries(x.sizes).filter(([, v]) => isStockSize(v))
     if (sizes.length) out.sizes = Object.fromEntries(sizes) as StockSettings['sizes']

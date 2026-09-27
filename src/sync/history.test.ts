@@ -92,7 +92,7 @@ describe('ångra-historiken med lagermått', () => {
   it('får med lagermåtten i varje steg', () => {
     build()
     docs().setStockSize('furu|22', { length: 2400, width: 145 })
-    docs().setKerf(2)
+    docs().setStockOptions({ kerf: 2 })
     const { past, future } = docs()
     const h = unpackHistory(stored(packHistory(past, future, SAVED)), SAVED)!
     expect(h.past).toEqual(past)

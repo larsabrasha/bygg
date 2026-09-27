@@ -56,13 +56,52 @@ describe('buildCutPlan', () => {
   it('använder inställt lagermått och sågblad', () => {
     const parts = [part('a', 1200, 95, 22), part('b', 1200, 95, 22)]
     const key = stockKey('furu', 22)
+    const board = { length: 2400, width: 95, trim: 0 }
     // 1200 + 3 + 1200 är längre än 2400: två brädor.
-    expect(buildCutPlan(parts, { sizes: { [key]: { length: 2400, width: 95 } } }).groups[0]!.boards).toHaveLength(2)
+    expect(buildCutPlan(parts, { sizes: { [key]: board } }).groups[0]!.boards).toHaveLength(2)
     // Utan sågblad går båda på en.
-    const group = buildCutPlan(parts, { kerf: 0, sizes: { [key]: { length: 2400, width: 95 } } }).groups[0]!
+    const group = buildCutPlan(parts, { kerf: 0, sizes: { [key]: board } }).groups[0]!
     expect(group.boards).toHaveLength(1)
     expect(group.isDefault).toBe(false)
     expect(group.waste).toBeCloseTo(0)
+  })
+
+  it('kapar ändarna på massivt trä men låter sidorna vara', () => {
+    const group = buildCutPlan([part('ben', 700, 45, 45)], {
+      sizes: { [stockKey('furu', 45)]: { length: 2400, width: 45, trim: 25 } },
+    }).groups[0]!
+    // En 45 bred del går på en 45 bred bräda, och ligger efter den kapade änden.
+    expect(group.boards[0]![0]).toMatchObject({ x: 25, y: 0 })
+    // 2400 - 2 × 25 = 2350 räcker inte för 2360.
+    const long = buildCutPlan([part('lång', 2360, 45, 45)], {
+      sizes: { [stockKey('furu', 45)]: { length: 2400, width: 45, trim: 25 } },
+    }).groups[0]!
+    expect(long.tooBig).toHaveLength(1)
+  })
+
+  it('rensar alla kanter på en skiva', () => {
+    const key = stockKey('plywood', 18)
+    const group = buildCutPlan([part('a', 500, 300, 18, { material: 'plywood' })]).groups[0]!
+    expect(group.stock.trim).toBe(10)
+    expect(group.boards[0]![0]).toMatchObject({ x: 10, y: 10 })
+    // En hel skiva som del får inte plats när kanterna rensas, men väl utan rensning.
+    const whole = [part('hel', 2440, 1220, 18, { material: 'plywood' })]
+    expect(buildCutPlan(whole).groups[0]!.tooBig).toHaveLength(1)
+    const untrimmed = buildCutPlan(whole, { sizes: { [key]: { length: 2440, width: 1220, trim: 0 } } })
+    expect(untrimmed.groups[0]!.boards).toHaveLength(1)
+  })
+
+  it('lägger kapmånen på delens längd men visar det färdiga måttet', () => {
+    const plan = buildCutPlan([part('ben', 700, 45, 45)], { lengthAllowance: 20 })
+    expect(plan.lengthAllowance).toBe(20)
+    expect(plan.groups[0]!.boards[0]![0]).toMatchObject({ w: 720, h: 45, length: 700, width: 45 })
+  })
+
+  it('väljer en längre bräda när delen och de kapade ändarna inte ryms på 2400', () => {
+    const group = buildCutPlan([part('lång', 2380, 95, 22)]).groups[0]!
+    // 2380 + 2 × 20 = 2420: nästa längd är 2700.
+    expect(group.stock).toMatchObject({ length: 2700, trim: 20 })
+    expect(group.boards).toHaveLength(1)
   })
 
   it('vrider bara plywood, och bara när det är inställt', () => {

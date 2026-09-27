@@ -400,8 +400,9 @@ function drawCutPlan(doc: jsPDF, input: DrawingPdfInput, plan: CutPlan) {
   y += 5.5
   text(
     doc,
-    `Mått i mm. Delens längd (fibern) längs brädans och skivans längd. Sågblad ${num.format(plan.kerf)} mm. ` +
-      'Alla snitt går tvärs över biten. Smala brädor är ritade högre än skalan.',
+    `Mått i mm. Delens längd (fibern) längs brädans och skivans längd. Sågblad ${num.format(plan.kerf)} mm` +
+      (plan.lengthAllowance > 0 ? `, kapmån ${num.format(plan.lengthAllowance)} mm på längden` : '') +
+      '. Alla snitt går tvärs över biten. Streckat: rensas bort. Smala brädor är ritade högre än skalan.',
     mx,
     y,
     3.2,
@@ -449,7 +450,8 @@ function drawCutPlan(doc: jsPDF, input: DrawingPdfInput, plan: CutPlan) {
     text(
       doc,
       `${unit} ${num.format(g.stock.length)} × ${num.format(g.stock.width)} · ${g.boards.length} ${noun} · ` +
-        `${Math.round(g.waste * 100)} % spill`,
+        `${Math.round(g.waste * 100)} % spill` +
+        (g.stock.trim > 0 ? ` · ${g.sheet ? 'rensa kanter' : 'kapa ändar'} ${num.format(g.stock.trim)}` : ''),
       mx + cw,
       y + 6.5,
       3.2,
@@ -476,11 +478,25 @@ function drawCutPlan(doc: jsPDF, input: DrawingPdfInput, plan: CutPlan) {
       doc.setLineWidth(0.3)
       doc.setDrawColor(0)
       doc.rect(mx, by, bw, bh)
+      // Det som rensas bort: streckat runt om på en skiva, vid ändarna på massivt trä.
+      const t = g.stock.trim
+      if (t > 0) {
+        doc.setLineWidth(0.15)
+        doc.setDrawColor(110)
+        doc.setLineDashPattern([0.8, 0.8], 0)
+        if (g.sheet) doc.rect(mx + t * k, by + t * ky, bw - 2 * t * k, bh - 2 * t * ky)
+        else {
+          doc.line(mx + t * k, by, mx + t * k, by + bh)
+          doc.line(mx + bw - t * k, by, mx + bw - t * k, by + bh)
+        }
+        doc.setLineDashPattern([], 0)
+        doc.setDrawColor(0)
+      }
       for (const p of pieces) {
         const px = mx + p.x * k
         const py = by + p.y * ky
-        const pw = p.length * k
-        const ph = p.width * ky
+        const pw = p.w * k
+        const ph = p.h * ky
         doc.setFillColor(222, 222, 222)
         doc.setLineWidth(0.2)
         doc.rect(px, py, pw, ph, 'FD')

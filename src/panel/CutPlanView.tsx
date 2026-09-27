@@ -29,6 +29,14 @@ const MIN_BOARD_PX = 40
 /** Ungefärlig bredd per tecken i etiketterna (11 px systemfont). */
 const CHAR_PX = 6.2
 
+/** Ett mått i mm som får vara 0 (sågblad, kapmån, rensad kant), eller ett felmeddelande. */
+function parseAmount(text: string): number | string {
+  const n = plainNumber(text)
+  if (n === null) return 'Skriv ett mått i mm'
+  if (n < 0) return 'Måttet kan inte vara negativt'
+  return n
+}
+
 /** Ett mått i mm, eller ett felmeddelande. */
 function parseSize(text: string): number | string {
   const n = plainNumber(text)
@@ -44,7 +52,7 @@ function parseSize(text: string): number | string {
  */
 export function CutPlanView({ bodies }: { bodies: readonly Body[] }) {
   const stock = useDocumentStore((s) => s.doc.stock)
-  const setKerf = useDocumentStore((s) => s.setKerf)
+  const setOptions = useDocumentStore((s) => s.setStockOptions)
   const plan = useMemo(() => buildCutPlan(bodies, stock), [bodies, stock])
   const purchases = useMemo(() => purchaseList(plan), [plan])
 
@@ -69,20 +77,36 @@ export function CutPlanView({ bodies }: { bodies: readonly Body[] }) {
         </div>
       )}
 
-      <label className={`${fieldLabel} max-w-40`}>
-        Sågblad
-        <CommitField
-          value={plain.format(plan.kerf)}
-          inputMode="decimal"
-          suffix="mm"
-          onCommit={(text) => {
-            const n = plainNumber(text)
-            if (n === null || n < 0) return 'Skriv bladets bredd i mm'
-            setKerf(n)
-            return null
-          }}
-        />
-      </label>
+      <div className="grid grid-cols-2 gap-2">
+        <label className={fieldLabel}>
+          Sågblad
+          <CommitField
+            value={plain.format(plan.kerf)}
+            inputMode="decimal"
+            suffix="mm"
+            onCommit={(text) => {
+              const n = parseAmount(text)
+              if (typeof n === 'string') return n
+              setOptions({ kerf: n })
+              return null
+            }}
+          />
+        </label>
+        <label className={fieldLabel}>
+          Kapmån på längden
+          <CommitField
+            value={plain.format(plan.lengthAllowance)}
+            inputMode="decimal"
+            suffix="mm"
+            onCommit={(text) => {
+              const n = parseAmount(text)
+              if (typeof n === 'string') return n
+              setOptions({ lengthAllowance: n })
+              return null
+            }}
+          />
+        </label>
+      </div>
 
       {plan.groups.map((g) => (
         <GroupView key={g.key} group={g} />
@@ -90,7 +114,8 @@ export function CutPlanView({ bodies }: { bodies: readonly Body[] }) {
 
       <p className="text-xs text-faint">
         Delarnas längd följer brädans och skivans längd, så att fibern går rätt. Alla snitt går tvärs över biten, som
-        med bordsåg eller skivsåg. Smala brädor ritas bredare än skalan. Tryck på en del för att välja den.
+        med bordsåg eller skivsåg. Den streckade linjen visar det som rensas bort, och kapmånen ingår i delarnas yta.
+        Smala brädor ritas bredare än skalan. Tryck på en del för att välja den.
       </p>
     </div>
   )
@@ -103,7 +128,7 @@ function GroupView({ group: g }: { group: CutPlanGroup }) {
   const noun = stockNoun(panel, g.boards.length)
   const unit = panel ? 'Skiva' : 'Bräda'
 
-  const sizeField = (label: string, key: 'length' | 'width') => (
+  const sizeField = (label: string, key: 'length' | 'width' | 'trim') => (
     <label className={fieldLabel}>
       {label}
       <CommitField
@@ -111,7 +136,7 @@ function GroupView({ group: g }: { group: CutPlanGroup }) {
         inputMode="decimal"
         suffix="mm"
         onCommit={(text) => {
-          const n = parseSize(text)
+          const n = key === 'trim' ? parseAmount(text) : parseSize(text)
           if (typeof n === 'string') return n
           set({ [key]: n })
           return null
@@ -137,9 +162,11 @@ function GroupView({ group: g }: { group: CutPlanGroup }) {
         </span>
       </div>
 
-      <div className="grid grid-cols-2 gap-2">
-        {sizeField(`${unit}, längd`, 'length')}
-        {sizeField(`${unit}, bredd`, 'width')}
+      <div className="grid grid-cols-3 gap-2">
+        {sizeField('Längd', 'length')}
+        {sizeField('Bredd', 'width')}
+        {/* Skivor rensas runt om, massivt trä bara i ändarna (se defaultTrim). */}
+        {sizeField(g.sheet ? 'Rensa kanter' : 'Kapa ändar', 'trim')}
       </div>
       <div className="flex flex-wrap items-center gap-2">
         {g.sheet && (
@@ -173,7 +200,13 @@ function GroupView({ group: g }: { group: CutPlanGroup }) {
           <span className="px-1.5 text-xs text-muted">
             {unit} {i + 1}
           </span>
-          <BoardDrawing stock={g.stock} pieces={pieces} material={g.material} label={`${unit} ${i + 1}`} />
+          <BoardDrawing
+            stock={g.stock}
+            sheet={g.sheet}
+            pieces={pieces}
+            material={g.material}
+            label={`${unit} ${i + 1}`}
+          />
         </div>
       ))}
     </div>
@@ -182,15 +215,18 @@ function GroupView({ group: g }: { group: CutPlanGroup }) {
 
 /**
  * En skiva eller bräda med delarna, i skala efter panelens bredd. En smal
- * bräda ritas högre än skalan (MIN_BOARD_PX), annars syns inte delarna.
+ * bräda ritas högre än skalan (MIN_BOARD_PX), annars syns inte delarna. Det
+ * som rensas bort avgränsas med en streckad linje.
  */
 function BoardDrawing({
   stock,
+  sheet,
   pieces,
   material,
   label,
 }: {
-  stock: StockSize
+  stock: StockSize & { trim: number }
+  sheet: boolean
   pieces: readonly PlacedPiece[]
   material: string
   label: string
@@ -210,11 +246,28 @@ function BoardDrawing({
       {width > 0 && (
         <svg width={width} height={height} role="img" aria-label={label} className="block overflow-visible">
           <rect x={0.5} y={0.5} width={width - 1} height={height - 1} rx={2} className="fill-hover stroke-line" />
+          {stock.trim > 0 && (
+            <g fill="none" strokeDasharray="3 3" className="stroke-faint">
+              {sheet ? (
+                <rect
+                  x={stock.trim * kx}
+                  y={stock.trim * ky}
+                  width={width - 2 * stock.trim * kx}
+                  height={height - 2 * stock.trim * ky}
+                />
+              ) : (
+                <>
+                  <line x1={stock.trim * kx} x2={stock.trim * kx} y1={0} y2={height} />
+                  <line x1={width - stock.trim * kx} x2={width - stock.trim * kx} y1={0} y2={height} />
+                </>
+              )}
+            </g>
+          )}
           {pieces.map((p) => {
             const x = p.x * kx
             const y = p.y * ky
-            const w = p.length * kx
-            const h = p.width * ky
+            const w = p.w * kx
+            const h = p.h * ky
             const selected = selection?.kind === 'body' && selection.id === p.bodyId
             const showName = h >= 14 && w >= p.name.length * CHAR_PX + 8
             return (
