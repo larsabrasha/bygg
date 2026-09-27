@@ -1,18 +1,20 @@
 # Bygger Docker-imagen när en versionstagg pushas (git tag v1.2.3 && git push origin v1.2.3)
 # och lägger den på ghcr.io/larsabrasha/bygg med taggarna 1.2.3, 1.2 och latest.
-# Testerna körs först; går de inte igenom byggs ingen image.
+# Testerna körs först; går de inte igenom byggs ingen image. Körs den för hand
+# (gh workflow run Image) byggs imagen men laddas inte upp.
 name: Image
 
 on:
   push:
     tags: ['v*']
+  workflow_dispatch:
 
 jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-node@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: 24
           cache: npm
@@ -29,25 +31,26 @@ jobs:
       packages: write
     steps:
       # .git följer med in i bygget (se .dockerignore): Om Bygg visar commiten.
-      - uses: actions/checkout@v5
-      - uses: docker/setup-buildx-action@v3
-      - uses: docker/login-action@v3
+      - uses: actions/checkout@v7
+      - uses: docker/setup-buildx-action@v4
+      - uses: docker/login-action@v4
+        if: github.ref_type == 'tag'
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
       - id: meta
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@v6
         with:
           images: ghcr.io/${{ github.repository }}
           tags: |
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
-      - uses: docker/build-push-action@v6
+      - uses: docker/build-push-action@v7
         with:
           context: .
           platforms: linux/amd64
-          push: true
+          push: ${{ github.ref_type == 'tag' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
