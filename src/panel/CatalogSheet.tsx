@@ -36,12 +36,12 @@ const ICON_SM = { size: 16, strokeWidth: 1.75, 'aria-hidden': true } as const
 const KIND_LABEL: Record<MaterialKind, string> = {
   wood: 'Massivt trä',
   sheet: 'Skiva',
-  ordered: 'Beställs tillskuret',
+  ordered: 'Till mått',
 }
 
 /** Vid varje slag i formuläret: vad det betyder för kaplistan och kapschemat (se model/cutPlan). Kort, det ska gå att se i farten. */
 const KIND_HINT: Record<MaterialKind, string> = {
-  wood: 'Brädor i standardmått',
+  wood: 'Kapas ur brädor, hyvlas vid behov',
   sheet: 'Läggs ut på hela skivor',
   ordered: 'Glas, sten – bara i kaplistan',
 }

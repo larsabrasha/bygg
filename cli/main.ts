@@ -304,7 +304,7 @@ export async function run(argv: string[], io: Io): Promise<number> {
         else
           for (const m of all)
             io.out(
-              `${m.id.padEnd(16)} ${m.name}  (${{ wood: 'massivt trä', sheet: 'skiva', ordered: 'beställs tillskuret' }[m.kind]}${m.own ? ', eget' : ''})`,
+              `${m.id.padEnd(16)} ${m.name}  (${{ wood: 'massivt trä', sheet: 'skiva', ordered: 'till mått' }[m.kind]}${m.own ? ', eget' : ''})`,
             )
         return 0
       }

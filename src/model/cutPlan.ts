@@ -125,7 +125,7 @@ export interface CutPlan {
   kerf: number
   /** Kapmån på längden, i mm: varje del kapas så mycket längre och kapas till sist. */
   lengthAllowance: number
-  /** Kaplistans rader som beställs tillskurna (glas), i kaplistans ordning. */
+  /** Kaplistans rader som görs till mått (glas), i kaplistans ordning. */
   ordered: CutListRow[]
 }
 
@@ -146,7 +146,7 @@ const MAX_MOVES = 200
 /**
  * Kapschemat: kaplistans delar utlagda på skivor och brädor, en grupp per
  * material och tjocklek. Delens längd (L, längs fibern) ligger längs skivans
- * längd, utom där skivan får vridas. Glas och annat som beställs tillskuret
+ * längd, utom där skivan får vridas. Glas och annat som görs till mått
  * är inte med: det sågas inte.
  *
  * Har en grupp flera lagermått kapas varje del först ur det smalaste den får
@@ -403,7 +403,7 @@ export const stockDims = (l: StockLayout) =>
 
 /**
  * Materialet som behövs: antal skivor och brädor per material, tjocklek och
- * lagermått. Sist det som beställs tillskuret (rutor av glas), en rad per mått.
+ * lagermått. Sist det som görs till mått (rutor av glas), en rad per mått.
  */
 export function materialList(plan: CutPlan): MaterialLine[] {
   const ordered = plan.ordered.map((row) => ({
@@ -411,7 +411,7 @@ export function materialList(plan: CutPlan): MaterialLine[] {
     material: row.material,
     count: row.count,
     text: `${row.count} ${row.count === 1 ? 'ruta' : 'rutor'} ${materialSpec(row.material).name} ${[row.thickness, row.width, row.length].map((n) => mm.format(n)).join(' × ')}`,
-    note: 'beställs tillskuret',
+    note: 'till mått',
   }))
   const sawn = plan.groups.flatMap((g) =>
     g.stocks

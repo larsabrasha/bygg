@@ -85,6 +85,6 @@ describe('glas', () => {
       '1 skiva MDF 19 × 1 220 × 2 440',
       '2 rutor glas 6 × 400 × 800',
     ])
-    expect(lines[1]!.note).toBe('beställs tillskuret')
+    expect(lines[1]!.note).toBe('till mått')
   })
 })

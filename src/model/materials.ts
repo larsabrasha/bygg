@@ -2,7 +2,7 @@
  * Hur ett material köps och kapas.
  * wood: massivt trä, som brädor eller limfogsskivor (se swedishStock).
  * sheet: skivor som sågas till på plats, med kapschema.
- * ordered: beställs tillskuret (glas); står i kaplistan men inte i kapschemat.
+ * ordered: till mått (glas, sten), varje del för sig; står i kaplistan men inte i kapschemat.
  */
 export type MaterialKind = 'wood' | 'sheet' | 'ordered'
 
@@ -165,14 +165,14 @@ export const firstUpper = (s: string) => s.charAt(0).toLocaleUpperCase('sv') + s
 /** Skivor som sågas (plywood, MDF, akryl), inte massivt trä och inte glas. */
 export const isSheetMaterial = (id: string) => materialSpec(id).kind === 'sheet'
 
-/** Beställs tillskuret och sågas inte: glas. */
+/** Görs till mått, en del i taget, och läggs inte ut i kapschemat: glas. */
 export const isOrdered = (id: string) => materialSpec(id).kind === 'ordered'
 
 const KIND_ORDER: Record<MaterialKind, number> = { wood: 0, sheet: 1, ordered: 2 }
 
 /**
  * Ordningen i kaplistan och kapschemat: massivt trä, skivor, sist det som
- * beställs. Inom varje slag i bokstavsordning.
+ * görs till mått. Inom varje slag i bokstavsordning.
  */
 export const compareMaterials = (a: string, b: string) =>
   KIND_ORDER[materialSpec(a).kind] - KIND_ORDER[materialSpec(b).kind] ||

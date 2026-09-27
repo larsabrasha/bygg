@@ -61,7 +61,7 @@ export function CutList() {
                   <h3 className="text-[13px] font-semibold">{materialTitle(g.material)}</h3>
                   <span className="ml-auto text-xs text-muted tabular-nums">
                     {/* Glas köps per ruta, inte per kubikmeter. */}
-                    {g.count} st · {isOrdered(g.material) ? 'beställs tillskuret' : `${volume.format(g.volumeM3)} m³`}
+                    {g.count} st · {isOrdered(g.material) ? 'till mått' : `${volume.format(g.volumeM3)} m³`}
                   </span>
                 </div>
                 <div role="table" aria-label={materialTitle(g.material)} className="text-[13px]">

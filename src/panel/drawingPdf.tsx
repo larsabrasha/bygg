@@ -414,7 +414,7 @@ function drawCutList(doc: jsPDF, input: DrawingPdfInput) {
     const title = materialTitle(g.material)
     caption(
       title,
-      `${g.count} st · ${isOrdered(g.material) ? 'beställs tillskuret' : `${volume.format(g.volumeM3)} m³`}`,
+      `${g.count} st · ${isOrdered(g.material) ? 'till mått' : `${volume.format(g.volumeM3)} m³`}`,
     )
     header()
     for (const r of rows) {
