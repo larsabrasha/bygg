@@ -258,7 +258,8 @@ export function Stage({
     >
       <div className={`size-full transition-opacity duration-1000 ${ready ? 'opacity-100' : 'opacity-0'}`}>
         <Canvas
-          shadows
+          // PCFShadowMap; med bara shadows väljs PCFSoftShadowMap, som three.js har tagit bort.
+          shadows="percentage"
           dpr={[1, 2]}
           frameloop={visible ? 'always' : 'never'}
           gl={{ alpha: true, antialias: true, powerPreference: 'high-performance' }}

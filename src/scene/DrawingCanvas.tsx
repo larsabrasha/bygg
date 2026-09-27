@@ -1,6 +1,6 @@
 import { Canvas, useThree } from '@react-three/fiber'
 import { useLayoutEffect } from 'react'
-import { OrthographicCamera, Raycaster, Vector2, Vector3, type Object3D } from 'three'
+import { Box3, Mesh, OrthographicCamera, Raycaster, Vector2, Vector3, type Object3D } from 'three'
 import type { CutListRow } from '../model/cutlist'
 import { anchorPoint, balloonRadius, bodyCorners, layoutBalloons, type Anchor, type Balloon } from '../model/drawing'
 import { explodedCenter } from '../model/explode'
@@ -64,6 +64,10 @@ export function DrawingCanvas(props: Props) {
 const v = new Vector3()
 const ndc = new Vector2()
 const raycaster = new Raycaster()
+const box = new Box3()
+
+const boxCorners = ({ min, max }: Box3): Vec3[] =>
+  [min.x, max.x].flatMap((x) => [min.y, max.y].flatMap((y) => [min.z, max.z].map((z): Vec3 => [x, y, z])))
 
 function Fit({ parts, offsets, azimuth, balloons }: Props) {
   // Kameran hämtas med get(): den ändras här, och värden från en hook får inte ändras.
@@ -134,16 +138,32 @@ function Fit({ parts, offsets, azimuth, balloons }: Props) {
     }
     const mid = (content.left + content.right) / 2
 
-    // Vad man träffar först i en punkt i bilden.
+    // Vad man träffar först i en punkt i bilden. Varje del prövas bara där dess låda syns
+    // i bilden: annars prövades varje stråle mot alla delar, vilket tog en halv sekund
+    // med 150 delar.
     scene.updateMatrixWorld()
-    const meshes: Object3D[] = []
+    const meshes: { mesh: Object3D; x0: number; x1: number; y0: number; y1: number }[] = []
     scene.traverse((o) => {
-      if (o.userData.pick) meshes.push(o)
+      if (!o.userData.pick || !(o instanceof Mesh)) return
+      // Bara meshens egen form, som strålen prövas mot (inte kanterna, som är barn till den).
+      if (!o.geometry.boundingBox) o.geometry.computeBoundingBox()
+      box.copy(o.geometry.boundingBox!).applyMatrix4(o.matrixWorld)
+      if (box.isEmpty()) return
+      const px = boxCorners(box).map(toPx)
+      meshes.push({
+        mesh: o,
+        x0: Math.min(...px.map((p) => p[0])),
+        x1: Math.max(...px.map((p) => p[0])),
+        y0: Math.min(...px.map((p) => p[1])),
+        y1: Math.max(...px.map((p) => p[1])),
+      })
     })
     const hitAt = (x: number, y: number) => {
+      const near = meshes.filter((m) => x >= m.x0 && x <= m.x1 && y >= m.y0 && y <= m.y1).map((m) => m.mesh)
+      if (near.length === 0) return undefined
       ndc.set((x / width) * 2 - 1, 1 - (y / height) * 2)
       raycaster.setFromCamera(ndc, cam)
-      const hit = raycaster.intersectObjects(meshes, false)[0]
+      const hit = raycaster.intersectObjects(near, false)[0]
       return (hit?.object.userData.pick as { id?: string } | undefined)?.id
     }
 

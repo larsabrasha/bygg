@@ -43,6 +43,24 @@ const SETTLE_MS = 400
 /** Den hopsatta modellen: inget flyttat. */
 const ASSEMBLED = new Map<string, Vec3>()
 
+/** Hur skarp JPEG:en i PDF:en blir (0–1). Vid 0,92 syns JPEG-fläckar vid kanterna först vid stor förstoring. */
+const JPEG_QUALITY = 0.92
+
+/**
+ * Bilden som JPEG (se PdfPicture). Canvasen är genomskinlig där inget är ritat, och
+ * JPEG har ingen genomskinlighet: bilden läggs på vitt, som papperet den står på.
+ */
+function jpegOnWhite(c: HTMLCanvasElement): string {
+  const out = document.createElement('canvas')
+  out.width = c.width
+  out.height = c.height
+  const g = out.getContext('2d')!
+  g.fillStyle = '#fff'
+  g.fillRect(0, 0, out.width, out.height)
+  g.drawImage(c, 0, 0)
+  return out.toDataURL('image/jpeg', JPEG_QUALITY)
+}
+
 /** Visaren (och pdf.js) laddas först när ritningen öppnas. */
 const PdfViewer = lazy(() => import('./PdfViewer'))
 
@@ -165,7 +183,7 @@ function DrawingView() {
   const buildPdfFile = async (): Promise<File> => {
     const { buildDrawingPdf } = await import('./drawingPdf')
     const picture = (c: HTMLCanvasElement | undefined, w?: number, h?: number) =>
-      c && c.width > 0 ? { url: c.toDataURL('image/png'), width: w ?? c.width, height: h ?? c.height } : undefined
+      c && c.width > 0 ? { url: jpegOnWhite(c), width: w ?? c.width, height: h ?? c.height } : undefined
     // Ballongerna ligger i bildens CSS-pixlar (layout), canvasen i skärmens pixlar: samma form.
     const exploded = picture(canvases.current.exploded, layout?.width, layout?.height)
     const blob = await buildDrawingPdf({

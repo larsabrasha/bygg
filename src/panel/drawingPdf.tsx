@@ -31,7 +31,11 @@ const volume = numberFormat(4, true)
 const stretchFormat = new Intl.NumberFormat('sv-SE', { maximumFractionDigits: 1 })
 const capitalize = (s: string) => s.charAt(0).toLocaleUpperCase('sv') + s.slice(1)
 
-/** En bild i pixlar (bara förhållandet mellan bredd och höjd räknas) och som data-URL. */
+/**
+ * En bild i pixlar (bara förhållandet mellan bredd och höjd räknas) och som data-URL,
+ * i JPEG: en PNG packar jsPDF upp och packar om, vilket tog en halv sekund för
+ * sprängskissen. En JPEG läggs in som den är.
+ */
 export interface PdfPicture {
   url: string
   width: number
@@ -160,7 +164,7 @@ function drawAssembly(doc: jsPDF, input: DrawingPdfInput) {
   text(doc, 'SPRÄNGSKISS, EJ SKALENLIG', fx + 2.5, fy + 4.5, 2.1, { gray: 68 })
   if (input.exploded) {
     const p = contain(input.exploded, fx + 2, fy + 7, rx - fx - 4, fh - 9)
-    doc.addImage(input.exploded.url, 'PNG', p.x, p.y, p.w, p.h, undefined, 'FAST')
+    doc.addImage(input.exploded.url, 'JPEG', p.x, p.y, p.w, p.h)
     if (input.exploded.layout) drawBalloons(doc, input.exploded.layout, p)
   }
 
@@ -252,7 +256,7 @@ function drawAssembly(doc: jsPDF, input: DrawingPdfInput) {
   text(doc, 'HOPSATT', rx + 2.5, fy + 4.5, 2.1, { gray: 68 })
   if (input.assembled) {
     const p = contain(input.assembled, rx + 2, fy + 6, rw - 4, listTop - fy - 7)
-    doc.addImage(input.assembled.url, 'PNG', p.x, p.y, p.w, p.h, undefined, 'FAST')
+    doc.addImage(input.assembled.url, 'JPEG', p.x, p.y, p.w, p.h)
   }
 }
 
