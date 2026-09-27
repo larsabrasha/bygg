@@ -2,12 +2,12 @@ import {
   ArrowRight,
   Calculator,
   ChevronDown,
-  Glasses,
+  RectangleGoggles,
   Keyboard,
   LockKeyhole,
   PencilLine,
   Puzzle,
-  Rotate3d,
+  ScanBox,
   Ruler,
   Share2,
   Undo2,
@@ -490,8 +490,8 @@ const EASY: Feature[] = [
 const MORE: Feature[] = [
   { icon: PencilLine, title: 'Apple Pencil', text: 'Pennan ritar, fingrarna vrider och zoomar.' },
   { icon: Variable, title: 'Parametrar', text: 'Namngivna mått som styr resten.' },
-  { icon: Rotate3d, title: 'AR på iOS', text: 'Möbeln i rummet, i verklig storlek.' },
-  { icon: Glasses, title: 'VR', text: 'Gå runt möbeln i headsetet.' },
+  { icon: ScanBox, title: 'AR på iOS', text: 'Möbeln i rummet, i verklig storlek.' },
+  { icon: RectangleGoggles, title: 'VR', text: 'Gå runt möbeln i headsetet.' },
   { icon: Share2, title: 'Export', text: 'GLB, OBJ, STL och 3MF för Blender, CAD och 3D-skrivare.' },
 ]
 

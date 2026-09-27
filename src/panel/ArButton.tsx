@@ -1,4 +1,4 @@
-import { Rotate3d } from 'lucide-react'
+import { ScanBox } from 'lucide-react'
 import { useAr } from './ar'
 import { Tip } from './Tip'
 
@@ -17,7 +17,7 @@ export function ArButton() {
         onClick={() => void ar.open()}
         className="flex h-8 cursor-pointer items-center gap-1.5 rounded-md px-2 text-[13px] font-medium hover:bg-hover disabled:cursor-default disabled:text-disabled disabled:hover:bg-transparent"
       >
-        <Rotate3d size={18} strokeWidth={1.75} aria-hidden />
+        <ScanBox size={18} strokeWidth={1.75} aria-hidden />
         AR
       </button>
     </Tip>
