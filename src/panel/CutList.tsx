@@ -52,7 +52,7 @@ export function CutList() {
           {view === 'list' &&
             groups.map((g) => (
               <div key={g.material} className="flex flex-col gap-1">
-                <div className="flex items-center gap-2 px-2">
+                <div className="flex items-center gap-2 px-3">
                   <span
                     className="size-3 shrink-0 rounded-[3px] ring-1 ring-black/15 ring-inset"
                     style={{ background: materialColor(g.material) }}
@@ -65,7 +65,7 @@ export function CutList() {
                   </span>
                 </div>
                 <div role="table" aria-label={materialTitle(g.material)} className="text-[13px]">
-                  <div role="row" className={`${cols} ${groupTitle} px-0.5 py-1.5 [&>*]:font-semibold`}>
+                  <div role="row" className={`${cols} ${groupTitle} px-1.5 py-1.5 [&>*]:font-semibold`}>
                     <span role="columnheader" className="text-right">
                       St
                     </span>
@@ -80,8 +80,8 @@ export function CutList() {
                       T
                     </span>
                   </div>
-                  {/* Ett kort per material, som korten i Kapschema. Radens hörn följer kortets: 6 + 2 = 8 px. */}
-                  <div role="rowgroup" className="flex flex-col rounded-lg bg-hover p-0.5">
+                  {/* Ett kort per material, som korten i Kapschema. Markeringen går ut i kanten; kortet rundar den. */}
+                  <div role="rowgroup" className="flex flex-col overflow-hidden rounded-lg bg-hover">
                     {g.rows.map((row) => (
                       <Row key={row.key} row={row} />
                     ))}
@@ -112,7 +112,7 @@ function Row({ row }: { row: CutListRow }) {
     <div
       role="row"
       aria-selected={isSelected}
-      className={`${cols} cursor-pointer rounded-md py-2 hover:bg-button aria-selected:bg-accent-soft narrow:py-3`}
+      className={`${cols} cursor-pointer px-1.5 py-2 hover:bg-button aria-selected:bg-accent-soft narrow:py-3`}
       onClick={() => {
         const id = row.bodyIds[0]
         if (id) select({ kind: 'body', id })

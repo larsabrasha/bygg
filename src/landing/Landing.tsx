@@ -471,7 +471,7 @@ function CutListCard() {
           ))}
         </tbody>
       </table>
-      <div className="flex justify-between border-t border-line bg-hover/60 px-5 py-3.5 text-[13px] tabular-nums">
+      <div className="flex justify-between bg-hover/60 px-5 py-3.5 text-[13px] tabular-nums">
         <span className="font-medium">{bordCutList.totalCount} delar</span>
         <span className="text-muted">{m3.format(bordCutList.totalVolumeM3)} m³ ek</span>
       </div>
@@ -485,7 +485,7 @@ function Row({ index, children }: { index: number; children: ReactNode }) {
     <tr
       ref={ref}
       style={{ transitionDelay: `${index * 40}ms` }}
-      className={`border-b border-line/60 transition-[opacity,translate] duration-500 last:border-0 motion-reduce:transition-none ${
+      className={`transition-[opacity,translate] duration-500 motion-reduce:transition-none ${
         shown ? 'translate-x-0 opacity-100' : 'translate-x-3 opacity-0'
       }`}
     >

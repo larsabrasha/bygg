@@ -1,5 +1,5 @@
 import { ChevronDown, Plus, Trash2, X } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import {
   BUILT_IN_COLORS,
   parseSheets,
@@ -186,18 +186,20 @@ function Materials() {
           Slå av dem du aldrig använder, så syns de inte i väljaren. Delar som redan har dem behåller dem.
         </p>
         {MATERIAL_GROUPS.map((g) => (
-          <div key={g.kind} className="mt-2 flex flex-col">
+          <div key={g.kind} className="mt-2 flex flex-col gap-1">
             {/* Samma grupper och namn som i materialväljaren i Egenskaper. */}
-            <h4 className="border-b border-line pb-1 text-xs font-semibold text-muted">{g.title}</h4>
-            {MATERIAL_SPECS.filter((m) => m.kind === g.kind).map((m) => (
-              <ShownRow
-                key={m.id}
-                color={m.color}
-                name={firstUpper(m.name)}
-                shown={!catalog.hidden.includes(m.id)}
-                onChange={(on) => setHidden(m.id, !on)}
-              />
-            ))}
+            <h4 className="px-3 text-xs font-semibold text-muted">{g.title}</h4>
+            <ShownList>
+              {MATERIAL_SPECS.filter((m) => m.kind === g.kind).map((m) => (
+                <ShownRow
+                  key={m.id}
+                  color={m.color}
+                  name={firstUpper(m.name)}
+                  shown={!catalog.hidden.includes(m.id)}
+                  onChange={(on) => setHidden(m.id, !on)}
+                />
+              ))}
+            </ShownList>
           </div>
         ))}
       </section>
@@ -227,6 +229,11 @@ function AllHeader({ title, ids }: { title: string; ids: readonly string[] }) {
   )
 }
 
+/** Ett kort med inbyggda saker, som korten i kaplistan: fylld yta i stället för linjer mellan raderna. */
+const ShownList = ({ children }: { children: ReactNode }) => (
+  <div className="flex flex-col rounded-lg bg-hover py-1">{children}</div>
+)
+
 /** En inbyggd sak (material eller färg) med Visas: av betyder att den inte syns i väljaren. */
 function ShownRow({
   color,
@@ -244,7 +251,7 @@ function ShownRow({
   onChange: (shown: boolean) => void
 }) {
   return (
-    <div className="flex items-center gap-2 border-b border-line py-0.5 last:border-b-0">
+    <div className="flex items-center gap-2 px-3 py-0.5">
       <Swatch color={color} round={round} />
       <span className="min-w-0 flex-1 text-[13px]">
         {name}
@@ -450,17 +457,19 @@ function Colors() {
         <p className="mb-1 text-[13px] text-muted">
           Vanliga kulörer på montrar och väggar. Färgen på skärmen är ungefärlig; det är koden som gäller.
         </p>
-        {BUILT_IN_COLORS.map((c) => (
-          <ShownRow
-            key={c.id}
-            round
-            color={c.color}
-            name={c.name}
-            note={c.code}
-            shown={!catalog.hidden.includes(c.id)}
-            onChange={(on) => setHidden(c.id, !on)}
-          />
-        ))}
+        <ShownList>
+          {BUILT_IN_COLORS.map((c) => (
+            <ShownRow
+              key={c.id}
+              round
+              color={c.color}
+              name={c.name}
+              note={c.code}
+              shown={!catalog.hidden.includes(c.id)}
+              onChange={(on) => setHidden(c.id, !on)}
+            />
+          ))}
+        </ShownList>
       </section>
     </div>
   )
