@@ -32,9 +32,21 @@ Gränserna (`src/model/limits.ts`) gäller i appen, vid import, på servern och 
 
 ## Driftsättning (Docker)
 
+En ny version släpps med en tagg. GitHub Actions kör testerna och lägger imagen på
+`ghcr.io/larsabrasha/bygg` (taggarna `1.2.3`, `1.2` och `latest`):
+
 ```sh
-docker compose up -d
+git tag v1.2.3 && git push origin v1.2.3
 ```
+
+På servern, bredvid `compose.yaml`:
+
+```sh
+docker compose pull && docker compose up -d
+```
+
+`BYGG_VERSION=1.2.3` i `.env` låser en version (till exempel för att gå tillbaka); annars gäller `latest`.
+Bygga imagen själv: `docker build -t ghcr.io/larsabrasha/bygg .`
 
 Appen och API:t nås på port 8787. Modellerna ligger som JSON-filer i volymen `bygg-data`,
 en mapp per användare (`users/<id>/models/<id>.json`, borttagna i `trash/`). Säkerhetskopiera den volymen.

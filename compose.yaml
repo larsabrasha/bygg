@@ -1,9 +1,11 @@
-# Starta: docker compose up -d
+# Starta eller uppdatera: docker compose pull && docker compose up -d
+# Imagen byggs av GitHub Actions när en versionstagg pushas (.github/workflows/image.yml).
+# En viss version: BYGG_VERSION=1.2.3 i .env; annars latest.
 # Utan inloggning än: appen körs bara utan konto, och allt sparas i webbläsaren. Volymen används
 # först när inloggningen slås på; då hamnar modellerna där, en mapp per användare (users/<id>/models, thumbs, trash).
 services:
   bygg:
-    build: .
+    image: ghcr.io/larsabrasha/bygg:${BYGG_VERSION:-latest}
     ports:
       - '8787:8787'
     environment:
