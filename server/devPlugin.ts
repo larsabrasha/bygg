@@ -1,21 +1,22 @@
 import { getRequestListener } from '@hono/node-server'
 import type { Connect, Plugin } from 'vite'
 import { createApp } from './app'
-import { FileStorage } from './storage'
+import { devAuth } from './auth'
+import { UserStorages } from './storage'
 
 /**
  * Kör API:t inuti Vites dev-server, så att `npm run dev` räcker och appen och
  * API:t delar port. Data hamnar i ./data (samma som produktionsserverns standard).
+ * Ingen inloggning här: allt gäller dev-användaren (./data/users/dev).
  * Också i förhandsvisningen av produktionsbygget (`npm run preview:vr`), så att
  * synken fungerar när bygget provas i VR.
  */
 export function byggApi(): Plugin {
   const mount = async (middlewares: Connect.Server) => {
-    const storage = new FileStorage(process.env.DATA_DIR ?? './data')
-    await storage.init()
-    const listener = getRequestListener(createApp({ storage }).fetch)
+    const storages = new UserStorages(process.env.DATA_DIR ?? './data')
+    const listener = getRequestListener(createApp({ storages, auth: devAuth() }).fetch)
     middlewares.use((req, res, next) => {
-      if (req.url?.startsWith('/api/')) void listener(req, res)
+      if (req.url?.startsWith('/api/') || req.url?.startsWith('/auth/')) void listener(req, res)
       else next()
     })
   }

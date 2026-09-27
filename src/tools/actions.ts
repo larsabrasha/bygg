@@ -10,6 +10,7 @@ import {
   rectSize,
 } from '../model/geometry'
 import { evaluateIn } from '../model/params'
+import { extent, widthAxis } from '../model/partAxes'
 import { rulerPointOn, type RulerPoint } from '../model/ruler'
 import { resolveBodies } from '../model/resolve'
 import {
@@ -22,7 +23,9 @@ import {
   snapValue,
   type PlaneTargets,
 } from '../model/snapping'
+import { snapStock, thicknessTargets, type StockTarget } from '../model/stockSnap'
 import {
+  DEFAULT_MATERIAL,
   FACES,
   type Body,
   type DimExpr,
@@ -317,6 +320,7 @@ export function tap(hit: Hit | null, tol: number) {
       distance: 0,
       min: pushPullMinOf(pp.target),
       onTarget: false,
+      stockTargets: stockTargetsOf(pp.target),
     })
   }
 }
@@ -392,6 +396,29 @@ export function beginPushPull(target: PushPullTarget, grabPoint?: Vec3) {
     distance: 0,
     min: pushPullMinOf(target),
     onTarget: false,
+    stockTargets: stockTargetsOf(target),
+  })
+}
+
+/**
+ * Lägen där delen får en tjocklek som finns att köpa. En ny del ur en skiss:
+ * när djupet blir det kortaste måttet (tjockleken, se defaultAxes), åt båda
+ * hållen om skissen inte sitter på en del (där blir det inåt ett urtag). En
+ * dels sida: bara längs tjockleksaxeln. Inga för verktyg, som inte köps.
+ */
+export function stockTargetsOf(target: PushPullTarget): StockTarget[] {
+  if (target.kind === 'sketch') {
+    const s = docs().doc.sketches.find((x) => x.id === target.id)
+    if (!s) return []
+    const [w, h] = rectSize(s.rect)
+    const width = Math.min(w, h)
+    return thicknessTargets(DEFAULT_MATERIAL, width, { bothWays: !s.on, max: width, min: s.on ? 0 : -Infinity })
+  }
+  const b = findBody(target.id)
+  if (!b || b.tool || faceAxis(target.face) !== b.thicknessAxis) return []
+  return thicknessTargets(b.material, extent(b, widthAxis(b)), {
+    base: extent(b, b.thicknessAxis),
+    min: pushPullMin(b, target.face),
   })
 }
 
@@ -608,9 +635,20 @@ export function move(ray: Ray, tol: number) {
   const t = closestParamOnLine(op.anchor, op.normal, ray.origin, ray.dir)
   if (t === null) return
   const s = snapValue(t - op.grab, 1, op.targets, tol)
+  // Andra delars kanter går före; tjocklekarna som finns att köpa snäpper bara i en smal zon,
+  // och bara när det är påslaget. Inte för ett tillägg eller urtag, som inte köps.
+  const combining = op.mode === 'add' || op.mode === 'subtract'
+  const stock =
+    s.onTarget || combining || !tools().stockSnap ? null : snapStock(t - op.grab, op.stockTargets ?? [], tol / 3)
+  const value = stock?.distance ?? s.value
   // Ytan stannar innan den når motsatta sidan.
-  const distance = Math.max(s.value, op.min ?? -Infinity)
-  setOp({ ...op, distance, onTarget: s.onTarget && distance === s.value })
+  const distance = Math.max(value, op.min ?? -Infinity)
+  setOp({
+    ...op,
+    distance,
+    onTarget: s.onTarget && distance === s.value,
+    stockHint: stock && distance === stock.distance ? stock.text : undefined,
+  })
 }
 
 /**

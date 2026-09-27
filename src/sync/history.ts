@@ -1,4 +1,4 @@
-import { del, get, set } from 'idb-keyval'
+import { del, get, set } from './localStore'
 import { FORMAT_VERSION, migrate } from '../persist/format'
 import { FACES } from '../model/types'
 import type { HistoryEntry, Selection } from '../store/documentStore'

@@ -13,7 +13,7 @@ ENV NODE_ENV=production \
     DATA_DIR=/data \
     STATIC_DIR=./dist
 COPY package.json package-lock.json ./
-# Bara serverns beroenden (hono, tsx); frontend-biblioteken är redan inbyggda i dist/.
+# Bara serverns beroenden (hono, openid-client, tsx); frontend-biblioteken är redan inbyggda i dist/.
 RUN npm ci --omit=dev && npm cache clean --force
 COPY --from=build /app/dist ./dist
 COPY server ./server

@@ -1,6 +1,7 @@
+import { userHeader } from './localStore'
 import type { ConflictResponse, ModelMeta, PutModelRequest, PutModelResponse, ServerModel } from './protocol'
 
-export type ApiErrorKind = 'offline' | 'no-server' | 'server'
+export type ApiErrorKind = 'offline' | 'no-server' | 'server' | 'auth'
 
 export class ApiError extends Error {
   constructor(
@@ -21,7 +22,10 @@ export interface SyncApi {
   delete(id: string, baseRevision: number): Promise<DeleteResult>
 }
 
-/** API-klient mot servern. Nätverksfel blir ApiError('offline'); saknas servern blir det 'no-server'. */
+/**
+ * API-klient mot servern. Nätverksfel blir ApiError('offline'); saknas servern blir det 'no-server';
+ * utloggad (eller inloggad som en annan användare) blir 'auth'.
+ */
 export function httpApi(
   base = '',
   fetchFn: (url: string, init: RequestInit) => Promise<Response> = (u, i) => fetch(u, i),
@@ -31,7 +35,7 @@ export function httpApi(
     try {
       res = await fetchFn(`${base}${path}`, {
         method,
-        headers: body !== undefined ? { 'content-type': 'application/json' } : {},
+        headers: { ...userHeader(), ...(body !== undefined && { 'content-type': 'application/json' }) },
         body: body !== undefined ? JSON.stringify(body) : undefined,
       })
     } catch {
@@ -42,6 +46,7 @@ export function httpApi(
     if (!(res.headers.get('content-type') ?? '').includes('application/json'))
       throw new ApiError('no-server', 'Ingen synkserver')
     const data = await res.json()
+    if (res.status === 401) throw new ApiError('auth', (data as { error?: string }).error ?? 'Inte inloggad')
     if (res.status >= 500) throw new ApiError('server', (data as { error?: string }).error ?? `Serverfel ${res.status}`)
     return { status: res.status, data }
   }

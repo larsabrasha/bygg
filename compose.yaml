@@ -1,11 +1,17 @@
 # Starta: docker compose up -d
-# Modellerna hamnar i volymen bygg-data (models/ och trash/ som JSON-filer).
-# Ingen inloggning: nås bara i det egna nätet, med https via en omvänd proxy (t.ex. Caddy).
+# Modellerna hamnar i volymen bygg-data, en mapp per användare (users/<id>/models, thumbs, trash).
+# Inloggning via Pocket ID. Hemligheterna läses från .env bredvid den här filen (se README).
 services:
   bygg:
     build: .
     ports:
       - '8787:8787'
+    environment:
+      APP_URL: https://bygg.larsabrasha.com
+      OIDC_ISSUER: https://id.larsabrasha.com
+      OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:?saknas i .env}
+      OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:?saknas i .env}
+      SESSION_SECRET: ${SESSION_SECRET:?saknas i .env}
     volumes:
       - bygg-data:/data
     restart: unless-stopped

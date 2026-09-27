@@ -1,7 +1,15 @@
 import { jsPDF } from 'jspdf'
 import type { ReactElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { countSame, isPanel, purchaseList, stockNoun, type CutPlan } from '../model/cutPlan'
+import {
+  countSame,
+  groupCount,
+  materialList,
+  stockDims,
+  stockNoun,
+  type CutPlan,
+  type StockLayout,
+} from '../model/cutPlan'
 import { groupByMaterial, type CutList, type CutListRow } from '../model/cutlist'
 import { compactNames, compactNumbers } from '../model/cutlistExport'
 import { numberFormat } from '../model/numberFormat'
@@ -18,6 +26,8 @@ import type { DrawingLayout } from '../scene/DrawingCanvas'
 
 const num = numberFormat(1, true)
 const volume = numberFormat(4, true)
+/** Förstoringen av en smal bräda i kapschemat: "3" eller "1,5". */
+const stretchFormat = new Intl.NumberFormat('sv-SE', { maximumFractionDigits: 1 })
 const capitalize = (s: string) => s.charAt(0).toLocaleUpperCase('sv') + s.slice(1)
 
 /** En bild i pixlar (bara förhållandet mellan bredd och höjd räknas) och som data-URL. */
@@ -372,6 +382,25 @@ function drawCutList(doc: jsPDF, input: DrawingPdfInput) {
   }
 }
 
+/** Avståndet mellan ränderna i spillet, i mm på papperet. */
+const HATCH_MM = 1.6
+
+/**
+ * Sneda ränder (/) över en rektangel på sidan: spillet på en skiva eller bräda. Delarna
+ * ritas ovanpå, fyllda, så ränderna syns bara där det inte blir någon del.
+ */
+function hatch(doc: jsPDF, x: number, y: number, w: number, h: number) {
+  doc.setLineWidth(0.12)
+  doc.setDrawColor(150)
+  // Linjerna x + y = c, från hörnet uppe till vänster till hörnet nere till höger.
+  for (let c = x + y + HATCH_MM; c < x + w + y + h; c += HATCH_MM) {
+    const x1 = Math.max(x, c - (y + h))
+    const x2 = Math.min(x + w, c - y)
+    doc.line(x1, c - x1, x2, c - x2)
+  }
+  doc.setDrawColor(0)
+}
+
 /** Lägsta höjd (mm) på en ritad bräda, så att smala delar syns; som på skärmen ritas den då högre än skalan. */
 const MIN_BOARD_MM = 8
 /** Högsta höjd (mm) på en ritad skiva, så att två ryms på en sida. */
@@ -398,30 +427,38 @@ function drawCutPlan(doc: jsPDF, input: DrawingPdfInput, plan: CutPlan) {
   y += 13.5
   line(doc, mx, y, mx + cw, y, 0.5)
   y += 5.5
-  text(
-    doc,
-    `Mått i mm. Delens längd (fibern) längs brädans och skivans längd. Sågblad ${num.format(plan.kerf)} mm` +
-      (plan.lengthAllowance > 0 ? `, kapmån ${num.format(plan.lengthAllowance)} mm på längden` : '') +
-      '. Alla snitt går tvärs över biten. Streckat: rensas bort. Smala brädor är ritade högre än skalan.',
-    mx,
-    y,
-    3.2,
-    { gray: 34 },
-  )
-  y += 4
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(3.2 * PT)
+  const intro = doc.splitTextToSize(
+    `Mått i mm. Fibern går längs brädan. Sågblad ${num.format(plan.kerf)} mm` +
+      (plan.lengthAllowance > 0 ? `, kapmån ${num.format(plan.lengthAllowance)} mm` : '') +
+      '. Snett randigt är spill; streckade linjer visar det som sågas bort.',
+    cw,
+  ) as string[]
+  intro.forEach((s, i) => text(doc, s, mx, y + i * 4.4, 3.2, { gray: 34 }))
+  y += (intro.length - 1) * 4.4 + 4
 
-  // Att köpa: en rad per lagermått, med en ruta att bocka av i bygghandeln.
-  const purchases = purchaseList(plan)
-  if (purchases.length > 0) {
+  // Materialet som behövs: en rad per lagermått, med en ruta att bocka av i förrådet eller
+  // bygghandeln. Löpmetern står efter måttet, och en notis om hyvling på en egen rad under.
+  const materials = materialList(plan)
+  if (materials.length > 0) {
     y += 6
-    text(doc, 'ATT KÖPA', mx, y + 3, 2.6, { bold: true, gray: 51 })
+    text(doc, 'MATERIAL SOM BEHÖVS', mx, y + 3, 2.6, { bold: true, gray: 51 })
     y += 5
-    for (const p of purchases) {
+    for (const p of materials) {
       doc.setLineWidth(0.3)
       doc.setDrawColor(0)
       doc.rect(mx, y + 1.2, 3.4, 3.4)
       text(doc, p.text, mx + 6, y + 4.2, 3.6)
-      if (p.length) text(doc, p.length, mx + 90, y + 4.2, 3.4, { align: 'right', gray: 34 })
+      if (p.length) {
+        doc.setFont('helvetica', 'normal')
+        doc.setFontSize(3.6 * PT)
+        text(doc, p.length, mx + 6 + doc.getTextWidth(p.text) + 4, y + 4.2, 3.4, { gray: 34 })
+      }
+      if (p.note) {
+        text(doc, p.note, mx + 6, y + 8.4, 3, { gray: 51 })
+        y += 3.8
+      }
       y += 5.6
     }
   }
@@ -432,31 +469,24 @@ function drawCutPlan(doc: jsPDF, input: DrawingPdfInput, plan: CutPlan) {
   }
 
   for (const g of plan.groups) {
-    if (g.boards.length === 0 && g.tooBig.length === 0) continue
-    const k = Math.min(cw / g.stock.length, MAX_BOARD_MM / g.stock.width)
-    const bw = g.stock.length * k
-    const bh = Math.max(g.stock.width * k, MIN_BOARD_MM)
-    const ky = bh / g.stock.width
-    const panel = isPanel(g)
-    const unit = panel ? 'Skiva' : 'Bräda'
+    const layouts = g.stocks.filter((l) => l.boards.length > 0)
+    if (layouts.length === 0 && g.tooBig.length === 0) continue
+    // Samma skala för alla mått i gruppen, så att en bräda och en skiva går att jämföra.
+    const k = Math.min(...g.stocks.map((l) => Math.min(cw / l.stock.length, MAX_BOARD_MM / l.stock.width)))
+    const heightOf = (l: StockLayout) => Math.max(l.stock.width * k, MIN_BOARD_MM)
     const captionH = 12
-    const boardH = 5 + bh + 4
+    const stockH = 6
+    const boardH = (l: StockLayout) => 5 + heightOf(l) + 4
 
     // Rubriken står aldrig ensam längst ner: den följs av minst en bräda.
-    if (y + 6 + captionH + boardH > bottom) newPage()
+    const first = layouts[0]
+    if (y + 6 + captionH + (first ? stockH + boardH(first) : 0) > bottom) newPage()
     else y += 6
-    const noun = stockNoun(panel, g.boards.length)
     text(doc, `${capitalize(g.material)} ${num.format(g.thickness)} mm`, mx, y + 6.5, 4.4, { bold: true })
-    text(
-      doc,
-      `${unit} ${num.format(g.stock.length)} × ${num.format(g.stock.width)} · ${g.boards.length} ${noun} · ` +
-        `${Math.round(g.waste * 100)} % spill` +
-        (g.stock.trim > 0 ? ` · ${g.sheet ? 'rensa kanter' : 'kapa ändar'} ${num.format(g.stock.trim)}` : ''),
-      mx + cw,
-      y + 6.5,
-      3.2,
-      { align: 'right', gray: 34 },
-    )
+    text(doc, `${groupCount(g)} · ${Math.round(g.waste * 100)} % spill`, mx + cw, y + 6.5, 3.2, {
+      align: 'right',
+      gray: 34,
+    })
     y += 9
     line(doc, mx, y, mx + cw, y, 0.4)
     y += 3
@@ -464,51 +494,78 @@ function drawCutPlan(doc: jsPDF, input: DrawingPdfInput, plan: CutPlan) {
       const names = countSame(g.tooBig.map((p) => `${p.name} (${num.format(p.length)} × ${num.format(p.width)})`)).join(
         ', ',
       )
+      const where = g.stocks.length > 1 ? 'något av måtten' : `en hel ${stockNoun(g.stocks[0]!.panel, 1)}`
       doc.setFont('helvetica', 'normal')
       doc.setFontSize(3.2 * PT)
-      const lines = doc.splitTextToSize(`Får inte plats på en hel ${unit.toLowerCase()}: ${names}`, cw) as string[]
+      const lines = doc.splitTextToSize(`Får inte plats på ${where}: ${names}`, cw) as string[]
       lines.forEach((s, i) => text(doc, s, mx, y + 3 + i * 4.2, 3.2))
       y += lines.length * 4.2 + 2
     }
 
-    g.boards.forEach((pieces, i) => {
-      if (y + boardH > bottom) newPage()
-      text(doc, `${unit} ${i + 1}`, mx, y + 3.2, 3, { gray: 51 })
-      const by = y + 5
-      doc.setLineWidth(0.3)
-      doc.setDrawColor(0)
-      doc.rect(mx, by, bw, bh)
-      // Det som rensas bort: streckat runt om på en skiva, vid ändarna på massivt trä.
-      const t = g.stock.trim
-      if (t > 0) {
-        doc.setLineWidth(0.15)
-        doc.setDrawColor(110)
-        doc.setLineDashPattern([0.8, 0.8], 0)
-        if (g.sheet) doc.rect(mx + t * k, by + t * ky, bw - 2 * t * k, bh - 2 * t * ky)
-        else {
-          doc.line(mx + t * k, by, mx + t * k, by + bh)
-          doc.line(mx + bw - t * k, by, mx + bw - t * k, by + bh)
-        }
-        doc.setLineDashPattern([], 0)
+    for (const l of layouts) {
+      const unit = capitalize(stockNoun(l.panel, 1))
+      const bw = l.stock.length * k
+      const bh = heightOf(l)
+      const ky = bh / l.stock.width
+      const t = l.stock.trim
+      if (y + stockH + boardH(l) > bottom) newPage()
+      text(
+        doc,
+        `${unit} ${stockDims(l)}` + (t > 0 ? ` · ${g.sheet ? 'rensa kanter' : 'kapa ändar'} ${num.format(t)}` : ''),
+        mx,
+        y + 4,
+        3.4,
+        { bold: true },
+      )
+      y += stockH
+
+      l.boards.forEach((pieces, i) => {
+        if (y + boardH(l) > bottom) newPage()
+        text(doc, `${unit} ${i + 1}`, mx, y + 3.2, 3, { gray: 51 })
+        // En smal bräda ritas bredare än skalan; det ska stå vid brädan, inte bara i inledningen.
+        const stretch = ky / k
+        if (stretch > 1.05)
+          text(doc, `Bredden ritad ${stretchFormat.format(stretch)} × större`, mx + bw, y + 3.2, 3, {
+            align: 'right',
+            gray: 90,
+          })
+        const by = y + 5
+        hatch(doc, mx, by, bw, bh)
+        doc.setLineWidth(0.3)
         doc.setDrawColor(0)
-      }
-      for (const p of pieces) {
-        const px = mx + p.x * k
-        const py = by + p.y * ky
-        const pw = p.w * k
-        const ph = p.h * ky
-        doc.setFillColor(222, 222, 222)
-        doc.setLineWidth(0.2)
-        doc.rect(px, py, pw, ph, 'FD')
-        // Namn och mått om de ryms, annars bara namnet, annars inget.
-        doc.setFont('helvetica', 'normal')
-        doc.setFontSize(2.8 * PT)
-        const dims = `${num.format(p.length)} × ${num.format(p.width)}`
-        const full = `${p.name} ${dims}`
-        const label = [full, p.name].find((t) => doc.getTextWidth(t) <= pw - 1.5)
-        if (label && ph >= 3.6) text(doc, label, px + pw / 2, py + ph / 2, 2.8, { align: 'center', baseline: 'middle' })
-      }
-      y += boardH
-    })
+        doc.rect(mx, by, bw, bh)
+        // Det som rensas bort: streckat runt om på en skiva, vid ändarna på massivt trä.
+        if (t > 0) {
+          doc.setLineWidth(0.15)
+          doc.setDrawColor(110)
+          doc.setLineDashPattern([0.8, 0.8], 0)
+          if (g.sheet) doc.rect(mx + t * k, by + t * ky, bw - 2 * t * k, bh - 2 * t * ky)
+          else {
+            doc.line(mx + t * k, by, mx + t * k, by + bh)
+            doc.line(mx + bw - t * k, by, mx + bw - t * k, by + bh)
+          }
+          doc.setLineDashPattern([], 0)
+          doc.setDrawColor(0)
+        }
+        for (const p of pieces) {
+          const px = mx + p.x * k
+          const py = by + p.y * ky
+          const pw = p.w * k
+          const ph = p.h * ky
+          doc.setFillColor(222, 222, 222)
+          doc.setLineWidth(0.2)
+          doc.rect(px, py, pw, ph, 'FD')
+          // Namn och mått om de ryms, annars bara namnet, annars inget.
+          doc.setFont('helvetica', 'normal')
+          doc.setFontSize(2.8 * PT)
+          const dims = `${num.format(p.length)} × ${num.format(p.width)}`
+          const full = `${p.name} ${dims}`
+          const label = [full, p.name].find((t) => doc.getTextWidth(t) <= pw - 1.5)
+          if (label && ph >= 3.6)
+            text(doc, label, px + pw / 2, py + ph / 2, 2.8, { align: 'center', baseline: 'middle' })
+        }
+        y += boardH(l)
+      })
+    }
   }
 }

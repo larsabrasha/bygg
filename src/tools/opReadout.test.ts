@@ -21,6 +21,12 @@ describe('värdet vid pilen', () => {
     expect(opReadout(pushPull(0))).toBeNull()
   })
 
+  it('push/pull: varför det snäppte, när det är till en tjocklek som finns att köpa', () => {
+    const op = { ...pushPull(22), stockHint: 'Hyvlat virke finns i 22' }
+    expect(opReadout(op)).toMatchObject({ text: '+22 mm', hint: 'Hyvlat virke finns i 22' })
+    expect(opReadout(pushPull(22))).not.toHaveProperty('hint')
+  })
+
   it('flytta: med tecken längs en pil, bara längden fritt i planet', () => {
     const op = {
       kind: 'move',

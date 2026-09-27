@@ -4,7 +4,7 @@ import { AXIS_COLORS } from '../scene/colors'
 import { useDocumentStore } from '../store/documentStore'
 import { useToolStore } from '../store/toolStore'
 import { useViewStore } from '../store/viewStore'
-import { cancel, faceDimension, typedPushPull, setCopy, undoLast } from '../tools/actions'
+import { cancel, faceDimension, typedPushPull, setCopy, stockTargetsOf, undoLast } from '../tools/actions'
 import { ExprInput } from './ExprInput'
 import {
   measureModel,
@@ -17,6 +17,7 @@ import {
 } from './measureModel'
 import { rulerResult, type RulerPoint } from '../model/ruler'
 import { bottomBox, ghostButton, iconAction, toggleButton } from './ui'
+import { Switch } from './Switch'
 import { Tip } from './Tip'
 import { numberFormat } from '../model/numberFormat'
 import { useCoversView } from './useCoversView'
@@ -51,6 +52,8 @@ export function MeasureBox() {
   const last = useToolStore((s) => s.lastPushPull)
   const setTool = useToolStore((s) => s.setTool)
   const copy = useToolStore((s) => s.copy)
+  const stockSnap = useToolStore((s) => s.stockSnap)
+  const setStockSnap = useToolStore((s) => s.setStockSnap)
   const ruler = useToolStore((s) => s.ruler)
   const rulerHover = useToolStore((s) => s.rulerHover)
   // extendableCopy och amendableOp läser dessa; prenumerera så att rutan ritas om när de ändras.
@@ -87,6 +90,18 @@ export function MeasureBox() {
 
   // En skiss på en del: ny del, tillägg på delen eller urtag i den. Förvalt efter riktningen.
   const sketchMode = sketchModeOf(op, doc)
+  // Bara där det gör något: en ny del ur en skiss, eller en dels sida längs tjockleken.
+  const stockTarget = shown?.kind === 'pushpull' ? shown.target : ready
+  const stockToggle = stockTarget &&
+    sketchMode?.current !== 'add' &&
+    sketchMode?.current !== 'subtract' &&
+    stockTargetsOf(stockTarget).length > 0 && (
+      <Tip label="Dragningen stannar vid tjocklekar som finns i handeln, t.ex. 22 och 28 för hyvlat virke" side="top">
+        <Switch checked={stockSnap} onChange={setStockSnap}>
+          Snäpp till standardtjocklek
+        </Switch>
+      </Tip>
+    )
   const modeToggle = sketchMode && (
     <div role="group" aria-label="Blir" className="flex gap-0.5">
       {SKETCH_MODES.map(([mode, label, tip]) => (
@@ -184,6 +199,7 @@ export function MeasureBox() {
                 </button>
               </Tip>
             )}
+            {stockToggle}
             {copyToggle}
             {modeToggle}
             {/* På smal skärm är rutan smalare (den slutar före verktygslisten); där får fält, kryss och bock plats på en rad utan strecket. */}

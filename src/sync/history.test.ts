@@ -91,11 +91,11 @@ describe('ångra-historiken', () => {
 describe('ångra-historiken med lagermått', () => {
   it('får med lagermåtten i varje steg', () => {
     build()
-    docs().setStockSize('furu|22', { length: 2400, width: 145 })
+    docs().setStockSizes('furu|22', [{ length: 2400, width: 145 }])
     docs().setStockOptions({ kerf: 2 })
     const { past, future } = docs()
     const h = unpackHistory(stored(packHistory(past, future, SAVED)), SAVED)!
     expect(h.past).toEqual(past)
-    expect(h.past.at(-1)!.doc.stock).toEqual({ sizes: { 'furu|22': { length: 2400, width: 145 } } })
+    expect(h.past.at(-1)!.doc.stock).toEqual({ sizes: { 'furu|22': [{ length: 2400, width: 145 }] } })
   })
 })

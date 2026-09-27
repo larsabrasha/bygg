@@ -1,14 +1,24 @@
-import { Box, Copy, Ellipsis, FolderOpen, LoaderCircle, Pencil, Plus, Trash2 } from 'lucide-react'
-import { useCallback, useRef, useState } from 'react'
+import { Box, Copy, Ellipsis, FolderOpen, LoaderCircle, LogIn, LogOut, Pencil, Plus, Trash2, X } from 'lucide-react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useLibraryStore, type ModelListItem } from '../store/libraryStore'
 import { nameFromFileName, readModelFile } from '../persist/modelFile'
-import { deleteWithUndo, duplicateModel, importModel, openFromGallery, renameModel } from '../sync/session'
+import { currentUser, loginUrl } from '../sync/auth'
+import { get as localGet, set as localSet } from '../sync/localStore'
+import {
+  deleteWithUndo,
+  duplicateModel,
+  importModel,
+  logout,
+  openFromGallery,
+  renameModel,
+  saveNow,
+} from '../sync/session'
 import { MenuItem } from './MenuItem'
 import { splitConflict } from './modelName'
 import { Notices } from './Notices'
 import { Logo } from './Logo'
 import { SyncBadge } from './SyncBadge'
-import { field, primaryButton, secondaryButton } from './ui'
+import { field, ghostButton, primaryButton, secondaryButton } from './ui'
 import { useDismiss } from './useDismiss'
 import { shortWhen } from './when'
 import { Tip } from './Tip'
@@ -96,6 +106,7 @@ function ModelTile({ model, thumb, isCurrent }: { model: ModelListItem; thumb?: 
             </p>
           )}
           <p className="flex items-center gap-1.5 text-xs text-faint tabular-nums">
+            {model.example && <span className="rounded bg-accent-soft px-1 font-medium text-accent">Exempel</span>}
             {conflict && (
               <Tip label={`Krock ${conflict.when}`}>
                 <span className="rounded bg-warn-soft px-1 font-medium text-warn">Konflikt</span>
@@ -103,7 +114,7 @@ function ModelTile({ model, thumb, isCurrent }: { model: ModelListItem; thumb?: 
             )}
             <span className="truncate">
               {shortWhen(model.updatedAt)}
-              {model.dirty && status !== 'local-only' ? ' · ej synkad' : ''}
+              {model.dirty && status !== 'local-only' && status !== 'guest' ? ' · ej synkad' : ''}
             </span>
           </p>
         </div>
@@ -164,6 +175,67 @@ async function importFile(file: File) {
   await openFromGallery(await importModel(r.name, r.doc))
 }
 
+/** I gästens databas när rutan om provläget stängts. */
+const INTRO_KEY = 'bygg:guest-intro-closed'
+
+/**
+ * Överst i startvyn utan konto: att modellerna är exempel och inte någon annans,
+ * och att allt bara sparas i webbläsaren. Går att stänga.
+ */
+function GuestIntro() {
+  const guest = useLibraryStore((s) => s.status === 'guest')
+  const [closed, setClosed] = useState(true)
+  useEffect(() => {
+    if (!guest) return
+    void localGet<boolean>(INTRO_KEY).then(
+      (c) => setClosed(c === true),
+      () => setClosed(false),
+    )
+  }, [guest])
+  if (!guest || closed) return null
+  return (
+    <div className="mb-5 flex items-start gap-3 rounded-xl bg-panel p-4 shadow-[0_6px_20px_-12px_rgba(40,25,10,0.35)] ring-1 ring-line narrow:flex-wrap">
+      <div className="min-w-0 flex-1 basis-64">
+        <p className="font-medium">Du provar Bygg utan konto</p>
+        <p className="mt-1 max-w-[620px] text-[13px] leading-relaxed text-muted">
+          Modellerna märkta <span className="rounded bg-accent-soft px-1 font-medium text-accent">Exempel</span> finns
+          här för att prova på: öppna, ändra eller ta bort dem, eller börja på en ny. Allt sparas bara i den här
+          webbläsaren och syns inte på dina andra enheter.
+        </p>
+      </div>
+      <div className="flex items-center gap-1">
+        <button className={primaryButton} onClick={() => void saveNow().finally(() => location.assign(loginUrl()))}>
+          <LogIn size={16} aria-hidden />
+          Logga in
+        </button>
+        <button
+          className="grid size-10 cursor-pointer place-items-center rounded-lg text-muted hover:bg-hover narrow:size-11"
+          aria-label="Stäng"
+          onClick={() => {
+            setClosed(true)
+            void localSet(INTRO_KEY, true)
+          }}
+        >
+          <X size={18} aria-hidden />
+        </button>
+      </div>
+    </div>
+  )
+}
+
+/** Loggar ut; visar vem som är inloggad. Inte i dev, där det inte finns någon inloggning. */
+function LogoutButton() {
+  const user = currentUser()
+  if (!user || user.dev) return null
+  return (
+    <Tip label={`Inloggad som ${user.name}. Logga ut.`}>
+      <button className={ghostButton} aria-label={`Logga ut ${user.name}`} onClick={() => void logout()}>
+        <LogOut size={18} aria-hidden />
+      </button>
+    </Tip>
+  )
+}
+
 /** Knapp som öppnar en modellfil. På smal skärm bara ikonen. */
 function ImportButton() {
   const input = useRef<HTMLInputElement>(null)
@@ -212,6 +284,7 @@ export function Gallery() {
         <div className="min-w-0 flex-1">
           <SyncBadge />
         </div>
+        <LogoutButton />
         <ImportButton />
         <button className={primaryButton} onClick={() => void openFromGallery('new')}>
           <Plus size={18} aria-hidden />
@@ -220,6 +293,7 @@ export function Gallery() {
       </header>
       <main className="relative min-h-0 flex-1 overflow-y-auto p-4 pb-[max(16px,env(safe-area-inset-bottom))]">
         <Notices />
+        <GuestIntro />
         <ul className="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-x-4 gap-y-5 narrow:grid-cols-2 narrow:gap-x-3">
           {visible.map((m) => (
             <ModelTile key={m.id} model={m} thumb={thumbs[m.id]} isCurrent={m.id === currentId} />

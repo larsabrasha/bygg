@@ -1,6 +1,6 @@
 import { create, type StoreApi } from 'zustand'
 
-export type SyncStatus = 'starting' | 'local-only' | 'syncing' | 'synced' | 'offline' | 'error'
+export type SyncStatus = 'starting' | 'local-only' | 'syncing' | 'synced' | 'offline' | 'error' | 'logged-out' | 'guest'
 
 export interface ModelListItem {
   id: string
@@ -8,6 +8,8 @@ export interface ModelListItem {
   updatedAt: string
   /** Har ändringar som inte har laddats upp. */
   dirty: boolean
+  /** Exempelmodell utan konto (se LocalModel.example). */
+  example?: boolean
 }
 
 export interface Notice {

@@ -2,6 +2,7 @@ import { create, type StoreApi } from 'zustand'
 import type { SketchMode } from '../model/combine'
 import type { RulerPoint } from '../model/ruler'
 import type { PlaneTargets } from '../model/snapping'
+import type { StockTarget } from '../model/stockSnap'
 import type { Combine, ModelDocument, Shape } from '../model/types'
 import { useDocumentStore, type Selection } from './documentStore'
 import type { Face, Frame, Rect, Vec2, Vec3 } from '../model/types'
@@ -49,6 +50,10 @@ export interface PushPullOp {
   /** Minsta distance för en dels yta (se pushPullMin). Saknas eller −∞ för en skiss, som kan dras åt båda hållen. */
   min?: number
   onTarget: boolean
+  /** Distances där delen får en tjocklek som finns att köpa (se thicknessTargets). */
+  stockTargets?: StockTarget[]
+  /** Draget snäppte till en tjocklek som finns att köpa; texten säger vilken. */
+  stockHint?: string
 }
 
 /** Världsaxel: 0 = X, 1 = Y (uppåt), 2 = Z. */
@@ -175,6 +180,8 @@ interface ToolSnapshot {
   lastPushPull: { distance: number; expr?: string } | null
   /** Flytta-läget gör kopior i stället för att flytta. Slås av när man byter verktyg. */
   copy: boolean
+  /** Push/pull snäpper till tjocklekar som finns att köpa (se stockSnap). På från början; sparas per enhet. */
+  stockSnap: boolean
   lastCopy: LastCopy | null
   lastOp: LastOp | null
   /** Punkterna man tryckt på med Mät: ingen, en (väntar på nästa) eller två (visar avståndet). */
@@ -198,11 +205,31 @@ interface ToolState extends ToolSnapshot {
   setMeasureField: (field: 0 | 1) => void
   setLastPushPull: (last: { distance: number; expr?: string }) => void
   setCopy: (copy: boolean) => void
+  setStockSnap: (on: boolean) => void
   setLastCopy: (last: LastCopy | null) => void
   setLastOp: (last: LastOp | null) => void
   setRuler: (points: RulerPoint[]) => void
   setRulerHover: (p: RulerPoint | null) => void
   setCombining: (c: ToolSnapshot['combining']) => void
+}
+
+const STOCK_SNAP_KEY = 'bygg.stockSnap'
+
+/** Utan lagring (privat fönster, node i testerna) är det på. */
+function readStockSnap(): boolean {
+  try {
+    return localStorage.getItem(STOCK_SNAP_KEY) !== 'false'
+  } catch {
+    return true
+  }
+}
+
+function saveStockSnap(on: boolean) {
+  try {
+    localStorage.setItem(STOCK_SNAP_KEY, String(on))
+  } catch {
+    // Går inte att spara; valet gäller tills sidan laddas om.
+  }
 }
 
 const idle = { op: null, measure: ['', ''] as [string, string], measureField: 0 as const }
@@ -217,6 +244,7 @@ const initial: ToolSnapshot = previous
       hoverHandle: null,
       lastPushPull: previous.getState().lastPushPull ?? null,
       copy: previous.getState().copy ?? false,
+      stockSnap: readStockSnap(),
       lastCopy: null,
       lastOp: null,
       ruler: [],
@@ -231,6 +259,7 @@ const initial: ToolSnapshot = previous
       hoverHandle: null,
       lastPushPull: null,
       copy: false,
+      stockSnap: readStockSnap(),
       lastCopy: null,
       lastOp: null,
       ruler: [],
@@ -270,6 +299,11 @@ export const useToolStore = create<ToolState>()((set) => ({
   setMeasureField: (measureField) => set({ measureField }),
   setLastPushPull: (lastPushPull) => set({ lastPushPull }),
   setCopy: (copy) => set({ copy }),
+  // Slås det av mitt i ett drag står måttet kvar, men inte texten om varför det snäppte.
+  setStockSnap: (stockSnap) => {
+    saveStockSnap(stockSnap)
+    set((s) => (s.op?.kind === 'pushpull' ? { stockSnap, op: { ...s.op, stockHint: undefined } } : { stockSnap }))
+  },
   setLastCopy: (lastCopy) => set({ lastCopy }),
   setLastOp: (lastOp) => set({ lastOp }),
   setRuler: (ruler) => set({ ruler }),

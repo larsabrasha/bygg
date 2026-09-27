@@ -36,6 +36,7 @@ import type {
   Vec3,
   WorldAxis,
 } from '../model/types'
+import { DEFAULT_MATERIAL } from '../model/types'
 import { anglesOf, restOf, withAngles } from '../model/orientation'
 import { add, scale } from '../model/vec'
 
@@ -97,8 +98,10 @@ interface DocumentState extends Snapshot {
   /** False om parametern används någonstans. */
   deleteParam: (id: string) => boolean
   /** Tar bort det valda. En del som har verktyg tar dem med sig. */
-  /** Lagermåttet för ett material och en tjocklek (stockKey); null går tillbaka till standardmåttet. */
-  setStockSize: (key: string, size: StockSize | null) => void
+  /** Lagermåtten för ett material och en tjocklek (stockKey); null (eller tom) går tillbaka till standardmåtten. */
+  setStockSizes: (key: string, sizes: StockSize[] | null) => void
+  /** Om delar i en grupp (stockKey) får kapas ur spill på ett annat mått. */
+  setLeftover: (key: string, on: boolean) => void
   /** Sågbladets bredd och kapmånen för kapschemat, i mm. */
   setStockOptions: (patch: Pick<StockSettings, 'kerf' | 'lengthAllowance'>) => void
   deleteSelection: () => void
@@ -251,7 +254,7 @@ export const useDocumentStore = create<DocumentState>()((set, get) => {
       const part = sketchToPart(
         sketch,
         distance,
-        { defId: newId(), instanceId: newId(), name, material: 'furu' },
+        { defId: newId(), instanceId: newId(), name, material: DEFAULT_MATERIAL },
         depthExpr,
       )
       if (!part) return null
@@ -411,12 +414,21 @@ export const useDocumentStore = create<DocumentState>()((set, get) => {
       return null
     },
 
-    setStockSize: (key, size) => {
+    setStockSizes: (key, list) => {
       const { doc } = get()
       const { [key]: _old, ...others } = doc.stock?.sizes ?? {}
       void _old
-      const sizes = size ? { ...others, [key]: size } : others
+      const sizes = list?.length ? { ...others, [key]: list } : others
       commit({ ...doc, stock: { ...doc.stock, sizes } })
+    },
+
+    setLeftover: (key, on) => {
+      const { doc } = get()
+      const others = (doc.stock?.noLeftover ?? []).filter((k) => k !== key)
+      const noLeftover = on ? others : [...others, key]
+      const { noLeftover: _old, ...rest } = doc.stock ?? {}
+      void _old
+      commit({ ...doc, stock: noLeftover.length ? { ...rest, noLeftover } : rest })
     },
 
     setStockOptions: (patch) => {

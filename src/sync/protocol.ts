@@ -37,5 +37,12 @@ export interface ConflictResponse {
   current: ServerModel | null
 }
 
+/** Svar från /auth/me: den inloggade användaren. dev = ingen inloggning (dev-servern). */
+export interface MeResponse {
+  sub: string
+  name: string
+  dev: boolean
+}
+
 /** Modell-id är UUID:er. Kontrolleras på servern så att id aldrig kan bli en sökväg. */
 export const MODEL_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/

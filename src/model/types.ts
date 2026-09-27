@@ -117,7 +117,7 @@ export interface Param {
   value: number
 }
 
-/** Måtten på det man köper: en skiva eller bräda. length längs fibern. */
+/** Lagermåttet: en skiva eller bräda. length längs fibern. */
 export interface StockSize {
   length: number
   width: number
@@ -133,8 +133,10 @@ export interface StockSettings {
   kerf?: number
   /** Kapmån på delarnas längd i mm. */
   lengthAllowance?: number
-  /** Lagermått per material och tjocklek, med nyckel från stockKey. */
-  sizes?: Record<string, StockSize>
+  /** Grupper (stockKey) där varje del kapas ur det smalaste måttet den ryms på, aldrig ur spill på ett annat. */
+  noLeftover?: string[]
+  /** Lagermåtten per material och tjocklek, med nyckel från stockKey. Varje del kapas ur det smalaste den ryms på. */
+  sizes?: Record<string, StockSize[]>
 }
 
 export interface ModelDocument {
@@ -187,3 +189,6 @@ export type Face = 'u+' | 'u-' | 'v+' | 'v-' | 'n+' | 'n-'
 export const FACES: readonly Face[] = ['u+', 'u-', 'v+', 'v-', 'n+', 'n-']
 
 export const MATERIALS = ['furu', 'gran', 'ek', 'björk', 'ask', 'plywood'] as const
+
+/** Materialet en ny del får. */
+export const DEFAULT_MATERIAL = 'furu'
