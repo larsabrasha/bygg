@@ -359,7 +359,7 @@ function MaterialDialog({
         aria-modal
         aria-label={title}
         // Fast höjd, efter det högsta slaget (Skiva): rutan ska inte hoppa när man byter slag och fälten ändras.
-        className="flex h-[min(100%,var(--material-dialog-h))] w-[min(440px,100%)] flex-col overflow-hidden rounded-xl border border-line bg-panel shadow-2xl [--material-dialog-h:720px] narrow:h-dvh narrow:w-full narrow:rounded-none narrow:border-0"
+        className="flex h-[min(100%,var(--material-dialog-h))] w-[min(440px,100%)] flex-col overflow-hidden rounded-xl border border-line bg-panel shadow-2xl [--material-dialog-h:700px] narrow:h-dvh narrow:w-full narrow:rounded-none narrow:border-0"
       >
         <header className="flex items-center gap-2 border-b border-line px-4 py-2 pt-[max(8px,env(safe-area-inset-top))]">
           <h2 className="min-w-0 flex-1 truncate text-base font-semibold">{title}</h2>
@@ -396,7 +396,7 @@ function MaterialForm({
   onChange: (patch: Partial<MaterialFields>) => void
 }) {
   const thicknesses = m.thicknesses ?? []
-  const sheets = m.sheets ?? []
+  const sheet = m.sheets?.[0]
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-1">
@@ -466,24 +466,24 @@ function MaterialForm({
               return null
             }}
           />
+          {/* Ett skivmått: kapschemat räknar på det. Säljs ett annat format blir det ett eget material. */}
           {m.kind === 'sheet' && (
-            <Chips
-              title="Skivmått"
-              items={sheets.map((s) => `${num.format(s.length)} × ${num.format(s.width)}`)}
-              // Kapschemat räknar på den första; den sista går inte att ta bort.
-              firstNote="vanligast"
-              removable={sheets.length > 1}
-              onRemove={(i) => onChange({ sheets: sheets.filter((_, j) => j !== i) })}
-              placeholder="t.ex. 2500 × 1250"
-              onAdd={(t) => {
-                const added = parseSheets(t)
-                if (added.length === 0) return 'Skriv måttet som längd × bredd, t.ex. 2500 × 1250'
-                const key = (s: { length: number; width: number }) => `${s.length}×${s.width}`
-                const known = new Set(sheets.map(key))
-                onChange({ sheets: [...sheets, ...added.filter((s) => !known.has(key(s)))] })
-                return null
-              }}
-            />
+            <label className="flex flex-col gap-1.5">
+              <span className="text-[13px] font-medium">Skivmått</span>
+              <span className="w-48">
+                <CommitField
+                  value={sheet ? `${num.format(sheet.length)} × ${num.format(sheet.width)}` : ''}
+                  suffix="mm"
+                  placeholder="2440 × 1220"
+                  onCommit={(t) => {
+                    const [first] = parseSheets(t)
+                    if (!first) return 'Skriv måttet som längd × bredd, t.ex. 2440 × 1220'
+                    onChange({ sheets: [first] })
+                    return null
+                  }}
+                />
+              </span>
+            </label>
           )}
           <div className="flex flex-col">
             <div className="-ml-2">
@@ -516,8 +516,6 @@ function MaterialForm({
 function Chips({
   title,
   items,
-  firstNote,
-  removable = true,
   onRemove,
   placeholder,
   inputWidth = 'w-40',
@@ -525,9 +523,6 @@ function Chips({
 }: {
   title: string
   items: string[]
-  /** Står i den första brickan, t.ex. vanligast. */
-  firstNote?: string
-  removable?: boolean
   onRemove: (index: number) => void
   placeholder: string
   /** Bredden på fältet för en ny, efter hur långt det man skriver är. */
@@ -553,18 +548,13 @@ function Chips({
             className="inline-flex h-8 items-center gap-1 rounded-full bg-button pl-3 text-[13px] tabular-nums narrow:h-9"
           >
             {item}
-            {i === 0 && firstNote && <span className="text-xs text-muted">· {firstNote}</span>}
-            {removable ? (
-              <button
-                className="grid size-7 cursor-pointer place-items-center rounded-full text-muted hover:bg-hover hover:text-ink narrow:size-8"
-                aria-label={`Ta bort ${item}`}
-                onClick={() => onRemove(i)}
-              >
-                <X size={14} strokeWidth={2} aria-hidden />
-              </button>
-            ) : (
-              <span className="w-2" />
-            )}
+            <button
+              className="grid size-7 cursor-pointer place-items-center rounded-full text-muted hover:bg-hover hover:text-ink narrow:size-8"
+              aria-label={`Ta bort ${item}`}
+              onClick={() => onRemove(i)}
+            >
+              <X size={14} strokeWidth={2} aria-hidden />
+            </button>
           </span>
         ))}
         <input
