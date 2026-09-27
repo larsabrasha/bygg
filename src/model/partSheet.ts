@@ -211,7 +211,14 @@ export interface SheetLine {
   style: LineStyle
 }
 
-/** Ett mått: måttlinjen, hjälplinjerna och texten. arrowsOut: för kort för pilar innanför. */
+/**
+ * Hur en ände av en måttlinje slutar: pil innanför (in), pil utanför som pekar in (out, när
+ * måttet är för kort för pilar innanför) eller en punkt (dot). Punkten står där två mått i en
+ * kedja möts och något av dem är kort, som ISO 129 tillåter när pilarna inte får plats.
+ */
+export type DimEnd = 'in' | 'out' | 'dot'
+
+/** Ett mått: måttlinjen, hjälplinjerna och texten. ends: hur (x1, y1) och (x2, y2) slutar. */
 export interface SheetDim {
   x1: number
   y1: number
@@ -222,7 +229,9 @@ export interface SheetDim {
   tx: number
   ty: number
   vertical: boolean
-  arrowsOut: boolean
+  ends: [DimEnd, DimEnd]
+  /** Hänvisningsstreck från texten till måttet, när texten fått flyttas åt sidan. */
+  leader?: [number, number, number, number]
 }
 
 /** Där en avbruten vy är avbruten: vid x, över vyns höjd h från y. */
@@ -314,11 +323,6 @@ export function layoutPartSheet(part: PartGeometry): PartSheetLayout {
       ]
     : []
 
-  const dims = [
-    ...dimRows(points[0]!, chain[0]!, (a) => toX(main, a), main.y, 'horizontal'),
-    ...dimRows(points[1]!, chain[1]!, (b) => main.y + B / s - b / s, main.x, 'vertical'),
-    ...dimRows(points[2]!, chain[2]!, (t) => below.y + t / s, below.x, 'vertical'),
-  ]
   // Hidden först, så att synliga kanter ritas ovanpå.
   shapes.sort((a, b) => Number(a.style === 'visible') - Number(b.style === 'visible'))
 
@@ -332,12 +336,57 @@ export function layoutPartSheet(part: PartGeometry): PartSheetLayout {
     { x0: right.x, y0: main.y + B / s + GAP, x1: AREA.x + AREA.w - PAD, y1: TITLE_TOP - PAD },
   ]
   const parents = { main, below }
-  const details = placeDetails(g, wanted, s, slots, (want, value, along) => {
+  const placed = placeDetails(g, wanted, s, slots, (want, value, along) => {
     const view = parents[want.view]
     if (along === 'h') return toX(view, value)
     return view.down ? view.y + value / s : view.y + g.size[view.v] / s - value / s
   })
-  return { scale: s, shapes, lines, dims, breaks, details }
+
+  // Det en detalj visar längs L, B och T: där behöver kedjan på bladet inte trängas.
+  const shown = ([0, 1, 2] as Dir[]).map((d) =>
+    placed.flatMap(({ want }): [number, number][] => {
+      if (d === 0) return [[want.lo[0], want.hi[0]]]
+      return DETAIL_VIEWS[want.view].v === d ? [[want.lo[1], want.hi[1]]] : []
+    }),
+  )
+  const atL = (a: number) => toX(main, a)
+  const atB = (b: number) => main.y + B / s - b / s
+  const atT = (t: number) => below.y + t / s
+  const kept = [
+    thinChain(points[0]!, atL, shown[0]!),
+    thinChain(points[1]!, atB, shown[1]!),
+    thinChain(points[2]!, atT, shown[2]!),
+  ]
+  const dims = [
+    ...dimRows(kept[0]!, kept[0]!.length > 2, atL, main.y, 'horizontal'),
+    ...dimRows(kept[1]!, kept[1]!.length > 2, atB, main.x, 'vertical'),
+    ...dimRows(kept[2]!, kept[2]!.length > 2, atT, below.x, 'vertical'),
+  ]
+  return { scale: s, shapes, lines, dims, breaks, details: placed.map((p) => p.detail) }
+}
+
+/**
+ * En kedja på bladet utan de punkter som bara trängs: är ett mått för kort för sin text
+ * tas en ände bort, om den ligger inne i något en detalj visar (shown), där den har ett
+ * mått i större skala. Kedjans ändar och det ingen detalj visar står kvar.
+ */
+export function thinChain(
+  points: readonly number[],
+  at: (value: number) => number,
+  shown: readonly [number, number][],
+) {
+  const kept = [...points]
+  const fits = (i: number) =>
+    textWidth(fmt.format(kept[i]! - kept[i - 1]!)) + 1 <= Math.abs(at(kept[i]!) - at(kept[i - 1]!))
+  const inDetail = (k: number) =>
+    k > 0 && k < kept.length - 1 && shown.some(([lo, hi]) => kept[k]! > lo + EPS && kept[k]! < hi - EPS)
+  for (let i = 1; i < kept.length;) {
+    // Måttet från kept[i - 1] till kept[i]: ryms det inte tas den ände bort som en detalj visar.
+    const drop = fits(i) ? -1 : [i, i - 1].find(inDetail)
+    if (drop === undefined || drop < 0) i++
+    else kept.splice(drop, 1)
+  }
+  return kept
 }
 
 /** Titelrutans övre vänstra hörn, och ramens nederkant. */
@@ -431,9 +480,9 @@ function placeDetails(
   s: number,
   slots: readonly Rect2[],
   parentAt: (want: DetailWant, value: number, along: 'h' | 'v') => number,
-): SheetDetail[] {
+): { want: DetailWant; detail: SheetDetail }[] {
   const used: Rect2[] = []
-  const out: SheetDetail[] = []
+  const out: { want: DetailWant; detail: SheetDetail }[] = []
   for (const want of wanted) {
     const size = { w: want.hi[0] - want.lo[0], h: want.hi[1] - want.lo[1] }
     const place = DETAIL_SCALES.filter((sd) => sd < s)
@@ -451,7 +500,10 @@ function placeDetails(
       .find(({ rect, slot }) => rect.x1 <= slot.x1 && rect.y1 <= slot.y1 && !used.some((u) => overlaps(u, rect)))
     if (!place) continue
     used.push(place.rect)
-    out.push(drawDetail(g, want, place.sd, place.rect, String.fromCharCode(65 + out.length), parentAt))
+    out.push({
+      want,
+      detail: drawDetail(g, want, place.sd, place.rect, String.fromCharCode(65 + out.length), parentAt),
+    })
   }
   return out
 }
@@ -617,6 +669,57 @@ function centerLines(e: SheetShape): SheetLine[] {
 
 /** Textens bredd på papperet, ungefär, med 2,8 mm text (TEXT i PartSheet.tsx). */
 const textWidth = (text: string) => text.length * 1.65
+/** Så långt ut en text flyttas i en andra rad när den inte får plats i den första. */
+const LIFT = 3
+/** Pilarnas längd på papperet (ARROW i PartSheet.tsx) och luften runt en text längs måttlinjen. */
+const ARROW = 2.5
+const TEXT_GAP = 0.8
+
+/** Så långt åt sidan en text som inte ryms får flyttas, med ett hänvisningsstreck. */
+const SHIFT_MAX = 16
+
+/**
+ * Var texterna i en kedja står, så att man ser vilket mått varje text hör till. Utan
+ * hänvisningsstreck står en text bara mellan sina hjälplinjer, rakt ovanför sitt mått lite
+ * längre ut (LIFT), eller efter pilen i kedjans yttersta ände (på måttlinjens förlängning).
+ * Går inget av det flyttas den åt sidan och får ett streck till sitt mått (leader). Texter
+ * som ryms mellan sina hjälplinjer ställs först, så att de inte trängs undan.
+ */
+function placeTexts(
+  segments: readonly { lo: number; hi: number; text: string; loEnd: DimEnd; hiEnd: DimEnd }[],
+): { at: number; lift: number; leader: boolean }[] {
+  const placed: { lo: number; hi: number; lift: number }[] = []
+  const free = (lo: number, hi: number, lift: number) =>
+    !placed.some((p) => p.lift === lift && lo < p.hi + TEXT_GAP && p.lo < hi + TEXT_GAP)
+  const fits = segments.map(({ lo, hi, text }) => textWidth(text) + 1 <= hi - lo)
+  const order = [...segments.keys()].sort((a, b) => Number(fits[b]) - Number(fits[a]))
+  const out: { at: number; lift: number; leader: boolean }[] = []
+  // Kedjans ytterändar på papperet: där kan en text stå på måttlinjens förlängning.
+  const first = segments.reduce((m, s) => Math.min(m, s.lo), Infinity)
+  const last = segments.reduce((m, s) => Math.max(m, s.hi), -Infinity)
+  for (const i of order) {
+    const { lo, hi, text, loEnd, hiEnd } = segments[i]!
+    const w = textWidth(text)
+    const mid = (lo + hi) / 2
+    // Efter en pil som står utanför fortsätter måttlinjen en bit; texten står efter den.
+    const past = (end: DimEnd) => (end === 'out' ? ARROW + 1.5 : 0) + TEXT_GAP + w / 2
+    const shifted = (lift: number) =>
+      Array.from({ length: Math.round(SHIFT_MAX / 0.5) }, (_, k) => (k + 1) * 0.5)
+        .flatMap((d) => [mid + d, mid - d])
+        .map((at) => ({ at, lift, leader: true }))
+    const tries = [
+      ...(fits[i] ? [{ at: mid, lift: 0, leader: false }] : []),
+      { at: mid, lift: LIFT, leader: false },
+      ...(Math.abs(lo - first) < EPS ? [{ at: lo - past(loEnd), lift: 0, leader: false }] : []),
+      ...(Math.abs(hi - last) < EPS ? [{ at: hi + past(hiEnd), lift: 0, leader: false }] : []),
+      ...shifted(LIFT),
+    ]
+    const pick = tries.find((t) => free(t.at - w / 2, t.at + w / 2, t.lift)) ?? { at: mid, lift: LIFT, leader: false }
+    placed.push({ lo: pick.at - w / 2, hi: pick.at + w / 2, lift: pick.lift })
+    out[i] = pick
+  }
+  return out
+}
 
 /**
  * Måtten längs en kant av en vy: kedjan närmast (om den behövs) och totalmåttet
@@ -636,14 +739,38 @@ export function dimRows(
   return rows.flatMap((segments, row) => {
     const offset = 8 + row * 8
     const line = edge - offset
-    return segments.map(([a, b], i) => {
+    // För kort för pilar innanför: pilarna står utanför, och där kedjan fortsätter en punkt.
+    const short = segments.map(([a, b]) => Math.abs(at(b) - at(a)) < 6)
+    const onPaper = segments.map(([a, b], i) => {
       const p1 = at(a)
       const p2 = at(b)
-      const text = fmt.format(b - a)
-      const len = Math.abs(p2 - p1)
-      // Ryms texten inte står varannan lite längre ut, så att grannarna inte krockar.
-      const lift = textWidth(text) + 1 > len && i % 2 === 1 ? 3 : 0
-      const mid = (p1 + p2) / 2
+      const end = (neighbour: number): DimEnd =>
+        neighbour >= 0 && neighbour < segments.length && (short[i] || short[neighbour])
+          ? 'dot'
+          : short[i]
+            ? 'out'
+            : 'in'
+      const ends: [DimEnd, DimEnd] = [end(i - 1), end(i + 1)]
+      const flip = p1 > p2
+      return {
+        p1,
+        p2,
+        ends,
+        lo: Math.min(p1, p2),
+        hi: Math.max(p1, p2),
+        loEnd: flip ? ends[1] : ends[0],
+        hiEnd: flip ? ends[0] : ends[1],
+        text: fmt.format(b - a),
+      }
+    })
+    const texts = placeTexts(onPaper)
+    return onPaper.map(({ p1, p2, lo, hi, text, ends }, i) => {
+      const { at: along, lift, leader } = texts[i]!
+      // Hänvisningsstrecket: från textens närmaste ände till mitten av måttlinjen.
+      const w = textWidth(text)
+      const mid = (lo + hi) / 2
+      const near = along > mid ? along - w / 2 : along + w / 2
+      const across = line - 1 - lift - 0.8
       const ext: SheetDim['ext'] =
         orientation === 'horizontal'
           ? [
@@ -662,10 +789,11 @@ export function dimRows(
             y2: line,
             ext,
             text,
-            tx: mid,
+            tx: along,
             ty: line - 1 - lift,
             vertical: false,
-            arrowsOut: len < 6,
+            ends,
+            ...(leader && { leader: [near, across, mid, line] as SheetDim['leader'] }),
           }
         : {
             x1: line,
@@ -675,9 +803,10 @@ export function dimRows(
             ext,
             text,
             tx: line - 1 - lift,
-            ty: mid,
+            ty: along,
             vertical: true,
-            arrowsOut: len < 6,
+            ends,
+            ...(leader && { leader: [across, near, line, mid] as SheetDim['leader'] }),
           }
     })
   })

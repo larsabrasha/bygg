@@ -10,6 +10,7 @@ import {
   type PartGeometry,
   type SheetBreak,
   type SheetDetail,
+  type DimEnd,
   type SheetDim,
   type SheetLine,
   type SheetShape,
@@ -22,6 +23,8 @@ const THICK = 0.5
 const THIN = 0.25
 const HIDDEN = 0.3
 const ARROW = 2.5
+/** Punkten där två korta mått i en kedja möts, i stället för pilar (ISO 129). */
+const DOT = 0.45
 /** Måttens text, 2,8 mm (8 pt); dimRows i partSheet.ts räknar med samma storlek. */
 const TEXT = 2.8
 
@@ -221,28 +224,42 @@ function Break({ brk: b }: { brk: SheetBreak }) {
   )
 }
 
-/** Måttlinje med pilar, hjälplinjer och text. Är den för kort står pilarna utanför och pekar in. */
+/**
+ * Måttlinje med hjälplinjer och text. Varje ände slutar med en pil innanför, en pil utanför
+ * som pekar in (för korta mått; linjen fortsätter förbi den) eller en punkt (där två mått i en
+ * kedja möts och något av dem är kort).
+ */
 export function Dim({ dim: d }: { dim: SheetDim }) {
   const len = Math.hypot(d.x2 - d.x1, d.y2 - d.y1) || 1
   const ux = (d.x2 - d.x1) / len
   const uy = (d.y2 - d.y1) / len
-  const out = d.arrowsOut ? -1 : 1
-  const arrow = (x: number, y: number, dir: number) => {
+  // dir: 1 i början (pilen pekar bakåt mot x1), -1 i slutet.
+  const marker = (x: number, y: number, dir: number, end: DimEnd, key: string) => {
+    if (end === 'dot') return <circle key={key} cx={x} cy={y} r={DOT} fill="black" stroke="none" />
+    const out = end === 'out' ? -1 : 1
     const bx = x + ux * ARROW * dir * out
     const by = y + uy * ARROW * dir * out
     const w = ARROW * 0.3
-    return `${x},${y} ${bx - uy * w},${by + ux * w} ${bx + uy * w},${by - ux * w}`
+    const points = `${x},${y} ${bx - uy * w},${by + ux * w} ${bx + uy * w},${by - ux * w}`
+    return <polygon key={key} points={points} fill="black" stroke="none" />
   }
   // Pilar utanför: måttlinjen fortsätter förbi dem.
-  const extra = d.arrowsOut ? ARROW + 1.5 : 0
+  const extra = (end: DimEnd) => (end === 'out' ? ARROW + 1.5 : 0)
+  const [start, finish] = d.ends
   return (
     <g strokeWidth={THIN}>
       {d.ext.map(([x1, y1, x2, y2], i) => (
         <line key={i} x1={x1} y1={y1} x2={x2} y2={y2} />
       ))}
-      <line x1={d.x1 - ux * extra} y1={d.y1 - uy * extra} x2={d.x2 + ux * extra} y2={d.y2 + uy * extra} />
-      <polygon points={arrow(d.x1, d.y1, 1)} fill="black" stroke="none" />
-      <polygon points={arrow(d.x2, d.y2, -1)} fill="black" stroke="none" />
+      <line
+        x1={d.x1 - ux * extra(start)}
+        y1={d.y1 - uy * extra(start)}
+        x2={d.x2 + ux * extra(finish)}
+        y2={d.y2 + uy * extra(finish)}
+      />
+      {d.leader && <line x1={d.leader[0]} y1={d.leader[1]} x2={d.leader[2]} y2={d.leader[3]} />}
+      {marker(d.x1, d.y1, 1, start, 'a')}
+      {marker(d.x2, d.y2, -1, finish, 'b')}
       <text
         x={d.tx}
         y={d.ty}
