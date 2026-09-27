@@ -35,8 +35,16 @@ function AxisTag({ index }: { index: 0 | 1 | 2 }) {
   )
 }
 
-/** Beräknat värde under ett fält som innehåller ett uttryck. */
-const Computed = ({ value }: { value: number }) => <span className="text-xs text-accent">= {fmt.format(value)}</span>
+/**
+ * Ett mått som styrs av ett uttryck: fältet visar det beräknade talet (uttrycket ryms inte
+ * i ett smalt fält), i accentfärg, och uttrycket står under. Med fokus står uttrycket i fältet.
+ */
+const Computed = ({ value }: { value: number }) => <span className="text-accent tabular-nums">{fmt.format(value)}</span>
+const Formula = ({ expr }: { expr: string }) => (
+  <span className="truncate px-2.5 text-xs text-accent" title={expr}>
+    = {expr}
+  </span>
+)
 
 /**
  * Längd, bredd och tjocklek enligt snickarkonventionen: L längs fibern, T tjockleken,
@@ -72,9 +80,10 @@ function ExtentFields({ body, def }: { body: Body; def: PartDef }) {
               quiet
               expr
               value={expr ?? fmt.format(size)}
+              display={expr ? <Computed value={size} /> : undefined}
               onCommit={(t) => setExtent(body.id, axis, t)}
             />
-            {expr && <Computed value={size} />}
+            {expr && <Formula expr={expr} />}
           </div>
         )
       })}
@@ -109,9 +118,10 @@ function PositionFields({ inst, def }: { inst: Instance; def: PartDef }) {
               quiet
               expr
               value={expr ?? fmt.format(corner[i]!)}
+              display={expr ? <Computed value={corner[i]!} /> : undefined}
               onCommit={(t) => setPosition(inst.id, axis, t)}
             />
-            {expr && <Computed value={corner[i]!} />}
+            {expr && <Formula expr={expr} />}
           </div>
         )
       })}

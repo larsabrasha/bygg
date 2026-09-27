@@ -16,6 +16,7 @@ export function CommitField({
   placeholder,
   expr = false,
   quiet = false,
+  display,
 }: {
   value: string
   /** Returnerar felmeddelande, eller null om värdet sparades. */
@@ -38,6 +39,8 @@ export function CommitField({
    * men minst 36 px med fingrar. Kräver prefix eller suffix.
    */
   quiet?: boolean
+  /** Visas i stället för texten när fältet inte har fokus (se ExprInput). Bara med expr. */
+  display?: ReactNode
 }) {
   const [text, setText] = useDraft(value)
   const [error, setError] = useState<string | null>(null)
@@ -75,6 +78,8 @@ export function CommitField({
       // Ett steg med piltangenterna sparas direkt, så att delen ändras medan man stegar.
       onStep={(t) => setError(onCommit(t))}
       badges
+      // Ett utkast som inte gick att spara syns som det är, inte som det gamla värdet.
+      display={text === value ? display : undefined}
       className={inputClass}
       // Utan ram räknas kanten (1 px) med i fältets utfyllnad.
       padX={boxed ? 'px-0' : 'px-[11px]'}
