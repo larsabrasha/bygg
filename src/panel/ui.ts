@@ -24,6 +24,15 @@ export const quietDangerButton = `${button} text-danger hover:bg-danger-soft`
 /** Knapp som slår av och på ett läge (aria-pressed). */
 export const toggleButton = `${button} bg-button text-ink hover:bg-hover aria-pressed:bg-accent-soft aria-pressed:text-accent`
 
+/**
+ * Segmenterad kontroll (Lista/Kapschema, Material/Färger): en skena där det valda segmentet är en
+ * ljus, lyft knapp, som på iOS. Inte accentfärgad, så att den inte förväxlas med en vald rad.
+ * segmentGroup på raden (role="group"), segment på varje knapp, aria-pressed på den valda.
+ */
+export const segmentGroup = 'flex rounded-lg bg-button p-0.5'
+export const segment =
+  'h-9 flex-1 cursor-pointer rounded-md text-[13px] font-medium text-muted transition-colors hover:text-ink aria-pressed:bg-segment aria-pressed:text-ink aria-pressed:shadow-[0_1px_3px_rgba(0,0,0,0.12),0_1px_1px_rgba(0,0,0,0.06)] narrow:h-10'
+
 /** Knapp utan bakgrund, t.ex. i en rad av åtgärder. */
 export const ghostButton = `${button} text-ink hover:bg-hover`
 
