@@ -1,4 +1,4 @@
-import { Glasses } from 'lucide-react'
+import { RectangleGoggles } from 'lucide-react'
 import { Tip } from './Tip'
 import { enterVr, useVrAvailable } from './vr'
 
@@ -15,7 +15,7 @@ export function VrButton() {
         onClick={() => void enterVr()}
         className="flex h-8 cursor-pointer items-center gap-1.5 rounded-md px-2 text-[13px] font-medium hover:bg-hover"
       >
-        <Glasses size={18} strokeWidth={1.75} aria-hidden />
+        <RectangleGoggles size={18} strokeWidth={1.75} aria-hidden />
         VR
       </button>
     </Tip>

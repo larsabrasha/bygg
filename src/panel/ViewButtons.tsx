@@ -1,21 +1,19 @@
 import {
-  Box,
   Boxes,
   ChevronDown,
-  Cuboid,
   Eye,
-  Glasses,
   Maximize2,
   Minimize2,
-  Rotate3d,
+  RectangleGoggles,
   RulerDimensionLine,
+  ScanBox,
   Scan,
-  Sparkles,
   type LucideIcon,
 } from 'lucide-react'
 import { useCallback, useRef, useState } from 'react'
 import { useAr } from './ar'
 import { ArButton } from './ArButton'
+import { RealisticCube, ShadedCube, WireframeCube } from './lookIcons'
 import { MenuItem } from './MenuItem'
 import { useDismiss } from './useDismiss'
 import { LOOKS, useViewStore, type Look } from '../store/viewStore'
@@ -102,9 +100,9 @@ export function ViewButtons() {
 
 /** Utseendena med namn och ikon, i den ordning V går igenom dem. */
 const LOOK_INFO: Record<Look, { label: string; Icon: LucideIcon }> = {
-  wireframe: { label: 'Trådmodell', Icon: Box },
-  shaded: { label: 'Skuggad', Icon: Cuboid },
-  realistic: { label: 'Realistisk', Icon: Sparkles },
+  wireframe: { label: 'Trådmodell', Icon: WireframeCube },
+  shaded: { label: 'Skuggad', Icon: ShadedCube },
+  realistic: { label: 'Realistisk', Icon: RealisticCube },
 }
 
 /** Utseendet: knappen visar det valda, menyn de tre. */
@@ -201,13 +199,13 @@ function ViewMenu() {
           </MenuItem>
           <div role="separator" className="mx-2 my-1 h-px bg-line" />
           {vr && (
-            <MenuItem Icon={Glasses} onClick={pick(() => void enterVr())}>
+            <MenuItem Icon={RectangleGoggles} onClick={pick(() => void enterVr())}>
               Visa i VR
             </MenuItem>
           )}
           {/* Menyn står kvar medan AR förbereds, så att det syns att något händer. */}
           {ar.supported && (
-            <MenuItem Icon={Rotate3d} disabled={ar.busy || !ar.available} onClick={() => void ar.open(close)}>
+            <MenuItem Icon={ScanBox} disabled={ar.busy || !ar.available} onClick={() => void ar.open(close)}>
               {ar.busy ? 'Förbereder AR…' : 'Visa i AR'}
             </MenuItem>
           )}
