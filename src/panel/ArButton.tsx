@@ -1,37 +1,25 @@
 import { Rotate3d } from 'lucide-react'
-import { useState } from 'react'
-import { arQuickLookSupported, openInAr } from '../scene/arExport'
-import { useBodies } from '../store/documentStore'
-import { MenuItem } from './MenuItem'
+import { useAr } from './ar'
+import { Tip } from './Tip'
 
-const supported = arQuickLookSupported()
-
-/** Visar modellen i verklig storlek med AR Quick Look. Syns bara på enheter som har det (iPhone, iPad). */
-export function ArButton({ onOpened }: { onOpened: () => void }) {
-  const bodies = useBodies()
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  if (!supported) return null
-
-  const open = async () => {
-    setBusy(true)
-    setError(null)
-    try {
-      await openInAr(bodies)
-      onOpened()
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e))
-    } finally {
-      setBusy(false)
-    }
-  }
-
+/**
+ * AR-knappen bredvid VR-knappen i 3D-vyn (ViewButtons), med text som den. Finns bara där AR går att
+ * starta; på smal skärm ligger AR i menyn Vy i stället.
+ */
+export function ArButton() {
+  const ar = useAr()
+  if (!ar.supported) return null
   return (
-    <>
-      <MenuItem Icon={Rotate3d} disabled={busy || bodies.length === 0} onClick={() => void open()}>
-        {busy ? 'Förbereder AR…' : 'Visa i AR'}
-      </MenuItem>
-      {error && <p className="px-3 text-xs text-danger">Kunde inte öppna AR: {error}</p>}
-    </>
+    <Tip label={ar.busy ? 'Förbereder AR…' : 'Visa i AR, i verklig storlek'}>
+      <button
+        aria-label="Visa i AR"
+        disabled={ar.busy || !ar.available}
+        onClick={() => void ar.open()}
+        className="flex h-8 cursor-pointer items-center gap-1.5 rounded-md px-2 text-[13px] font-medium hover:bg-hover disabled:cursor-default disabled:text-disabled disabled:hover:bg-transparent"
+      >
+        <Rotate3d size={18} strokeWidth={1.75} aria-hidden />
+        AR
+      </button>
+    </Tip>
   )
 }

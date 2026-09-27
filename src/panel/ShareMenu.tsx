@@ -2,7 +2,6 @@ import { FileBox, FileHeart, Printer, Share } from 'lucide-react'
 import { Fragment, useCallback, useRef, useState } from 'react'
 import { useBodies, useDocumentStore } from '../store/documentStore'
 import { useLibraryStore } from '../store/libraryStore'
-import { ArButton } from './ArButton'
 import { buildExportFile, EXPORT_FORMATS, type ExportFormat } from './exportActions'
 import { deliverFile } from './fileOut'
 import { MenuItem } from './MenuItem'
@@ -12,7 +11,7 @@ import { groupTitle } from './ui'
 
 /**
  * Skicka modellen som fil: filformaten direkt, med en rad om var varje format går att öppna.
- * AR ligger sist, under ett streck: den visar modellen i stället för att skicka den.
+ * AR ligger bland lägena i 3D-vyn (ViewButtons), bredvid VR.
  */
 export function ShareMenu({ buttonClass }: { buttonClass: string }) {
   const [open, setOpen] = useState(false)
@@ -73,18 +72,8 @@ export function ShareMenu({ buttonClass }: { buttonClass: string }) {
             </Fragment>
           ))}
           {error && <p className="px-3 py-1 text-xs text-danger">Kunde inte exportera: {error}</p>}
-          <ArItem onOpened={close} />
         </div>
       )}
-    </div>
-  )
-}
-
-/** AR under ett streck. Syns bara på enheter som har AR Quick Look (iPhone, iPad). */
-function ArItem({ onOpened }: { onOpened: () => void }) {
-  return (
-    <div className="mt-1 border-t border-line pt-1 empty:hidden">
-      <ArButton onOpened={onOpened} />
     </div>
   )
 }
