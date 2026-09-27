@@ -50,9 +50,14 @@ export async function uploadThumbnail(id: string, url: string): Promise<'ok' | '
 }
 
 /** Serverns bild av modellen som data-URL, eller null om den saknas eller inte går att hämta. */
-export async function downloadThumbnail(id: string): Promise<string | null> {
+export const downloadThumbnail = (id: string) => downloadPng(`/api/models/${id}/thumb`)
+
+/** Bilden av en modell i serverns papperskorg, som downloadThumbnail. */
+export const downloadTrashThumbnail = (id: string) => downloadPng(`/api/trash/${id}/thumb`)
+
+async function downloadPng(url: string): Promise<string | null> {
   try {
-    const r = await fetch(`/api/models/${id}/thumb`, { headers: userHeader() })
+    const r = await fetch(url, { headers: userHeader() })
     if (r.status !== 200 || r.headers.get('content-type') !== 'image/png') return null
     const blob = await r.blob()
     return await new Promise<string>((resolve, reject) => {

@@ -1,9 +1,9 @@
-import { mkdir, readdir, readFile, rename, stat, writeFile } from 'node:fs/promises'
+import { mkdir, readdir, readFile, rename, stat, unlink, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import type { SavedFile } from '../src/persist/format'
 import type { Catalog } from '../src/model/catalog'
-import type { ModelMeta, ServerCatalog, ServerModel } from '../src/sync/protocol'
-import { MODEL_ID_PATTERN } from '../src/sync/protocol'
+import type { ModelMeta, ServerCatalog, ServerModel, TrashItem } from '../src/sync/protocol'
+import { MODEL_ID_PATTERN, TRASH_DAYS } from '../src/sync/protocol'
 import { SUB_PATTERN } from './auth'
 
 export type PutResult =
@@ -17,10 +17,38 @@ export type PutCatalogResult =
 
 export type DeleteResult = { ok: true } | { ok: false; current: ServerModel | null }
 
+export type RestoreResult =
+  | { ok: true; revision: number }
+  /** Finns inte i papperskorgen (raderad för gott, eller redan tillbaka). */
+  | { ok: false; missing: true }
+  /** En modell med samma id finns redan bland modellerna. */
+  | { ok: false; exists: true }
+  /** Användaren har redan så många modeller som hen får ha. */
+  | { ok: false; full: true }
+
+/** En fil i papperskorgen: <id>-<tid>.json (och .png), där tiden är när den lades där. */
+interface TrashEntry {
+  id: string
+  /** Filnamnet utan ändelse. */
+  base: string
+  deletedAt: Date
+}
+
+/** Tiden i ett filnamn i papperskorgen (toISOString med - i stället för : och .), eller null. */
+export function trashTime(stamp: string): Date | null {
+  const m = /^(\d{4}-\d{2}-\d{2})T(\d{2})-(\d{2})-(\d{2})-(\d{3})Z$/.exec(stamp)
+  if (!m) return null
+  const d = new Date(`${m[1]}T${m[2]}:${m[3]}:${m[4]}.${m[5]}Z`)
+  return Number.isNaN(d.getTime()) ? null : d
+}
+
+const DAY_MS = 24 * 60 * 60 * 1000
+
 /**
  * Modeller som JSON-filer: <dataDir>/models/<id>.json, och bilden av varje modell
  * (till startvyn) i <dataDir>/thumbs/<id>.png. Borttagna flyttas till
- * <dataDir>/trash/ i stället för att raderas. Skrivningar är atomära (temp-fil +
+ * <dataDir>/trash/ i stället för att raderas; där går de att ta tillbaka i TRASH_DAYS
+ * dagar, sedan raderas de för gott. Skrivningar är atomära (temp-fil +
  * rename) och köas per modell, så att två samtidiga anrop inte kan tappa en revision.
  */
 export class FileStorage {
@@ -36,6 +64,8 @@ export class FileStorage {
    * säkerhetskopia) syns.
    */
   private readonly metas = new Map<string, { mtimeMs: number; size: number; meta: ModelMeta | null }>()
+  /** Namnet på varje modell i papperskorgen, per fil. Filerna där ändras aldrig. */
+  private readonly trashNames = new Map<string, string | null>()
 
   constructor(
     dataDir: string,
@@ -223,6 +253,112 @@ export class FileStorage {
       return { ok: true }
     })
   }
+
+  /** Filerna i papperskorgen, senast borttagna först. Filer med ett namn som inte går att läsa hoppas över. */
+  private async trashEntries(): Promise<TrashEntry[]> {
+    const entries: TrashEntry[] = []
+    for (const name of await readdir(this.trashDir)) {
+      if (!name.endsWith('.json')) continue
+      const base = name.slice(0, -5)
+      const id = base.slice(0, 36)
+      const deletedAt = trashTime(base.slice(37))
+      if (!MODEL_ID_PATTERN.test(id) || base[36] !== '-' || !deletedAt) continue
+      entries.push({ id, base, deletedAt })
+    }
+    return entries.sort((a, b) => b.deletedAt.getTime() - a.deletedAt.getTime())
+  }
+
+  private async removeTrashEntry(e: TrashEntry) {
+    for (const ext of ['.json', '.png'])
+      await unlink(path.join(this.trashDir, e.base + ext)).catch((err: unknown) => {
+        if (!isMissing(err)) throw err
+      })
+    this.trashNames.delete(e.base)
+  }
+
+  /**
+   * Raderar för gott det som legat i papperskorgen i mer än TRASH_DAYS dagar. Returnerar hur många.
+   * Samma modell kan ligga där flera gånger (borttagen, uppladdad igen, borttagen); varje fil för sig.
+   */
+  async purgeOldTrash(): Promise<number> {
+    const limit = this.now().getTime() - TRASH_DAYS * DAY_MS
+    let n = 0
+    for (const e of await this.trashEntries()) {
+      if (e.deletedAt.getTime() > limit) continue
+      await this.withLock(e.id, () => this.removeTrashEntry(e))
+      n++
+    }
+    return n
+  }
+
+  /** Modellerna i papperskorgen, senast borttagna först; en gång per modell, den senaste. Rensar först. */
+  async listTrash(): Promise<TrashItem[]> {
+    await this.purgeOldTrash()
+    const seen = new Set<string>()
+    const items: TrashItem[] = []
+    for (const e of await this.trashEntries()) {
+      if (seen.has(e.id)) continue
+      seen.add(e.id)
+      let name = this.trashNames.get(e.base)
+      if (name === undefined) {
+        const raw = await readFile(path.join(this.trashDir, `${e.base}.json`), 'utf8').catch(() => null)
+        try {
+          name = raw === null ? null : ((JSON.parse(raw) as ServerModel).name ?? null)
+        } catch {
+          name = null
+        }
+        this.trashNames.set(e.base, name)
+      }
+      if (name !== null) items.push({ id: e.id, name, deletedAt: e.deletedAt.toISOString() })
+    }
+    return items
+  }
+
+  /** Bilden av en modell i papperskorgen (den senaste gången den lades där), eller null. */
+  async getTrashThumb(id: string): Promise<Buffer | null> {
+    const e = (await this.trashEntries()).find((x) => x.id === id)
+    if (!e) return null
+    return readFile(path.join(this.trashDir, `${e.base}.png`)).catch((err: unknown) => {
+      if (isMissing(err)) return null
+      throw err
+    })
+  }
+
+  /**
+   * Tar tillbaka modellen ur papperskorgen, med samma id och revision som när den togs bort,
+   * så att enheter som har den kvar lokalt känner igen den. Äldre filer för samma modell raderas.
+   * Räknas som en ny modell mot maxModels, och skapas i samma kö som nya modeller.
+   */
+  restore(id: string, maxModels = Infinity): Promise<RestoreResult> {
+    return this.withLock('create', () =>
+      this.withLock(id, async (): Promise<RestoreResult> => {
+        const entries = (await this.trashEntries()).filter((e) => e.id === id)
+        const latest = entries[0]
+        if (!latest) return { ok: false, missing: true }
+        if (await this.read(id)) return { ok: false, exists: true }
+        if ((await this.count()) >= maxModels) return { ok: false, full: true }
+        const raw = JSON.parse(await readFile(path.join(this.trashDir, `${latest.base}.json`), 'utf8')) as ServerModel
+        await rename(path.join(this.trashDir, `${latest.base}.json`), this.file(id))
+        await rename(path.join(this.trashDir, `${latest.base}.png`), this.thumbFile(id)).catch((err: unknown) => {
+          if (!isMissing(err)) throw err
+        })
+        this.trashNames.delete(latest.base)
+        this.metas.delete(`${id}.json`)
+        for (const e of entries.slice(1)) await this.removeTrashEntry(e)
+        return { ok: true, revision: raw.revision }
+      }),
+    )
+  }
+
+  /** Raderar modellen ur papperskorgen för gott, alla gånger den lagts där. Falskt om den inte fanns där. */
+  purgeTrash(id: string): Promise<boolean> {
+    if (!MODEL_ID_PATTERN.test(id)) return Promise.reject(new Error(`Ogiltigt modell-id: ${id}`))
+    return this.withLock(id, async () => {
+      const entries = (await this.trashEntries()).filter((e) => e.id === id)
+      for (const e of entries) await this.removeTrashEntry(e)
+      return entries.length > 0
+    })
+  }
 }
 
 const isMissing = (e: unknown) => (e as NodeJS.ErrnoException).code === 'ENOENT'
@@ -252,6 +388,17 @@ export class UserStorages {
       s.catch(() => this.storages.delete(sub))
     }
     return s
+  }
+
+  /** Raderar det som legat för länge i papperskorgen, för alla användare. Returnerar hur många. */
+  async purgeOldTrash(): Promise<number> {
+    const users = await readdir(path.join(this.dataDir, 'users')).catch((e: unknown) => {
+      if (isMissing(e)) return []
+      throw e
+    })
+    let n = 0
+    for (const sub of users) if (SUB_PATTERN.test(sub)) n += await (await this.for(sub)).purgeOldTrash()
+    return n
   }
 
   private async open(sub: string) {

@@ -11,6 +11,7 @@ import type {
   PutModelRequest,
   MeApiResponse,
   PutModelResponse,
+  RestoreResponse,
 } from '../src/sync/protocol'
 import { MODEL_ID_PATTERN } from '../src/sync/protocol'
 import type { Auth, User } from './auth'
@@ -108,6 +109,8 @@ export function createApp({
   }
   app.use('/api/models/:id', checkId)
   app.use('/api/models/:id/*', checkId)
+  app.use('/api/trash/:id', checkId)
+  app.use('/api/trash/:id/*', checkId)
 
   app.get('/api/models', async (c) => c.json(await c.var.storage.list()))
 
@@ -226,6 +229,7 @@ export function createApp({
     const r = await c.var.storage.delete(c.req.param('id'), base)
     if (!r.ok) return c.json<ConflictResponse>({ current: r.current }, 409)
     hub.publish(c.var.user.sub, { kind: 'delete', id: c.req.param('id') }, clientOf(c))
+    hub.publish(c.var.user.sub, { kind: 'trash' }, clientOf(c))
     return c.body(null, 204)
   })
 
@@ -242,6 +246,34 @@ export function createApp({
     if (!isPng(png)) return c.json({ error: 'Bilden ska vara PNG' }, 400)
     const ok = await c.var.storage.putThumb(c.req.param('id'), png)
     return ok ? c.body(null, 204) : c.json({ error: 'Finns inte' }, 404)
+  })
+
+  // Papperskorgen: borttagna modeller i TRASH_DAYS dagar (se FileStorage). Listan rensas först.
+  app.get('/api/trash', async (c) => c.json(await c.var.storage.listTrash()))
+
+  app.get('/api/trash/:id/thumb', async (c) => {
+    const png = await c.var.storage.getTrashThumb(c.req.param('id'))
+    if (!png) return c.json({ error: 'Finns inte' }, 404)
+    return c.body(new Uint8Array(png), 200, { 'content-type': 'image/png', 'cache-control': 'no-cache' })
+  })
+
+  // Tillbaka bland modellerna, med samma id och revision; andra enheter hämtar den vid nästa synk.
+  app.post('/api/trash/:id/restore', async (c) => {
+    const id = c.req.param('id')
+    const r = await c.var.storage.restore(id, LIMITS.models)
+    if (!r.ok && 'missing' in r) return c.json({ error: 'Finns inte i papperskorgen' }, 404)
+    if (!r.ok && 'exists' in r) return c.json({ error: 'Det finns redan en modell med samma id' }, 409)
+    if (!r.ok) return c.json({ error: modelLimitText() }, 403)
+    hub.publish(c.var.user.sub, { kind: 'model', id, revision: r.revision }, clientOf(c))
+    hub.publish(c.var.user.sub, { kind: 'trash' }, clientOf(c))
+    return c.json<RestoreResponse>({ revision: r.revision })
+  })
+
+  app.delete('/api/trash/:id', async (c) => {
+    const found = await c.var.storage.purgeTrash(c.req.param('id'))
+    if (!found) return c.json({ error: 'Finns inte i papperskorgen' }, 404)
+    hub.publish(c.var.user.sub, { kind: 'trash' }, clientOf(c))
+    return c.body(null, 204)
   })
 
   app.all('/api/*', (c) => c.json({ error: 'Finns inte' }, 404))

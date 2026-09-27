@@ -22,7 +22,8 @@ import { TokenStore } from './tokens'
  *   OIDC_CLIENT_SECRET  d:o
  *   SESSION_SECRET      minst 32 slumpade tecken; signerar cookies (openssl rand -hex 32)
  *   PORT                (8787)
- *   DATA_DIR            (./data)  – här hamnar users/<användare>/models, thumbs och trash,
+ *   DATA_DIR            (./data)  – här hamnar users/<användare>/models, thumbs och trash
+ *                                 (papperskorgen, som töms efter TRASH_DAYS dagar),
  *                                 och CLI:ts nycklar (tokens.json, bara hashar)
  *   STATIC_DIR          (./dist)
  */
@@ -79,6 +80,16 @@ app.use('/*', serveStatic({ root: staticDir }))
 app.get('/assets/*', (c) => c.text('Finns inte', 404))
 // Appen har en enda sida; övriga okända sökvägar får index.html.
 app.get('*', sendIndex)
+
+// Papperskorgen töms på det som legat där i TRASH_DAYS dagar: vid start och sedan två gånger om dygnet.
+// (Den rensas också när någon öppnar den, se /api/trash.)
+const purgeTrash = () =>
+  storages
+    .purgeOldTrash()
+    .then((n) => n > 0 && console.log(`[bygg] ${n} modeller raderades för gott ur papperskorgen.`))
+    .catch((e: unknown) => console.error('[bygg] Kunde inte tömma papperskorgen', e))
+void purgeTrash()
+setInterval(() => void purgeTrash(), 12 * 60 * 60 * 1000).unref()
 
 serve({ fetch: app.fetch, port }, (info) => {
   console.log(`[bygg] Lyssnar på port ${info.port}. Data i ${dataDir}.`)

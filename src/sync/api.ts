@@ -7,8 +7,10 @@ import type {
   PutCatalogRequest,
   PutModelRequest,
   PutModelResponse,
+  RestoreResponse,
   ServerCatalog,
   ServerModel,
+  TrashItem,
 } from './protocol'
 
 /** rejected: servern tog inte emot det som skickades (för stort, för många modeller). */
@@ -39,6 +41,16 @@ export interface CatalogApi {
   putCatalog(req: PutCatalogRequest): Promise<PutCatalogResult>
 }
 
+/**
+ * Serverns papperskorg (se server/storage.ts). restore: 'full' när kontot redan har så många
+ * modeller som det får ha, 'gone' när den inte finns kvar (raderad för gott, eller redan tillbaka).
+ */
+export interface TrashApi {
+  listTrash(): Promise<TrashItem[]>
+  restore(id: string): Promise<{ ok: true; revision: number } | { ok: false; reason: 'full' | 'gone'; message: string }>
+  purge(id: string): Promise<void>
+}
+
 export interface SyncApi {
   list(): Promise<ModelMeta[]>
   get(id: string): Promise<ServerModel | null>
@@ -53,7 +65,7 @@ export interface SyncApi {
 export function httpApi(
   base = '',
   fetchFn: (url: string, init: RequestInit) => Promise<Response> = (u, i) => fetch(u, i),
-): SyncApi & CatalogApi {
+): SyncApi & CatalogApi & TrashApi {
   const request = async (method: string, path: string, body?: unknown): Promise<{ status: number; data: unknown }> => {
     let res: Response
     try {
@@ -106,6 +118,24 @@ export function httpApi(
       if (r.status === 409) return { ok: false, ...(r.data as CatalogConflictResponse) }
       if (r.status !== 200) throw new ApiError('server', (r.data as { error?: string }).error ?? `Fel ${r.status}`)
       return { ok: true, ...(r.data as PutModelResponse) }
+    },
+    async listTrash() {
+      const r = await request('GET', '/api/trash')
+      if (r.status !== 200) throw new ApiError('server', `Fel ${r.status}`)
+      return r.data as TrashItem[]
+    },
+    async restore(id) {
+      const r = await request('POST', `/api/trash/${id}/restore`)
+      const message = (r.data as { error?: string } | null)?.error ?? `Fel ${r.status}`
+      if (r.status === 403) return { ok: false, reason: 'full', message }
+      if (r.status === 404 || r.status === 409) return { ok: false, reason: 'gone', message }
+      if (r.status !== 200) throw new ApiError('server', message)
+      return { ok: true, revision: (r.data as RestoreResponse).revision }
+    },
+    async purge(id) {
+      const r = await request('DELETE', `/api/trash/${id}`)
+      // Redan borta räknas som klart.
+      if (r.status !== 204 && r.status !== 404) throw new ApiError('server', `Fel ${r.status}`)
     },
     async delete(id, baseRevision) {
       const r = await request('DELETE', `/api/models/${id}?baseRevision=${baseRevision}`)

@@ -10,7 +10,7 @@ import { migrate, serialize } from '../src/persist/format'
 import { MODEL_FILE_SUFFIX, modelFileJson, nameFromFileName, readModelFile } from '../src/persist/modelFile'
 import { emptyDocument } from '../src/store/documentStore'
 import type { ModelMeta } from '../src/sync/protocol'
-import { MODEL_ID_PATTERN } from '../src/sync/protocol'
+import { MODEL_ID_PATTERN, TRASH_DAYS } from '../src/sync/protocol'
 import { CliError, configFile, httpClient, normalizeServer, readConfig, writeConfig, type Api } from './client'
 import { cutListJson, cutListText, cutPlanJson, cutPlanText, summarize, summaryText } from './describe'
 import { applyOps, MAX_COPY_COUNT, MAX_OPS } from './ops'
@@ -40,7 +40,7 @@ Modeller (<modell> = id, början på ett id, namnet, eller en lokal fil som slut
   import <fil> [--name N]   Lägg upp en modellfil (.bygg.json) på servern.
   export <modell> [-o F]    Modellen som .bygg.json (samma fil som Dela → Bygg-fil i appen).
   rename <modell> <namn>
-  delete <modell> --yes     Flytta modellen till serverns papperskorg.
+  delete <modell> --yes     Flytta modellen till papperskorgen (i appens startvy), där den ligger i 30 dagar.
   materials                 Material att välja mellan (inbyggda och dina egna).
   ops                       Alla operationer för edit, med exempel.
 
@@ -365,12 +365,13 @@ export async function run(argv: string[], io: Io): Promise<number> {
       }
       case 'delete': {
         if (isLocal(args[0] ?? '')) throw new CliError('Ta bort en lokal fil med rm.')
-        if (!flags.yes) throw new CliError('Lägg till --yes för att ta bort (modellen hamnar i serverns papperskorg).')
+        if (!flags.yes)
+          throw new CliError('Lägg till --yes för att ta bort (modellen hamnar i papperskorgen i 30 dagar).')
         const a = api()
         const meta = await findRemote(a, args[0] ?? '')
         const r = await a.delete(meta.id, meta.revision)
         if (!r.ok) throw new CliError('Modellen ändrades nyss på en annan enhet. Den finns kvar; kör igen om du vill.')
-        io.out(`"${meta.name}" ligger i serverns papperskorg.`)
+        io.out(`"${meta.name}" ligger i papperskorgen i ${TRASH_DAYS} dagar. Ta tillbaka den i appens startvy.`)
         return 0
       }
       case 'edit': {

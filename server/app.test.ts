@@ -197,3 +197,102 @@ describe('material och färger', () => {
     expect(got.catalog.colors.map((c: { id: string }) => c.id)).toEqual(['c1'])
   })
 })
+
+describe('papperskorgen', () => {
+  const ID2 = '66666666-7777-4888-9999-000000000000'
+  const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3]) as Uint8Array<ArrayBuffer>
+  let now: Date
+  let storages: UserStorages
+
+  beforeEach(() => {
+    now = new Date('2026-09-25T12:00:00Z')
+    storages = new UserStorages(dir, () => now)
+    app = createApp({ storages, auth: devAuth() })
+  })
+
+  const remove = (id = ID, revision = 1) =>
+    app.request(`/api/models/${id}?baseRevision=${revision}`, { method: 'DELETE' })
+  const trash = async () => (await app.request('/api/trash')).json()
+  const restore = (id = ID) => app.request(`/api/trash/${id}/restore`, { method: 'POST' })
+
+  it('listar det som tagits bort, med namn och när', async () => {
+    await put({ name: 'Bord', baseRevision: null, file })
+    await remove()
+    expect(await trash()).toEqual([{ id: ID, name: 'Bord', deletedAt: '2026-09-25T12:00:00.000Z' }])
+  })
+
+  it('tar tillbaka modellen med samma revision och bild', async () => {
+    await put({ name: 'Bord', baseRevision: null, file })
+    await put({ name: 'Bord', baseRevision: 1, file })
+    await app.request(`/api/models/${ID}/thumb`, { method: 'PUT', body: png, headers: { 'content-type': 'image/png' } })
+    await remove(ID, 2)
+    expect((await app.request(`/api/trash/${ID}/thumb`)).status).toBe(200)
+    const r = await restore()
+    expect(r.status).toBe(200)
+    expect(await r.json()).toEqual({ revision: 2 })
+    expect((await app.request(`/api/models/${ID}`)).status).toBe(200)
+    expect((await app.request(`/api/models/${ID}/thumb`)).status).toBe(200)
+    expect(await trash()).toEqual([])
+    expect(await readdir(path.join(userDir, 'trash'))).toEqual([])
+    // Tillbaka på riktigt: den går att spara vidare från sin revision.
+    expect((await put({ name: 'Bord', baseRevision: 2, file })).status).toBe(200)
+  })
+
+  it('visar en modell en gång, den senaste, och tar tillbaka den', async () => {
+    await put({ name: 'Bord', baseRevision: null, file })
+    await remove()
+    now = new Date('2026-09-26T12:00:00Z')
+    // Samma id igen (appen laddar upp en modell som togs bort medan den ändrades), och bort igen.
+    await put({ name: 'Bord 2', baseRevision: null, file })
+    await remove()
+    expect(await trash()).toEqual([{ id: ID, name: 'Bord 2', deletedAt: '2026-09-26T12:00:00.000Z' }])
+    await restore()
+    expect((await (await app.request(`/api/models/${ID}`)).json()).name).toBe('Bord 2')
+    expect(await readdir(path.join(userDir, 'trash'))).toEqual([])
+  })
+
+  it('tar inte tillbaka något som saknas, eller över en modell med samma id', async () => {
+    expect((await restore()).status).toBe(404)
+    await put({ name: 'Bord', baseRevision: null, file })
+    await remove()
+    await put({ name: 'Ny', baseRevision: null, file })
+    expect((await restore()).status).toBe(409)
+    expect((await (await app.request(`/api/models/${ID}`)).json()).name).toBe('Ny')
+  })
+
+  it('raderar för gott', async () => {
+    await put({ name: 'Bord', baseRevision: null, file })
+    await remove()
+    expect((await app.request(`/api/trash/${ID}`, { method: 'DELETE' })).status).toBe(204)
+    expect(await trash()).toEqual([])
+    expect(await readdir(path.join(userDir, 'trash'))).toEqual([])
+    expect((await app.request(`/api/trash/${ID}`, { method: 'DELETE' })).status).toBe(404)
+    expect((await app.request('/api/trash/inte-ett-id', { method: 'DELETE' })).status).toBe(400)
+  })
+
+  it('raderar det som legat där i 30 dagar', async () => {
+    await put({ name: 'Gammal', baseRevision: null, file })
+    await put({ name: 'Ny', baseRevision: null, file }, ID2)
+    await remove(ID)
+    now = new Date('2026-10-10T12:00:00Z')
+    await remove(ID2)
+    now = new Date('2026-10-25T11:59:59Z')
+    expect((await trash()).map((t: { name: string }) => t.name)).toEqual(['Ny', 'Gammal'])
+    now = new Date('2026-10-25T12:00:00Z')
+    expect((await trash()).map((t: { name: string }) => t.name)).toEqual(['Ny'])
+    // Också utan att någon öppnar papperskorgen (servern rensar två gånger om dygnet).
+    now = new Date('2026-11-09T12:00:00Z')
+    expect(await storages.purgeOldTrash()).toBe(1)
+    expect(await readdir(path.join(userDir, 'trash'))).toEqual([])
+  })
+
+  it('räknas inte mot antalet modeller, men en som tas tillbaka gör det', async () => {
+    await put({ name: 'Bord', baseRevision: null, file })
+    await remove()
+    const storage = await storages.for('dev')
+    expect(await storage.count()).toBe(0)
+    expect((await storage.restore(ID, 0)).ok).toBe(false)
+    expect((await restore()).status).toBe(200)
+    expect(await storage.count()).toBe(1)
+  })
+})

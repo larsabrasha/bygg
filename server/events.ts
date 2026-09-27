@@ -9,6 +9,8 @@ export type ChangeEvent =
   | { kind: 'model'; id: string; revision: number }
   | { kind: 'delete'; id: string }
   | { kind: 'catalog'; revision: number }
+  /** Något lades i papperskorgen, togs tillbaka eller raderades för gott. */
+  | { kind: 'trash' }
 
 /** by: fliken som gjorde ändringen (x-bygg-client), så att den inte synkar i onödan. */
 export type Listener = (event: ChangeEvent & { by?: string }) => void

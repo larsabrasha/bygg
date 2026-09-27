@@ -18,6 +18,18 @@ export interface ModelListItem {
   example?: boolean
 }
 
+/**
+ * En modell i papperskorgen. where: local = bara i webbläsaren (utan konto, eller aldrig synkad);
+ * server = i serverns papperskorg; pending = borttagen här men inte på servern än (nästa synk).
+ */
+export interface TrashListItem {
+  id: string
+  name: string
+  deletedAt: string
+  where: 'local' | 'server' | 'pending'
+  thumb?: string
+}
+
 export interface Notice {
   id: string
   text: string
@@ -43,6 +55,12 @@ interface LibrarySnapshot {
   opening: { id: string; name: string } | null
   /** Inställningar är öppna, och på vilken sida (se SettingsSheet). */
   settings: SettingsPage | null
+  /** Startvyn visar papperskorgen i stället för modellerna. */
+  trashOpen: boolean
+  /** Det som ligger i papperskorgen, senast borttaget först; null tills det lästs in. */
+  trash: TrashListItem[] | null
+  /** Serverns papperskorg gick inte att läsa (ingen kontakt); bara det som ligger här visas. */
+  trashPartial: boolean
 }
 
 interface LibraryState extends LibrarySnapshot {
@@ -57,6 +75,9 @@ const initial: LibrarySnapshot = previous
   ? (({ models, thumbs, screen, pendingDelete, currentId, currentName, currentBase, status, error, notices }) => ({
       opening: null,
       settings: null,
+      trashOpen: false,
+      trash: null,
+      trashPartial: false,
       models,
       thumbs: thumbs ?? {},
       screen: screen ?? 'model',
@@ -81,6 +102,9 @@ const initial: LibrarySnapshot = previous
       notices: [],
       opening: null,
       settings: null,
+      trashOpen: false,
+      trash: null,
+      trashPartial: false,
     }
 
 let noticeSeq = 0

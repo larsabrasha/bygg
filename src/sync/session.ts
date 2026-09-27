@@ -5,7 +5,7 @@ import type { ModelDocument } from '../model/types'
 import { migrate, serialize } from '../persist/format'
 import { useCatalogStore } from '../store/catalogStore'
 import { emptyDocument, useDocumentStore } from '../store/documentStore'
-import { useLibraryStore, type SyncStatus } from '../store/libraryStore'
+import { useLibraryStore, type SyncStatus, type TrashListItem } from '../store/libraryStore'
 import { useToolStore } from '../store/toolStore'
 import { useViewStore } from '../store/viewStore'
 import { ApiError, CLIENT_ID, httpApi } from './api'
@@ -15,11 +15,13 @@ import { PREFETCH, syncOnce, type SyncEvent } from './engine'
 import { prefetched } from './prefetch'
 import { idbRepo, importLegacy, LEGACY_KEY, type LocalModel } from './localRepo'
 import { deleteHistory, getHistory, packHistory, putHistory, unpackHistory } from './history'
+import { getLocalTrash, listLocalTrash, putLocalTrash, removeLocalTrash } from './localTrash'
 import { parsePath, pathFor, type Route } from './route'
 import {
   captureThumbnail,
   deleteThumbnail,
   downloadThumbnail,
+  downloadTrashThumbnail,
   getThumbnail,
   putThumbnail,
   uploadThumbnail,
@@ -369,6 +371,8 @@ export function syncNow({ thumbs = true }: { thumbs?: boolean } = {}): Promise<v
       // Med kontakt och inloggning: lyssna på ändringar (igen, om strömmen stängts).
       connectEvents()
       await refreshList()
+      // Det som väntade på att tas bort ligger nu i serverns papperskorg.
+      if (lib().trashOpen && lib().trash?.some((i) => i.where === 'pending')) void loadTrash()
       if (thumbs) await syncThumbs()
     } catch (e) {
       if (e instanceof ApiError) lib().set({ status: STATUS_FOR[e.kind], error: e.message })
@@ -509,6 +513,8 @@ export async function createModel(): Promise<boolean> {
   }
   await repo.put(m)
   showModel(m)
+  // Man börjar rita: skuggat syns kanterna och ytorna tydligast, utan trätexturen.
+  useViewStore.getState().setLook('shaded')
   await refreshList()
   scheduleSync(SYNC_DELAY_MS)
   return true
@@ -529,13 +535,27 @@ export async function renameModel(id: string, name: string) {
   scheduleSync(SYNC_DELAY_MS)
 }
 
-/** Tar bort lokalt direkt; på servern vid nästa synk (hamnar i serverns papperskorg). */
+/** Sant för en modell utan skisser och delar: i papperskorgen finns inget att ta tillbaka. */
+function isEmpty(m: LocalModel): boolean {
+  const r = migrate(m.file)
+  return r.ok && r.doc.sketches.length === 0 && r.doc.instances.length === 0
+}
+
+/**
+ * Lägger modellen i papperskorgen. Finns den på servern tas den bort där vid nästa synk och
+ * hamnar i serverns papperskorg; annars i webbläsarens (localTrash). En tom modell raderas direkt.
+ */
 export async function deleteModel(id: string) {
   await flushSave()
   const m = await repo.get(id)
   if (!m) return
-  if (m.baseRevision === null) await repo.remove(id)
-  else await repo.put({ ...m, deleted: true })
+  if (m.baseRevision === null) {
+    if (!isEmpty(m)) {
+      const thumb = await getThumbnail(id).catch(() => undefined)
+      await putLocalTrash({ model: { ...m, deleted: undefined }, deletedAt: new Date().toISOString(), thumb })
+    }
+    await repo.remove(id)
+  } else await repo.put({ ...m, deleted: true })
   await deleteThumbnail(id).catch(() => {})
   await deleteHistory(id).catch(() => {})
   if (id === lib().currentId) await openFallback()
@@ -551,7 +571,10 @@ export function deleteWithUndo(id: string) {
   const m = lib().models.find((x) => x.id === id)
   if (!m || deleteTimers.has(id)) return
   lib().set({ pendingDelete: [...lib().pendingDelete, id] })
-  const notice = lib().notify(`”${m.name}” togs bort.`, { label: 'Ångra', run: () => undoDelete(id) })
+  const notice = lib().notify(`”${m.name}” flyttades till papperskorgen.`, {
+    label: 'Ångra',
+    run: () => undoDelete(id),
+  })
   const timer = setTimeout(() => {
     deleteTimers.delete(id)
     lib().dismiss(notice)
@@ -567,6 +590,130 @@ export function undoDelete(id: string) {
   deleteTimers.delete(id)
   lib().dismiss(t.notice)
   lib().set({ pendingDelete: lib().pendingDelete.filter((x) => x !== id) })
+}
+
+/**
+ * Läser in papperskorgen till startvyn: webbläsarens, det som väntar på att tas bort på servern,
+ * och serverns. Utan kontakt med servern visas det som finns här (trashPartial). Bilderna från
+ * serverns papperskorg hämtas efteråt, en i taget.
+ */
+export async function loadTrash() {
+  const now = new Date()
+  const items: TrashListItem[] = (await listLocalTrash(now).catch(() => [])).map((t) => ({
+    id: t.model.id,
+    name: t.model.name,
+    deletedAt: t.deletedAt,
+    where: 'local',
+    thumb: t.thumb,
+  }))
+  for (const m of await repo.list())
+    if (m.deleted) items.push({ id: m.id, name: m.name, deletedAt: now.toISOString(), where: 'pending' })
+  let partial = false
+  if (!isGuest()) {
+    try {
+      const known = new Set(items.map((i) => i.id))
+      for (const t of await api.listTrash()) if (!known.has(t.id)) items.push({ ...t, where: 'server' })
+    } catch (e) {
+      // Utan synkserver (bara statiska filer) finns ingen papperskorg där att sakna.
+      partial = !(e instanceof ApiError && e.kind === 'no-server')
+    }
+  }
+  items.sort((a, b) => b.deletedAt.localeCompare(a.deletedAt))
+  const shown = new Map((lib().trash ?? []).map((i) => [i.id, i.thumb]))
+  for (const i of items) i.thumb ??= shown.get(i.id)
+  lib().set({ trash: items, trashPartial: partial })
+  for (const i of items) {
+    if (i.where !== 'server' || i.thumb) continue
+    const thumb = await downloadTrashThumbnail(i.id)
+    if (thumb) lib().set({ trash: lib().trash?.map((x) => (x.id === i.id ? { ...x, thumb } : x)) ?? null })
+  }
+}
+
+/** Öppnar eller stänger papperskorgen i startvyn. */
+export function showTrash(open: boolean) {
+  lib().set({ trashOpen: open })
+  if (open) void loadTrash()
+}
+
+/** Ett meddelande när servern inte gick att nå för det man bad om i papperskorgen. */
+function trashFailed(e: unknown) {
+  if (!(e instanceof ApiError)) throw e
+  lib().notify(e.kind === 'offline' ? 'Ingen kontakt med servern. Försök igen om en stund.' : e.message)
+}
+
+/** Tar tillbaka modellen ur papperskorgen, till modellerna. */
+export async function restoreFromTrash(id: string) {
+  const item = lib().trash?.find((i) => i.id === id)
+  if (!item) return
+  try {
+    if (item.where === 'pending') {
+      const m = await repo.get(id)
+      if (m) await repo.put({ ...m, deleted: undefined })
+    } else if (item.where === 'local') {
+      if (atModelLimit()) return
+      const t = await getLocalTrash(id)
+      if (t) {
+        await repo.put(t.model)
+        if (t.thumb) await putThumbnail(id, t.thumb).catch(() => {})
+        await removeLocalTrash(id)
+      }
+    } else {
+      const r = await api.restore(id)
+      if (!r.ok) lib().notify(r.reason === 'full' ? r.message : `”${item.name}” finns inte kvar i papperskorgen.`)
+      // Hämtas som vilken modell som helst från servern.
+      else await syncNow()
+    }
+  } catch (e) {
+    trashFailed(e)
+  }
+  await refreshList()
+  await loadTrash()
+  scheduleSync(SYNC_DELAY_MS)
+}
+
+/** Raderar modellerna ur papperskorgen för gott. */
+export async function deleteForever(ids: readonly string[]) {
+  const items = (lib().trash ?? []).filter((i) => ids.includes(i.id))
+  try {
+    // Det som väntar på servern ska dit först; sedan raderas det där.
+    if (items.some((i) => i.where === 'pending')) await syncNow()
+    for (const i of items) {
+      if (i.where === 'local') await removeLocalTrash(i.id)
+      else await api.purge(i.id)
+    }
+  } catch (e) {
+    trashFailed(e)
+  }
+  await loadTrash()
+}
+
+/**
+ * En ny modell från en av exempelmodellerna (src/examples), märkt som exempel, och öppnar den.
+ * Finns namnet redan får den en siffra efter. Med konto laddas den upp som vilken modell som helst.
+ */
+export async function createFromExample(name: string) {
+  if (atModelLimit()) return
+  const { EXAMPLES } = await import('../examples')
+  const e = EXAMPLES.find((x) => x.name === name)
+  const r = e && migrate(e.file)
+  if (!e || !r?.ok) return
+  const names = new Set(lib().models.map((m) => m.name))
+  let unique = e.name
+  for (let n = 2; names.has(unique); n++) unique = `${e.name} ${n}`
+  const id = newId()
+  await repo.put({
+    id,
+    name: unique,
+    file: serialize(r.doc),
+    updatedAt: new Date().toISOString(),
+    baseRevision: null,
+    dirty: !isGuest(),
+    example: true,
+  })
+  await putThumbnail(id, await dataUrl(e.thumb)).catch(() => {})
+  await refreshList()
+  scheduleSync(SYNC_DELAY_MS)
+  await openFromGallery(id)
 }
 
 /** Kopia av en modell, med ny id och namnet "… kopia". Öppnas inte. */
@@ -659,7 +806,7 @@ export async function openFromGallery(id: string | 'new') {
   if (id === 'new') {
     if (!(await createModel())) return
   } else await openModel(id)
-  lib().set({ screen: 'model' })
+  lib().set({ screen: 'model', trashOpen: false })
   // Kameran från förra modellen passar sällan; visa hela den här, direkt och utan att glida dit.
   useViewStore.getState().requestFit('all', { animate: false })
 }
@@ -779,10 +926,19 @@ function connectEvents() {
     eventsConnected = true
   })
   source.addEventListener('change', (m: MessageEvent<string>) => {
+    let kind: string | undefined
     try {
-      if ((JSON.parse(m.data) as { by?: string }).by === CLIENT_ID) return
+      const e = JSON.parse(m.data) as { by?: string; kind?: string }
+      if (e.by === CLIENT_ID) return
+      kind = e.kind
     } catch {
       // Okänd händelse: synka ändå.
+    }
+    if (kind === 'trash') {
+      // Bara papperskorgen ändrades (en annan enhet tömde den, eller tog tillbaka något: då kommer
+      // också en ändring av modellen). Läses om om den visas.
+      if (lib().trashOpen) void loadTrash()
+      return
     }
     scheduleSync(PUSH_DELAY_MS)
   })

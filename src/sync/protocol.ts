@@ -17,6 +17,22 @@ export interface ModelMeta {
   updatedAt: string
 }
 
+/** Så länge en borttagen modell ligger i papperskorgen innan den raderas för gott. */
+export const TRASH_DAYS = 30
+
+/** En modell i papperskorgen (data/users/<sub>/trash/<id>-<tid>.json). */
+export interface TrashItem {
+  id: string
+  name: string
+  /** När den lades i papperskorgen. Den raderas TRASH_DAYS dagar senare. */
+  deletedAt: string
+}
+
+/** Svar när en modell tagits tillbaka ur papperskorgen: den ligger bland modellerna igen. */
+export interface RestoreResponse {
+  revision: number
+}
+
 /** Så ser en modellfil ut på servern (data/models/<id>.json). */
 export interface ServerModel extends ModelMeta {
   file: SavedFile

@@ -244,8 +244,7 @@ export function Properties() {
                     className={field}
                     value={def.material}
                     onChange={(e) => {
-                      if (e.target.value === EDIT_MATERIALS)
-                        useLibraryStore.getState().set({ settings: 'materials' })
+                      if (e.target.value === EDIT_MATERIALS) useLibraryStore.getState().set({ settings: 'materials' })
                       else updatePart(body.id, { material: e.target.value })
                     }}
                   >

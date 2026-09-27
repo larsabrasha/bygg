@@ -1,5 +1,6 @@
 import {
   Box,
+  ChevronDown,
   Copy,
   Ellipsis,
   LoaderCircle,
@@ -14,6 +15,7 @@ import {
   X,
 } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
+import type { Example } from '../examples'
 import { useLibraryStore, type ModelListItem } from '../store/libraryStore'
 import { nameFromFileName, readModelFile } from '../persist/modelFile'
 import { canLogIn, currentUser, loginUrl } from '../sync/auth'
@@ -25,17 +27,20 @@ import {
   logout,
   openFromGallery,
   renameModel,
+  createFromExample,
   saveNow,
+  showTrash,
 } from '../sync/session'
 import { MenuItem } from './MenuItem'
 import { splitConflict } from './modelName'
 import { Notices } from './Notices'
 import { Logo } from './Logo'
 import { SyncBadge } from './SyncBadge'
-import { field, ghostButton, primaryButton, secondaryButton } from './ui'
+import { field, ghostButton, groupTitle, primaryButton, secondaryButton } from './ui'
 import { useDismiss } from './useDismiss'
 import { shortWhen } from './when'
 import { Tip } from './Tip'
+import { TrashView } from './TrashView'
 
 function RenameField({ model, onDone }: { model: ModelListItem; onDone: () => void }) {
   const [name, setName] = useState(model.name)
@@ -253,12 +258,64 @@ function LogoutButton() {
   )
 }
 
-/** Knapp som öppnar en modellfil. På smal skärm bara ikonen. */
+/**
+ * Ny modell: en tom med ett tryck, eller från ett exempel i menyn bakom pilen, som mallarna
+ * i Pages. Exemplen (src/examples) läses in först när menyn öppnas.
+ */
+function NewModelButton() {
+  const [open, setOpen] = useState(false)
+  const [examples, setExamples] = useState<readonly Example[] | null>(null)
+  const ref = useRef<HTMLDivElement>(null)
+  const close = useCallback(() => setOpen(false), [])
+  useDismiss(ref, open, close)
+  useEffect(() => {
+    if (open && !examples) void import('../examples').then((m) => setExamples(m.EXAMPLES))
+  }, [open, examples])
+
+  return (
+    <div ref={ref} className="relative flex shrink-0">
+      <button className={`${primaryButton} rounded-r-none`} onClick={() => void openFromGallery('new')}>
+        <Plus size={18} aria-hidden />
+        Ny modell
+      </button>
+      <Tip label="Från ett exempel">
+        <button
+          className={`${primaryButton} rounded-l-none border-l border-on-accent/30 px-2`}
+          aria-label="Ny modell från ett exempel"
+          aria-expanded={open}
+          onClick={() => setOpen((o) => !o)}
+        >
+          <ChevronDown size={16} aria-hidden />
+        </button>
+      </Tip>
+      {open && (
+        <div className="absolute top-full right-0 z-10 mt-1 w-64 rounded-lg border border-line bg-panel p-1 shadow-lg">
+          <p className={`${groupTitle} px-2 pt-1.5 pb-1`}>Från ett exempel</p>
+          {examples?.map((e) => (
+            <button
+              key={e.name}
+              className="flex w-full cursor-pointer items-center gap-3 rounded-md px-2 py-1.5 text-left hover:bg-hover narrow:py-2"
+              onClick={() => {
+                setOpen(false)
+                void createFromExample(e.name)
+              }}
+            >
+              <img src={e.thumb} alt="" className="h-9 w-12 shrink-0 rounded bg-canvas object-contain" />
+              {e.name}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+/** Knapp som importerar en Bygg-fil som ny modell (en kopia; filen ändras inte). På smal skärm bara ikonen. */
 function ImportButton() {
   const input = useRef<HTMLInputElement>(null)
   return (
     <>
-      <Tip label="Öppna en modellfil">
+      <Tip label="Importera en Bygg-fil som ny modell">
         <button className={secondaryButton} aria-label="Importera" onClick={() => input.current?.click()}>
           <Import size={18} aria-hidden />
           <span className="narrow:hidden">Importera</span>
@@ -286,6 +343,11 @@ function ImportButton() {
  * går fort att öppna en modell igen.
  */
 export function Gallery() {
+  const trashOpen = useLibraryStore((s) => s.trashOpen)
+  return trashOpen ? <TrashView /> : <Models />
+}
+
+function Models() {
   const models = useLibraryStore((s) => s.models)
   const thumbs = useLibraryStore((s) => s.thumbs)
   const currentId = useLibraryStore((s) => s.currentId)
@@ -313,12 +375,9 @@ export function Gallery() {
           </button>
         </Tip>
         <ImportButton />
-        <button className={primaryButton} onClick={() => void openFromGallery('new')}>
-          <Plus size={18} aria-hidden />
-          Ny modell
-        </button>
+        <NewModelButton />
       </header>
-      <main className="relative min-h-0 flex-1 overflow-y-auto p-4 pb-[max(16px,env(safe-area-inset-bottom))]">
+      <main className="relative flex min-h-0 flex-1 flex-col overflow-y-auto p-4 pb-[max(16px,env(safe-area-inset-bottom))]">
         <Notices />
         <GuestIntro />
         <ul className="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-x-4 gap-y-5 narrow:grid-cols-2 narrow:gap-x-3">
@@ -326,8 +385,13 @@ export function Gallery() {
             <ModelTile key={m.id} model={m} thumb={thumbs[m.id]} isCurrent={m.id === currentId} />
           ))}
         </ul>
-        {/* Längst ner och diskret: det letar man efter någon gång, inte varje dag. */}
-        <footer className="mt-10 flex justify-center">
+        {/* Längst ner och diskret: det letar man efter någon gång, inte varje dag. Med få modeller
+            längst ner i fönstret, inte mitt i det; med många efter den sista. */}
+        <footer className="mt-auto flex flex-wrap justify-center gap-x-2 pt-10">
+          <button className={`${ghostButton} text-muted`} onClick={() => showTrash(true)}>
+            <Trash2 size={16} aria-hidden />
+            Papperskorgen
+          </button>
           <button
             className={`${ghostButton} text-muted`}
             onClick={() => useLibraryStore.getState().set({ settings: 'about' })}
