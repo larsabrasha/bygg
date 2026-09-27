@@ -92,7 +92,7 @@ function text(
   doc.text(s, x, y, { align: opts.align ?? 'left', baseline: opts.baseline ?? 'alphabetic' })
 }
 
-/** Benämningen på en rad: namnen, diametern på en rund del och färgen den målas i. */
+/** Namnet på en rad: namnen, diametern på en rund del och färgen den målas i. */
 const rowName = (row: CutListRow) =>
   compactNames(row.names) +
   (row.round ? ` (Ø ${num.format(row.round.diameter)})` : '') +
@@ -168,7 +168,7 @@ function drawAssembly(doc: jsPDF, input: DrawingPdfInput) {
   const th = [11, 8.5, 8.5]
   const ty = fy + fh - th[0]! - th[1]! - th[2]!
   const cw = rw / 3
-  cell(doc, rx, ty, rw, th[0]!, 'Benämning', input.name, 4.2, true)
+  cell(doc, rx, ty, rw, th[0]!, 'Namn', input.name, 4.2, true)
   cell(doc, rx, ty + th[0]!, 2 * cw, th[1]!, 'Innehåll', 'Sammanställning, sprängskiss')
   cell(doc, rx + 2 * cw, ty + th[0]!, cw, th[1]!, 'Datum', input.date)
   const y3 = ty + th[0]! + th[1]!
@@ -186,7 +186,7 @@ function drawAssembly(doc: jsPDF, input: DrawingPdfInput) {
   line(doc, rx, listTop, rx + rw, listTop, 0.35)
   text(doc, 'Stycklista', rx + 1.5, listTop + 4.2, 3, { bold: true })
   // Kolumnerna räknas från höger efter det bredaste i varje: materialet ("Laminerat glas")
-  // och måtten ("382,4") får plats, benämningen får resten och kortas med … om den inte ryms.
+  // och måtten ("382,4") får plats, namnet får resten och kortas med … om den inte ryms.
   // Materialet får högst en tredjedel av bredden.
   const widest = (texts: readonly string[], textSize: number, bold = false) => {
     doc.setFont('helvetica', bold ? 'bold' : 'normal')
@@ -222,7 +222,7 @@ function drawAssembly(doc: jsPDF, input: DrawingPdfInput) {
     text(doc, s, x, headY + 3.4, HEAD_SIZE, { gray: 51, bold: true, align })
   head('POS', cols.pos, 'right')
   head('ANT', cols.ant, 'right')
-  head('BENÄMNING', cols.name, 'left')
+  head('NAMN', cols.name, 'left')
   head('L', cols.l, 'right')
   head('B', cols.b, 'right')
   head('T', cols.t, 'right')

@@ -278,17 +278,20 @@ export function Properties() {
       {body && def ? (
         <div className="flex flex-col gap-4">
           <Group title="Del">
-            <CommitField
-              key={def.id}
-              label="Namn"
-              className={`${field} text-base font-semibold`}
-              value={def.name}
-              onCommit={(t) => {
-                if (!t.trim()) return 'Namnet får inte vara tomt'
-                updatePart(body.id, { name: t.trim() })
-                return null
-              }}
-            />
+            {/* Samma ord som i kaplistan och på ritningen. */}
+            <label className={fieldLabel}>
+              Namn
+              <CommitField
+                key={def.id}
+                className={`${field} text-base font-semibold`}
+                value={def.name}
+                onCommit={(t) => {
+                  if (!t.trim()) return 'Namnet får inte vara tomt'
+                  updatePart(body.id, { name: t.trim() })
+                  return null
+                }}
+              />
+            </label>
             <label className={fieldLabel}>
               Material
               <select

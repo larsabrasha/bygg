@@ -70,7 +70,7 @@ export function CutList() {
                   <thead className={groupTitle}>
                     <tr className="border-b border-line [&_th]:px-1.5 [&_th]:py-1.5 [&_th]:font-semibold">
                       <th className="w-8 text-right">St</th>
-                      <th className="text-left">Del</th>
+                      <th className="text-left">Namn</th>
                       <th className={dimCol}>L</th>
                       <th className={dimCol}>B</th>
                       <th className={`${dimCol} w-10`}>T</th>

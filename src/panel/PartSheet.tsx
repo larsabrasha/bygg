@@ -49,7 +49,7 @@ export function PartSheet({ pos, row, geometry, modelName, date, sheet, sheets }
       label={`Detaljblad för position ${pos}, ${names}`}
       note="Mått i mm. L längs fibern. Projektion enligt E-metoden."
       cells={[
-        { dx: 0, dy: 0, w: 95, h: 12, label: 'Benämning', value: names, size: 4, bold: true },
+        { dx: 0, dy: 0, w: 95, h: 12, label: 'Namn', value: names, size: 4, bold: true },
         { dx: 95, dy: 0, w: 30, h: 12, label: 'Pos', value: String(pos), size: 6, bold: true },
         { dx: 0, dy: 12, w: 40, h: 9, label: 'Material', value: materialTitle(row.material) },
         { dx: 40, dy: 12, w: 25, h: 9, label: 'Antal', value: `${row.count} st` },
