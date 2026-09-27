@@ -35,9 +35,15 @@ function Readout({ op }: { op: Op }) {
   if (!r) return null
   return (
     // Lågt z-index: under måttrutan och panelerna, som ligger ovanpå 3D-vyn.
-    <Html position={r.at} zIndexRange={[5, 0]} style={{ pointerEvents: 'none' }} calculatePosition={inView}>
+    <Html
+      position={r.at}
+      zIndexRange={[5, 0]}
+      style={{ pointerEvents: 'none' }}
+      calculatePosition={(el, camera, size) => inView(el, camera, size, r.hint !== undefined)}
+    >
       <span className="block translate-x-3 -translate-y-[calc(100%+12px)] rounded-lg bg-accent px-2 py-1 text-[13px] font-semibold whitespace-nowrap text-on-accent tabular-nums shadow-md narrow:-translate-y-[calc(100%+56px)]">
         {r.text}
+        {r.hint && <span className="block text-[11px] font-normal">{r.hint}</span>}
       </span>
     </Html>
   )
@@ -48,19 +54,23 @@ const projected = new Vector3()
 const READOUT_W = 110
 const READOUT_H = 50
 const READOUT_H_NARROW = 94
+/** Med en rad till om tjockleken som finns att köpa. */
+const HINT_W = 200
+const HINT_H = 16
 const MARGIN = 8
 
 /**
  * Som drei:s egen placering, men inom vyn: pilspetsen kan ligga vid kanten
  * eller utanför, och då skulle bubblan hamna under panelen eller klippas.
  */
-function inView(el: Object3D, camera: Camera, size: { width: number; height: number }): number[] {
+function inView(el: Object3D, camera: Camera, size: { width: number; height: number }, hint = false): number[] {
   projected.setFromMatrixPosition(el.matrixWorld).project(camera)
   const x = ((projected.x + 1) * size.width) / 2
   const y = ((1 - projected.y) * size.height) / 2
-  const h = size.width <= 720 ? READOUT_H_NARROW : READOUT_H
+  const h = (size.width <= 720 ? READOUT_H_NARROW : READOUT_H) + (hint ? HINT_H : 0)
+  const w = hint ? HINT_W : READOUT_W
   const clamp = (v: number, lo: number, hi: number) => Math.min(Math.max(v, lo), Math.max(lo, hi))
-  return [clamp(x, MARGIN, size.width - READOUT_W - MARGIN), clamp(y, h + MARGIN, size.height - MARGIN)]
+  return [clamp(x, MARGIN, size.width - w - MARGIN), clamp(y, h + MARGIN, size.height - MARGIN)]
 }
 
 /** Det som ritas ovanpå förhandsdokumentet: rektangel, pil, värdet och snäppmarkör. */
@@ -89,7 +99,9 @@ function OpShapes({ op }: { op: Op }) {
     return (
       <>
         <Arrow op={op} />
-        {op.onTarget && <SnapMarker position={add(op.anchor, scale(op.normal, op.distance))} onTarget />}
+        {(op.onTarget || op.stockHint) && (
+          <SnapMarker position={add(op.anchor, scale(op.normal, op.distance))} onTarget />
+        )}
       </>
     )
   }

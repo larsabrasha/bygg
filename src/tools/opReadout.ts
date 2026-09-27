@@ -13,12 +13,14 @@ const plain = numberFormat(1)
  * man drar i, där pilen sitter (push/pull), vid det flyttade (flytta) eller vid
  * ekern man vrider (vrida), eller diametern vid pekaren (cirkel). Där tittar
  * man medan man drar. Null när inget har ändrats än, eller för en rektangel.
+ * hint säger varför värdet snäppte, om det är till en tjocklek som finns att köpa.
  */
-export function opReadout(op: Op): { at: Vec3; text: string } | null {
+export function opReadout(op: Op): { at: Vec3; text: string; hint?: string } | null {
   if (op.kind === 'pushpull') {
     if (op.distance === 0) return null
     const at = add(op.anchor, scale(op.normal, op.distance))
-    return { at, text: `${delta.format(op.distance)} mm` }
+    const text = `${delta.format(op.distance)} mm`
+    return op.stockHint ? { at, text, hint: op.stockHint } : { at, text }
   }
   if (op.kind === 'move') {
     const [du, dv] = op.delta

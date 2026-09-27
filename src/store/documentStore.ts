@@ -36,6 +36,7 @@ import type {
   Vec3,
   WorldAxis,
 } from '../model/types'
+import { DEFAULT_MATERIAL } from '../model/types'
 import { anglesOf, restOf, withAngles } from '../model/orientation'
 import { add, scale } from '../model/vec'
 
@@ -253,7 +254,7 @@ export const useDocumentStore = create<DocumentState>()((set, get) => {
       const part = sketchToPart(
         sketch,
         distance,
-        { defId: newId(), instanceId: newId(), name, material: 'furu' },
+        { defId: newId(), instanceId: newId(), name, material: DEFAULT_MATERIAL },
         depthExpr,
       )
       if (!part) return null

@@ -1142,3 +1142,84 @@ describe('pilen under pekaren', () => {
     expect(tools().hoverHandle).toBeNull()
   })
 })
+
+describe('push/pull snäpper till tjocklekar som finns att köpa', () => {
+  /** Vågrät stråle i höjd y: push/pull uppåt från golvet hamnar på y. */
+  const at = (y: number) => ({ origin: [300, y, 3000] as Vec3, dir: [0, 0, -1] as Vec3 })
+  const pushPullOp = () => tools().op as PushPullOp
+
+  it('en ny del ur en skiss snäpper till 22 och säger varför; 25 går att dra fram', () => {
+    const s = drawGroundRect(0, 0, 600, -95)
+    tools().setTool('pushpull')
+    tap({ point: [300, 0, -50], target: { kind: 'sketch', id: s } }, 15)
+    move(at(21), 15)
+    expect(pushPullOp()).toMatchObject({ distance: 22, stockHint: 'Hyvlat virke finns i 22' })
+    move(at(25), 15)
+    expect(pushPullOp().distance).toBe(25)
+    expect(pushPullOp().stockHint).toBeUndefined()
+    // Djupare än skissen är bred blir djupet inte tjockleken: inget snäpp.
+    move(at(98), 15)
+    expect(pushPullOp().distance).toBe(98)
+  })
+
+  it('en dels sida längs tjockleken snäpper till plywoodens tjocklekar; andra sidor gör det inte', () => {
+    const b = extrude(drawGroundRect(0, 0, 600, -400), '16')
+    docs().updatePart(b.id, { material: 'plywood' })
+    tools().setTool('pushpull')
+    tap({ point: [300, 16, -200], target: { kind: 'body', id: b.id, face: 'n+' } }, 15)
+    move(at(17.8), 15)
+    expect(pushPullOp()).toMatchObject({ distance: 2, stockHint: 'Plywood finns i 18' })
+    cancel()
+    // Längs längden: inget snäpp till tjocklekar.
+    tap({ point: [600, 8, -200], target: { kind: 'body', id: b.id, face: 'u+' } }, 15)
+    move({ origin: [621, 8, 3000], dir: [0, 0, -1] }, 15)
+    expect(pushPullOp().distance).toBe(21)
+    expect(pushPullOp().stockHint).toBeUndefined()
+  })
+
+  it('en annan dels kant går före', () => {
+    extrude(drawGroundRect(700, 0, 800, -100), '21')
+    const s = drawGroundRect(0, 0, 600, -95)
+    tools().setTool('pushpull')
+    tap({ point: [300, 0, -50], target: { kind: 'sketch', id: s } }, 15)
+    move(at(21.5), 15)
+    expect(pushPullOp()).toMatchObject({ distance: 21, onTarget: true })
+    expect(pushPullOp().stockHint).toBeUndefined()
+  })
+
+  it('ett tillägg på en del snäpper inte, och ett skrivet mått står sig', () => {
+    const rail = extrude(drawGroundRect(0, 0, 400, -60), '20')
+    tools().setTool('rect')
+    tap({ point: [150, 20, -10], target: { kind: 'body', id: rail.id, face: 'n+' } }, 0)
+    move(down(250, -50), 0)
+    commit()
+    tools().setTool('pushpull')
+    tap({ point: [200, 20, -30], target: { kind: 'sketch', id: doc().sketches.at(-1)!.id } }, 15)
+    tools().setOp({ ...pushPullOp(), mode: 'add' })
+    move({ origin: [200, 41, 3000], dir: [0, 0, -1] }, 15)
+    expect(pushPullOp().distance).toBe(21)
+    expect(pushPullOp().stockHint).toBeUndefined()
+
+    const b = extrude(drawGroundRect(0, -200, 600, -295), '21')
+    expect(buildCutList([b]).rows[0]!.thickness).toBe(21)
+  })
+})
+
+describe('snäpp till handelsmått går att slå av', () => {
+  it('avslaget snäpper draget inte; påslaget igen gör det', () => {
+    const s = drawGroundRect(0, 0, 600, -95)
+    tools().setTool('pushpull')
+    tap({ point: [300, 0, -50], target: { kind: 'sketch', id: s } }, 15)
+    const at = (y: number) => ({ origin: [300, y, 3000] as Vec3, dir: [0, 0, -1] as Vec3 })
+    move(at(21), 15)
+    expect((tools().op as PushPullOp).stockHint).toBeDefined()
+    // Mitt i draget: texten försvinner direkt, och nästa drag snäpper inte.
+    tools().setStockSnap(false)
+    expect((tools().op as PushPullOp).stockHint).toBeUndefined()
+    move(at(21), 15)
+    expect((tools().op as PushPullOp).distance).toBe(21)
+    tools().setStockSnap(true)
+    move(at(21), 15)
+    expect((tools().op as PushPullOp).distance).toBe(22)
+  })
+})
