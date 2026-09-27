@@ -2,6 +2,8 @@ import { StrictMode, type ReactNode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { canOpenApp, startAuth } from './sync/auth'
 import './index.css'
+// Temat (System, Ljust, Mörkt): index.html sätter det före första bilden, theme.ts håller det rätt sedan.
+import './theme'
 
 const render = (node: ReactNode) => createRoot(document.getElementById('root')!).render(<StrictMode>{node}</StrictMode>)
 

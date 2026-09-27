@@ -1,5 +1,3 @@
-import { AboutSheet } from './panel/AboutSheet'
-import { CatalogSheet } from './panel/CatalogSheet'
 import { CombineBar } from './panel/CombineBar'
 import { Gallery } from './panel/Gallery'
 import { DimensionLabels } from './panel/DimensionLabels'
@@ -10,6 +8,7 @@ import { ExplodeBar } from './panel/ExplodeBar'
 import { Drawing } from './panel/Drawing'
 import { VisibilityBar } from './panel/VisibilityBar'
 import { SelectionBar } from './panel/SelectionBar'
+import { SettingsSheet } from './panel/SettingsSheet'
 import { Sidebar } from './panel/Sidebar'
 import { Toolbar } from './panel/Toolbar'
 import { ToolRail } from './panel/ToolButtons'
@@ -83,9 +82,8 @@ export function App() {
       <OpeningOverlay />
       {/* Ritningen ligger ovanpå allt, som startvyn. */}
       <Drawing />
-      {/* Material och färger öppnas från startvyn och från Egenskaper, och ligger över båda. */}
-      <CatalogSheet />
-      <AboutSheet />
+      {/* Inställningar öppnas från startvyn, och på Material eller Färger från Egenskaper; ligger över båda. */}
+      <SettingsSheet />
     </TipProvider>
   )
 }

@@ -32,6 +32,15 @@
     <meta name="apple-mobile-web-app-title" content="Bygg" />
     <meta name="mobile-web-app-capable" content="yes" />
     <title>Bygg</title>
+    <script>
+      // Temat före första bilden, så att sidan inte blinkar ljus när Mörkt är valt. Samma nyckel
+      // och regel som src/theme.ts, som tar över när appen laddats.
+      try {
+        var t = localStorage.getItem('bygg.theme')
+        if (t !== 'light' && t !== 'dark') t = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+        document.documentElement.dataset.theme = t
+      } catch (e) {}
+    </script>
     <style>
       /* Startbilden medan appen laddas: i #root, så att React byter ut den när den ritar första
          gången. Färgerna från index.css, med värdena som reserv: i dev laddas index.css av
@@ -58,14 +67,12 @@
         margin: 0;
         color: var(--color-muted, #6b655c);
       }
-      @media (prefers-color-scheme: dark) {
-        .splash {
-          background: var(--color-canvas, #1b1a18);
-          color: var(--color-ink, #ebe7e0);
-        }
-        .splash p {
-          color: var(--color-muted, #a8a196);
-        }
+      html[data-theme='dark'] .splash {
+        background: var(--color-canvas, #1b1a18);
+        color: var(--color-ink, #ebe7e0);
+      }
+      html[data-theme='dark'] .splash p {
+        color: var(--color-muted, #a8a196);
       }
       @keyframes splash-in {
         from {

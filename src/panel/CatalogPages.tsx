@@ -11,7 +11,6 @@ import {
 import { firstUpper, MATERIAL_GROUPS, MATERIAL_SPECS, type MaterialKind, type MaterialSpec } from '../model/materials'
 import { numberFormat } from '../model/numberFormat'
 import { useCatalogStore } from '../store/catalogStore'
-import { useLibraryStore } from '../store/libraryStore'
 import { ColorInput } from './ColorInput'
 import { CommitField } from './CommitField'
 import { Switch } from './Switch'
@@ -25,8 +24,6 @@ import {
   primaryButton,
   quietDangerButton,
   secondaryButton,
-  segment,
-  segmentGroup,
 } from './ui'
 
 const num = numberFormat(1)
@@ -59,71 +56,14 @@ const NEW_MATERIAL = {
 /** Genomskinligt material (glas, akryl): så mycket syns av ytan i 3D-vyn. */
 const CLEAR_OPACITY = 0.3
 
-/**
- * Material och färger: användarens egna material, de inbyggda som ska synas
- * i väljaren och standardfärgerna. Hör till användaren och gäller alla modeller.
- * Ett blad ovanpå allt, som ritningen; på smal skärm hela skärmen.
+/*
+ * Sidorna Material och Färger i Inställningar (SettingsSheet): användarens egna material och de
+ * inbyggda som ska synas i väljaren, och standardfärgerna. Hör till användaren och gäller alla modeller.
  */
-export function CatalogSheet() {
-  const open = useLibraryStore((s) => s.catalogOpen)
-  const close = () => useLibraryStore.getState().set({ catalogOpen: null })
-  useEffect(() => {
-    if (!open) return
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && close()
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [open])
-  if (!open) return null
-
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 print:hidden narrow:items-stretch"
-      onPointerDown={(e) => e.target === e.currentTarget && close()}
-    >
-      <div
-        role="dialog"
-        aria-modal
-        aria-label="Material och färger"
-        className="flex h-[min(88dvh,760px)] w-[min(560px,calc(100vw-32px))] flex-col overflow-hidden rounded-xl border border-line bg-panel shadow-2xl narrow:h-dvh narrow:w-full narrow:rounded-none narrow:border-0"
-      >
-        <header className="flex items-center gap-2 border-b border-line px-4 py-2 pt-[max(8px,env(safe-area-inset-top))]">
-          <h2 className="flex-1 text-base font-semibold">Material och färger</h2>
-          <Tip label="Stäng">
-            <button className={`${iconAction} hover:bg-hover`} aria-label="Stäng" onClick={close}>
-              <X size={20} strokeWidth={1.75} aria-hidden />
-            </button>
-          </Tip>
-        </header>
-        <div className="px-4 pt-3">
-          <div className={segmentGroup} role="group" aria-label="Visa">
-            {(
-              [
-                ['materials', 'Material'],
-                ['colors', 'Färger'],
-              ] as const
-            ).map(([v, label]) => (
-              <button
-                key={v}
-                className={segment}
-                aria-pressed={open === v}
-                onClick={() => useLibraryStore.getState().set({ catalogOpen: v })}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-        </div>
-        <div className="min-h-0 flex-1 overflow-y-auto px-4 pt-4 pb-[max(16px,env(safe-area-inset-bottom))]">
-          {open === 'materials' ? <Materials /> : <Colors />}
-        </div>
-      </div>
-    </div>
-  )
-}
 
 type MaterialFields = Omit<MaterialSpec, 'id'>
 
-function Materials() {
+export function Materials() {
   const catalog = useCatalogStore((s) => s.catalog)
   const addMaterial = useCatalogStore((s) => s.addMaterial)
   const setHidden = useCatalogStore((s) => s.setHidden)
@@ -325,7 +265,7 @@ function MaterialRow({ material: m, onOpen }: { material: CatalogMaterial; onOpe
 }
 
 /**
- * Ett material i en egen ruta ovanpå Material och färger, som den rutan själv: mitt på skärmen,
+ * Ett material i en egen ruta ovanpå Inställningar, som den rutan själv: mitt på skärmen,
  * på smal skärm hela skärmen. Esc stänger bara den här rutan. children står under fälten.
  */
 function MaterialDialog({
@@ -346,7 +286,7 @@ function MaterialDialog({
     close.current = onClose
   })
   useEffect(() => {
-    // Före Material och färgers egen lyssnare (capture), så att Esc inte stänger båda.
+    // Före Inställningars egen lyssnare (capture), så att Esc inte stänger båda.
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return
       // Ett fält med text att tömma (se Chips) får Esc först.
@@ -596,7 +536,7 @@ function Chips({
 
 type ColorFields = Omit<CatalogColor, 'id' | 'updatedAt'>
 
-function Colors() {
+export function Colors() {
   const catalog = useCatalogStore((s) => s.catalog)
   const addColor = useCatalogStore((s) => s.addColor)
   const setHidden = useCatalogStore((s) => s.setHidden)

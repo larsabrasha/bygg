@@ -7,7 +7,7 @@ import type { Body, Vec3 } from '../model/types'
 import { add, scale } from '../model/vec'
 import { BodyMesh } from '../scene/BodyMesh'
 import { RealisticLight } from '../scene/studio'
-import { useColorScheme } from '../scene/useColorScheme'
+import { useColorScheme } from '../theme'
 import { hasWoodTexture, loadWood } from '../scene/woodTexture'
 
 /**

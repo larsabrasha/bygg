@@ -4,6 +4,9 @@
    en stående A4 är också under 720 px bred, och ritningen ska skrivas ut som på bred skärm. */
 @custom-variant narrow (@media screen and (max-width: 720px));
 
+/* dark: följer det valda temat (data-theme, se nedan), inte bara systemets. */
+@custom-variant dark (&:where([data-theme='dark'], [data-theme='dark'] *));
+
 @theme {
   --font-sans: system-ui, -apple-system, 'Segoe UI', sans-serif;
   --color-ink: #2a2724;
@@ -60,33 +63,36 @@
   }
 }
 
-/* Mörkt tema följer systemets inställning. Samma namn, andra värden, så att
-   komponenterna inte behöver dark:-varianter. 3D-vyns färger: src/scene/colors.ts. */
-@media (prefers-color-scheme: dark) {
-  :root {
-    color-scheme: dark;
-    --color-ink: #ebe7e0;
-    --color-canvas: #1b1a18;
-    --color-panel: #24221f;
-    --color-line: #3b3833;
-    --color-muted: #a8a196;
-    --color-faint: #8a8378;
-    --color-hover: #2e2b27;
-    --color-accent: #6aa5f5;
-    --color-accent-soft: #1f3552;
-    --color-accent-line: #34588a;
-    --color-on-accent: #0c1a2e;
-    --color-danger: #f28b82;
-    --color-danger-soft: #3d2422;
-    --color-field: #1b1a18;
-    --color-button: #36332e;
-    --color-segment: #5a564f;
-    --color-disabled: #5d5850;
-    --color-unit: #857e74;
-    --color-warn: #f0b453;
-    --color-warn-soft: #3b2e14;
-    --color-studio: #3a3733;
-  }
+/* Mörkt tema: valt, eller systemets när valet är System. src/theme.ts (och skriptet i index.html,
+   före första bilden) sätter data-theme. Samma namn, andra värden, så att komponenterna inte
+   behöver dark:-varianter. 3D-vyns färger: src/scene/colors.ts. */
+:root {
+  color-scheme: light;
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --color-ink: #ebe7e0;
+  --color-canvas: #1b1a18;
+  --color-panel: #24221f;
+  --color-line: #3b3833;
+  --color-muted: #a8a196;
+  --color-faint: #8a8378;
+  --color-hover: #2e2b27;
+  --color-accent: #6aa5f5;
+  --color-accent-soft: #1f3552;
+  --color-accent-line: #34588a;
+  --color-on-accent: #0c1a2e;
+  --color-danger: #f28b82;
+  --color-danger-soft: #3d2422;
+  --color-field: #1b1a18;
+  --color-button: #36332e;
+  --color-segment: #5a564f;
+  --color-disabled: #5d5850;
+  --color-unit: #857e74;
+  --color-warn: #f0b453;
+  --color-warn-soft: #3b2e14;
+  --color-studio: #3a3733;
 }
 
 @layer base {

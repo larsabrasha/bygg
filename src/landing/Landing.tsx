@@ -31,6 +31,7 @@ import { numberFormat } from '../model/numberFormat'
 import { GitHubMark, REPO_URL } from '../panel/GitHubMark'
 import { Logo } from '../panel/Logo'
 import { canLogIn, loginUrl, startWithoutAccount } from '../sync/auth'
+import { useColorScheme } from '../theme'
 import { Boards } from './Boards'
 import { bordBoards, bordCutList, bordDrawing, bordView, nattduksbordView, type View } from './models'
 import { Sheets } from './Sheets'
@@ -60,28 +61,27 @@ function Stage({ view, fill = view.fill, shift = [0, 0], className = '', ...prop
   const [ready, setReady] = useState(false)
   const light = STILLS[`./stills/${view.name}-light.webp`]
   const dark = STILLS[`./stills/${view.name}-dark.webp`]
+  // Efter det valda temat, inte bara systemets: därför ingen <picture> med media-villkor.
+  const scheme = useColorScheme()
   return (
     <div className={className}>
       {/* Mått i cqmin: bilden är lika stor som möbeln i 3D-vyn, som räknar ut sin storlek ur den kortaste sidan. */}
       <div className="relative size-full [container-type:size]">
         {light && dark && (
-          <picture>
-            <source srcSet={dark} media="(prefers-color-scheme: dark)" />
-            <img
-              src={light}
-              alt=""
-              onLoad={() => setLoaded(true)}
-              style={{
-                left: `${50 + shift[0] * 100}%`,
-                top: `${50 + shift[1] * 100}%`,
-                width: `${(100 * fill) / view.fill}cqmin`,
-                transitionDuration: ready ? '1000ms' : '400ms',
-              }}
-              className={`pointer-events-none absolute max-w-none -translate-x-1/2 -translate-y-1/2 transition-opacity select-none ${
-                loaded && !ready ? 'opacity-100' : 'opacity-0'
-              }`}
-            />
-          </picture>
+          <img
+            src={scheme === 'dark' ? dark : light}
+            alt=""
+            onLoad={() => setLoaded(true)}
+            style={{
+              left: `${50 + shift[0] * 100}%`,
+              top: `${50 + shift[1] * 100}%`,
+              width: `${(100 * fill) / view.fill}cqmin`,
+              transitionDuration: ready ? '1000ms' : '400ms',
+            }}
+            className={`pointer-events-none absolute max-w-none -translate-x-1/2 -translate-y-1/2 transition-opacity select-none ${
+              loaded && !ready ? 'opacity-100' : 'opacity-0'
+            }`}
+          />
         )}
         <Suspense fallback={null}>
           <LazyStage
@@ -388,13 +388,9 @@ const APP = import.meta.glob<string>('./app/*.webp', { eager: true, query: '?url
 function AppShot({ name, alt, className }: { name: 'dator' | 'mobil'; alt: string; className: string }) {
   const light = APP[`./app/${name}-ljus.webp`]
   const dark = APP[`./app/${name}-mork.webp`]
+  const scheme = useColorScheme()
   if (!light || !dark) return null
-  return (
-    <picture>
-      <source srcSet={dark} media="(prefers-color-scheme: dark)" />
-      <img src={light} alt={alt} loading="lazy" className={className} />
-    </picture>
-  )
+  return <img src={scheme === 'dark' ? dark : light} alt={alt} loading="lazy" className={className} />
 }
 
 /** Hur appen ser ut, på datorn och i mobilen: bordet ovanför, med en bräda vald. */

@@ -195,7 +195,7 @@ export function PaintField({ instanceId, def }: { instanceId: string; def: PartD
                 className="inline-flex h-9 cursor-pointer items-center text-[13px] text-accent narrow:h-11"
                 onClick={() => {
                   setOpen(false)
-                  useLibraryStore.getState().set({ catalogOpen: 'colors' })
+                  useLibraryStore.getState().set({ settings: 'colors' })
                 }}
               >
                 Redigera färglistan…
@@ -219,7 +219,7 @@ export function PaintField({ instanceId, def }: { instanceId: string; def: PartD
 
 /**
  * En egen färg för delen: färgväljare och kod. Standardfärgerna ändras inte
- * här, bara under Material och färger.
+ * här, bara under Färger i Inställningar.
  */
 function CustomColor({
   initial,

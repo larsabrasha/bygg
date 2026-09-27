@@ -32,3 +32,9 @@ export const RealisticCube = createLucideIcon('realistic-cube', [
   path('grain-top', 'M7.5 6.5c2-.8 5.5.8 8.5 0', { strokeWidth: '1' }),
   ...edges,
 ])
+
+/** Material: en bräda med fibrer, som i den realistiska kuben. Lucide har ingen ikon för trä. */
+export const Plank = createLucideIcon('plank', [
+  ['rect', { x: '2', y: '7', width: '20', height: '10', rx: '2', key: 'board' }],
+  path('grain', 'M5.5 11c3-1.2 6 1.2 9 0 1.5-.6 2.8-.4 4 0M5.5 14c2.5-1 5.5 1 8 0', { strokeWidth: '1' }),
+])

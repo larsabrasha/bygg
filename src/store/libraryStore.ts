@@ -1,5 +1,11 @@
 import { create, type StoreApi } from 'zustand'
 
+/**
+ * En sida i Inställningar. Menu: öppnade från kugghjulet, utan en bestämd sida; på smal skärm
+ * syns listan över sidorna, på bred Allmänt bredvid den.
+ */
+export type SettingsPage = 'menu' | 'general' | 'materials' | 'colors' | 'about'
+
 export type SyncStatus = 'starting' | 'local-only' | 'syncing' | 'synced' | 'offline' | 'error' | 'logged-out' | 'guest'
 
 export interface ModelListItem {
@@ -35,10 +41,8 @@ interface LibrarySnapshot {
   notices: Notice[]
   /** Modellen som öppnas, tills 3D-vyn har ritat den (se OpenWatcher). */
   opening: { id: string; name: string } | null
-  /** Sidan Material och färger är öppen, och vad som ska synas först. */
-  catalogOpen: 'materials' | 'colors' | null
-  /** Rutan Om Bygg är öppen. */
-  aboutOpen: boolean
+  /** Inställningar är öppna, och på vilken sida (se SettingsSheet). */
+  settings: SettingsPage | null
 }
 
 interface LibraryState extends LibrarySnapshot {
@@ -52,8 +56,7 @@ const previous = import.meta.hot?.data.libraryStore as StoreApi<LibraryState> | 
 const initial: LibrarySnapshot = previous
   ? (({ models, thumbs, screen, pendingDelete, currentId, currentName, currentBase, status, error, notices }) => ({
       opening: null,
-      catalogOpen: null,
-      aboutOpen: false,
+      settings: null,
       models,
       thumbs: thumbs ?? {},
       screen: screen ?? 'model',
@@ -77,8 +80,7 @@ const initial: LibrarySnapshot = previous
       error: null,
       notices: [],
       opening: null,
-      catalogOpen: null,
-      aboutOpen: false,
+      settings: null,
     }
 
 let noticeSeq = 0

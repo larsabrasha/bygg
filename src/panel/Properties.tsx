@@ -24,7 +24,7 @@ import { numberFormat } from '../model/numberFormat'
 
 const fmt = numberFormat(1)
 
-/** Sista raden i materialväljaren: öppnar Material och färger i stället för att välja. */
+/** Sista raden i materialväljaren: öppnar Material i Inställningar i stället för att välja. */
 const EDIT_MATERIALS = '\u0000ändra'
 
 /** Axelns bokstav i samma färg som axelkorset och flyttpilarna. */
@@ -245,7 +245,7 @@ export function Properties() {
                     value={def.material}
                     onChange={(e) => {
                       if (e.target.value === EDIT_MATERIALS)
-                        useLibraryStore.getState().set({ catalogOpen: 'materials' })
+                        useLibraryStore.getState().set({ settings: 'materials' })
                       else updatePart(body.id, { material: e.target.value })
                     }}
                   >

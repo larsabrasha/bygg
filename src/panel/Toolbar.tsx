@@ -1,5 +1,6 @@
-import { DraftingCompass, PanelRightClose, PanelRightOpen } from 'lucide-react'
+import { DraftingCompass, PanelRightClose, PanelRightOpen, Settings } from 'lucide-react'
 import { useBodies } from '../store/documentStore'
+import { useLibraryStore } from '../store/libraryStore'
 import { useViewStore } from '../store/viewStore'
 import { RedoButton, UndoButton } from './HistoryButtons'
 import { ModelTitle } from './ModelTitle'
@@ -36,9 +37,22 @@ export function Toolbar() {
         <UndoButton />
         <RedoButton />
       </div>
-      {/* Synkstatus (bara när något är fel), Ritning och Dela, och detaljpanelen längst till höger, med luft emellan. */}
+      {/*
+        Synkstatus (bara när något är fel), Inställningar (samma som i startvyn, så att temat går att byta
+        utan att lämna modellen), Ritning och Dela, och detaljpanelen längst till höger, med luft emellan.
+      */}
       <div className="ml-auto flex shrink-0 items-center gap-4 narrow:gap-2">
         <SyncBadge withLabel={false} />
+        {/* Gäller appen, inte modellen: en egen grupp, med luft till Ritning och Dela. */}
+        <Tip label="Inställningar">
+          <button
+            className={iconButton}
+            aria-label="Inställningar"
+            onClick={() => useLibraryStore.getState().set({ settings: 'menu' })}
+          >
+            <Settings {...ICON} />
+          </button>
+        </Tip>
         <div className="flex items-center gap-1">
           <DrawingButton />
           <ShareMenu buttonClass={iconButton} />

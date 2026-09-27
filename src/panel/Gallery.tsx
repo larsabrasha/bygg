@@ -2,14 +2,14 @@ import {
   Box,
   Copy,
   Ellipsis,
-  FolderOpen,
   LoaderCircle,
   LogIn,
+  Import,
   Info,
   LogOut,
-  Palette,
   Pencil,
   Plus,
+  Settings,
   Trash2,
   X,
 } from 'lucide-react'
@@ -260,7 +260,7 @@ function ImportButton() {
     <>
       <Tip label="Öppna en modellfil">
         <button className={secondaryButton} aria-label="Importera" onClick={() => input.current?.click()}>
-          <FolderOpen size={18} aria-hidden />
+          <Import size={18} aria-hidden />
           <span className="narrow:hidden">Importera</span>
         </button>
       </Tip>
@@ -303,14 +303,13 @@ export function Gallery() {
           <SyncBadge />
         </div>
         <LogoutButton />
-        <Tip label="Egna material och standardfärger">
+        <Tip label="Inställningar">
           <button
-            className={secondaryButton}
-            aria-label="Material och färger"
-            onClick={() => useLibraryStore.getState().set({ catalogOpen: 'materials' })}
+            className={ghostButton}
+            aria-label="Inställningar"
+            onClick={() => useLibraryStore.getState().set({ settings: 'menu' })}
           >
-            <Palette size={18} aria-hidden />
-            <span className="narrow:hidden">Material och färger</span>
+            <Settings size={18} aria-hidden />
           </button>
         </Tip>
         <ImportButton />
@@ -331,7 +330,7 @@ export function Gallery() {
         <footer className="mt-10 flex justify-center">
           <button
             className={`${ghostButton} text-muted`}
-            onClick={() => useLibraryStore.getState().set({ aboutOpen: true })}
+            onClick={() => useLibraryStore.getState().set({ settings: 'about' })}
           >
             <Info size={16} aria-hidden />
             Om Bygg
