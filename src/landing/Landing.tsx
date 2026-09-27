@@ -382,6 +382,54 @@ function Explode() {
   )
 }
 
+/** Bilderna av appen (npm run appshots), i ljust och mörkt tema. */
+const APP = import.meta.glob<string>('./app/*.webp', { eager: true, query: '?url', import: 'default' })
+
+function AppShot({ name, alt, className }: { name: 'dator' | 'mobil'; alt: string; className: string }) {
+  const light = APP[`./app/${name}-ljus.webp`]
+  const dark = APP[`./app/${name}-mork.webp`]
+  if (!light || !dark) return null
+  return (
+    <picture>
+      <source srcSet={dark} media="(prefers-color-scheme: dark)" />
+      <img src={light} alt={alt} loading="lazy" className={className} />
+    </picture>
+  )
+}
+
+/** Hur appen ser ut, på datorn och i mobilen: bordet ovanför, med en bräda vald. */
+function AppView() {
+  return (
+    <section className="mx-auto max-w-6xl px-6 py-24 max-[899px]:py-16">
+      <Reveal className="mb-14 max-w-[640px] max-[899px]:mb-10">
+        <Eyebrow>Appen</Eyebrow>
+        <h2 className="text-[clamp(32px,4.4vw,54px)] leading-[1.02] font-semibold tracking-[-0.03em] text-balance">
+          Samma app på datorn <Wood>och i mobilen.</Wood>
+        </h2>
+        <p className="mt-6 max-w-[480px] text-[17px] leading-relaxed text-muted text-pretty">
+          Välj en del och dra i pilen, eller skriv måttet. På datorn står egenskaperna bredvid, i mobilen i ett blad som
+          du drar upp.
+        </p>
+      </Reveal>
+      <Reveal delay={120}>
+        {/* Mobilen överlappar datorn nere till höger; utrymmet för den står som marginal. */}
+        <div className="relative pr-[10%] pb-[10%] max-[560px]:pr-[22%] max-[560px]:pb-[22%]">
+          <AppShot
+            name="dator"
+            alt="Bygg på datorn: bordet i ek med en bräda i skivan vald, en pil att dra i, måttrutan och egenskaperna i en panel till höger."
+            className="w-full rounded-xl shadow-[0_30px_80px_-30px_rgba(40,25,10,0.5),0_0_0_1px_rgba(0,0,0,0.06)]"
+          />
+          <AppShot
+            name="mobil"
+            alt="Bygg i mobilen: samma bord med brädan vald, verktygen längs kanten och bladet med egenskaperna längst ner."
+            className="absolute right-0 bottom-0 w-[23%] rounded-[2rem] border-[6px] border-[#1c1a18] shadow-[0_30px_60px_-20px_rgba(40,25,10,0.6)] max-[560px]:w-[32%] max-[560px]:rounded-[1.4rem] max-[560px]:border-4"
+          />
+        </div>
+      </Reveal>
+    </section>
+  )
+}
+
 function CutListCard() {
   const rows = bordCutList.rows
   return (
@@ -724,6 +772,7 @@ export function Landing({ openApp = false }: { openApp?: boolean }) {
         <main>
           <Hero />
           <Explode />
+          <AppView />
           <CutList />
           <CutPlan />
           <Drawing />
