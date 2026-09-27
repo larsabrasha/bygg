@@ -1,16 +1,13 @@
-import { Download } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { buildCutList, groupByMaterial, type CutListRow } from '../model/cutlist'
 import { compactNames } from '../model/cutlistExport'
 import { numberFormat } from '../model/numberFormat'
 import { materialColor } from '../scene/colors'
 import { useBodies, useDocumentStore } from '../store/documentStore'
-import { useLibraryStore } from '../store/libraryStore'
-import { downloadCutListCsv } from './cutlistActions'
 import { EmptyState } from './EmptyState'
 import { CutPlanView } from './CutPlanView'
 import { CutListPicture } from './pictures'
-import { groupTitle, secondaryButton, sectionTitle } from './ui'
+import { groupTitle, sectionTitle } from './ui'
 
 const num = numberFormat(1, true)
 const volume = numberFormat(4, true)
@@ -28,7 +25,6 @@ export function CutList() {
   const bodies = useBodies()
   const cutList = useMemo(() => buildCutList(bodies), [bodies])
   const groups = useMemo(() => groupByMaterial(cutList.rows), [cutList])
-  const modelName = useLibraryStore((s) => s.currentName)
   const [view, setView] = useState<'list' | 'plan'>('list')
 
   return (
@@ -41,12 +37,6 @@ export function CutList() {
         </EmptyState>
       ) : (
         <div className="flex flex-col gap-5">
-          <dl className="grid grid-cols-3 gap-2">
-            <Stat label="Delar" value={String(cutList.totalCount)} />
-            <Stat label="Olika mått" value={String(cutList.rows.length)} />
-            <Stat label="Volym" value={volume.format(cutList.totalVolumeM3)} unit="m³" />
-          </dl>
-
           <div className="flex rounded-lg bg-button p-0.5" role="group" aria-label="Visa">
             {(
               [
@@ -95,32 +85,16 @@ export function CutList() {
               </div>
             ))}
 
+          {/* Siffrorna för hela listan står längst ner, bleka: bra att veta, men inget man planerar efter. */}
           {view === 'list' && (
-            <div className="flex flex-col gap-3">
-              <p className="text-xs text-faint">Mått i mm. L längs fibern, T tjocklek.</p>
-              <div className="flex flex-wrap gap-2">
-                <button className={secondaryButton} onClick={() => downloadCutListCsv(cutList, modelName)}>
-                  <Download size={16} strokeWidth={1.75} aria-hidden />
-                  Ladda ner CSV
-                </button>
-              </div>
-            </div>
+            <p className="text-xs text-faint tabular-nums">
+              {cutList.totalCount} {cutList.totalCount === 1 ? 'del' : 'delar'} · {cutList.rows.length} olika mått ·{' '}
+              {volume.format(cutList.totalVolumeM3)} m³. Mått i mm: L längs fibern, T tjocklek.
+            </p>
           )}
         </div>
       )}
     </section>
-  )
-}
-
-function Stat({ label, value, unit }: { label: string; value: string; unit?: string }) {
-  return (
-    <div className="flex min-w-0 flex-col gap-0.5 rounded-lg bg-hover px-3 py-2">
-      <dt className="text-xs text-muted">{label}</dt>
-      <dd className="truncate text-[17px] font-semibold tabular-nums">
-        {value}
-        {unit && <span className="ml-0.5 text-xs font-normal text-muted">{unit}</span>}
-      </dd>
-    </div>
   )
 }
 

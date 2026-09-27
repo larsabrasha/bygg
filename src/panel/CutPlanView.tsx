@@ -1,4 +1,4 @@
-import { Plus, RotateCcw, X } from 'lucide-react'
+import { ChevronDown, Plus, RotateCcw, SlidersHorizontal, X } from 'lucide-react'
 import { useMemo, useRef, useState } from 'react'
 import {
   buildCutPlan,
@@ -73,36 +73,44 @@ export function CutPlanView({ bodies }: { bodies: readonly Body[] }) {
 
   return (
     <div className="flex flex-col gap-6">
-      {purchases.length > 0 && (
-        <div className="flex flex-col gap-1.5 rounded-lg bg-hover px-3 py-2.5">
-          <h3 className={groupTitle}>Att köpa</h3>
-          <ul className="flex flex-col gap-1 text-[13px]">
-            {purchases.map((p) => (
-              <li key={p.key} className="flex items-baseline gap-2">
-                <span
-                  className="size-2.5 shrink-0 translate-y-px self-start rounded-[3px] ring-1 ring-black/15 ring-inset"
-                  style={{ background: materialColor(p.material), marginTop: 3 }}
-                  aria-hidden
-                />
-                <span className="min-w-0 flex-1 tabular-nums">
-                  {p.text}
-                  {/* Köps tjockare än delarna ritats. */}
-                  {p.note && <span className="block text-xs text-muted">{p.note}</span>}
-                </span>
-                {p.length && (
-                  <span className="shrink-0 text-xs whitespace-nowrap text-muted tabular-nums">{p.length}</span>
-                )}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
+      {/* Överblicken: det man ska köpa och sågen, som två kort tätt ihop. */}
+      <div className="flex flex-col gap-3">
+        {purchases.length > 0 && (
+          <div className="flex flex-col gap-1.5 rounded-lg bg-hover px-3 py-2.5">
+            <h3 className={groupTitle}>Att köpa</h3>
+            <ul className="flex flex-col gap-1 text-[13px]">
+              {purchases.map((p) => (
+                <li key={p.key} className="flex items-baseline gap-2">
+                  <span
+                    className="size-2.5 shrink-0 translate-y-px self-start rounded-[3px] ring-1 ring-black/15 ring-inset"
+                    style={{ background: materialColor(p.material), marginTop: 3 }}
+                    aria-hidden
+                  />
+                  <span className="min-w-0 flex-1 tabular-nums">
+                    {p.text}
+                    {/* Köps tjockare än delarna ritats. */}
+                    {p.note && <span className="block text-xs text-muted">{p.note}</span>}
+                  </span>
+                  {p.length && (
+                    <span className="shrink-0 text-xs whitespace-nowrap text-muted tabular-nums">{p.length}</span>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
 
-      <SawOptions kerf={plan.kerf} allowance={plan.lengthAllowance} />
+        <SawOptions kerf={plan.kerf} allowance={plan.lengthAllowance} />
+      </div>
 
-      {plan.groups.map((g) => (
-        <GroupView key={g.key} group={g} allowance={plan.lengthAllowance} />
-      ))}
+      {/* Luft och en tunn linje mellan grupperna, tätt inom dem: då syns vad som hör ihop. */}
+      <div className="flex flex-col divide-y divide-line">
+        {plan.groups.map((g) => (
+          <div key={g.key} className="py-8 first:pt-4">
+            <GroupView group={g} allowance={plan.lengthAllowance} />
+          </div>
+        ))}
+      </div>
 
       <p className="text-xs text-faint">
         Fibern går längs brädan. Det streckade sågas bort. Tryck på en del för att se vilken det är.
@@ -111,7 +119,7 @@ export function CutPlanView({ bodies }: { bodies: readonly Body[] }) {
   )
 }
 
-/** Sågbladet och kapmånen: en rad, och fälten när man trycker på Ändra. */
+/** Sågbladet och kapmånen: ett kort som öppnas med ett tryck. */
 function SawOptions({ kerf, allowance }: { kerf: number; allowance: number }) {
   const setOptions = useDocumentStore((s) => s.setStockOptions)
   const [editing, setEditing] = useState(false)
@@ -131,18 +139,31 @@ function SawOptions({ kerf, allowance }: { kerf: number; allowance: number }) {
       />
     </label>
   )
+  // Ett kort som inköpslistan, med ikon, rubrik och pil: inställningen ska synas, inte bara vara en
+  // blek rad. Hela kortet öppnar fälten.
   return (
-    <div className="flex flex-col gap-2">
-      <div className="flex items-center gap-2">
-        <span className="min-w-0 flex-1 px-1.5 text-xs text-muted tabular-nums">
-          Sågblad {num.format(kerf)} mm · {allowance > 0 ? `kapmån ${num.format(allowance)} mm` : 'ingen kapmån'}
+    <div className="rounded-lg bg-hover">
+      <button
+        className="flex w-full cursor-pointer items-center gap-3 px-3 py-2.5 text-left"
+        aria-expanded={editing}
+        onClick={() => setEditing(!editing)}
+      >
+        <SlidersHorizontal size={18} strokeWidth={1.75} className="shrink-0 text-muted" aria-hidden />
+        <span className="min-w-0 flex-1">
+          <span className="block text-[13px] font-medium">Sågblad och kapmån</span>
+          <span className="block text-xs text-muted tabular-nums">
+            Blad {num.format(kerf)} mm · {allowance > 0 ? `kapmån ${num.format(allowance)} mm` : 'ingen kapmån'}
+          </span>
         </span>
-        <button className={ghostButton} aria-expanded={editing} onClick={() => setEditing(!editing)}>
-          {editing ? 'Klar' : 'Ändra'}
-        </button>
-      </div>
+        <ChevronDown
+          size={18}
+          strokeWidth={1.75}
+          className={`shrink-0 text-muted transition-transform ${editing ? 'rotate-180' : ''}`}
+          aria-hidden
+        />
+      </button>
       {editing && (
-        <div className="grid grid-cols-2 gap-2">
+        <div className="grid grid-cols-2 gap-2 px-3 pb-3">
           {field('Sågblad', kerf, 'kerf')}
           {field('Kapmån på längden', allowance, 'lengthAllowance')}
         </div>
@@ -161,33 +182,37 @@ function GroupView({ group: g, allowance }: { group: CutPlanGroup; allowance: nu
   const several = g.stocks.length > 1
 
   return (
-    <div className="flex flex-col gap-3">
-      <div className="flex items-center gap-2 px-1.5">
-        <span
-          className="size-3 shrink-0 rounded-[3px] ring-1 ring-black/15 ring-inset"
-          style={{ background: materialColor(g.material) }}
-          aria-hidden
-        />
-        <h3 className="text-[13px] font-semibold">
-          {capitalize(g.material)} {num.format(g.thickness)} mm
-        </h3>
-        <span className="ml-auto text-xs text-muted tabular-nums">
-          {groupCount(g)}
-          {g.stocks.some((l) => l.boards.length > 0) && ` · ${percent.format(g.waste)} spill`}
-        </span>
-      </div>
-
-      <div className="flex items-center gap-2">
-        <ul className="min-w-0 flex-1 px-1.5 text-xs text-muted tabular-nums">
+    <div className="flex flex-col gap-5">
+      {/* Rubriken och raderna under den hör ihop: tätt, och luft först före brädorna. */}
+      <div className="flex flex-col gap-1 px-1.5">
+        <div className="flex items-center gap-2">
+          <span
+            className="size-3 shrink-0 rounded-[3px] ring-1 ring-black/15 ring-inset"
+            style={{ background: materialColor(g.material) }}
+            aria-hidden
+          />
+          <h3 className="text-sm font-semibold">
+            {capitalize(g.material)} {num.format(g.thickness)} mm
+          </h3>
+          <button
+            className={`${ghostButton} -my-2 ml-auto`}
+            aria-expanded={editing}
+            onClick={() => setEditing(!editing)}
+          >
+            {editing ? 'Klar' : 'Ändra'}
+          </button>
+        </div>
+        <ul className="text-xs text-muted tabular-nums">
+          <li className="text-ink">
+            {groupCount(g)}
+            {g.stocks.some((l) => l.boards.length > 0) && ` · ${percent.format(g.waste)} spill`}
+          </li>
           {g.stocks.map((l, i) => (
             <li key={i}>{stockSummary(l, g.sheet)}</li>
           ))}
           {/* Standardmåtten är en gissning; det ska synas att de går att ändra till det man köper. */}
           {g.isDefault && <li className="text-faint">Förslag. Ändra till det du köper.</li>}
         </ul>
-        <button className={ghostButton} aria-expanded={editing} onClick={() => setEditing(!editing)}>
-          {editing ? 'Klar' : 'Ändra'}
-        </button>
       </div>
 
       {editing && (
@@ -235,18 +260,20 @@ function GroupView({ group: g, allowance }: { group: CutPlanGroup; allowance: nu
         </div>
       )}
 
-      {g.stocks.flatMap((l, si) =>
-        l.boards.map((pieces, i) => {
-          const unit = capitalize(stockNoun(l.panel, 1))
-          // Med flera mått står bredden efter, så att man ser vilket mått brädan eller skivan är.
-          const label = `${unit} ${i + 1}${several ? ` · ${num.format(l.stock.width)} bred` : ''}`
-          return (
-            <div key={`${si}-${i}`} className="flex flex-col gap-1">
-              <BoardDrawing stock={l.stock} sheet={g.sheet} pieces={pieces} material={g.material} label={label} />
-            </div>
-          )
-        }),
-      )}
+      <div className="flex flex-col gap-4">
+        {g.stocks.flatMap((l, si) =>
+          l.boards.map((pieces, i) => {
+            const unit = capitalize(stockNoun(l.panel, 1))
+            // Med flera mått står bredden efter, så att man ser vilket mått brädan eller skivan är.
+            const label = `${unit} ${i + 1}${several ? ` · ${num.format(l.stock.width)} bred` : ''}`
+            return (
+              <div key={`${si}-${i}`} className="flex flex-col gap-1">
+                <BoardDrawing stock={l.stock} sheet={g.sheet} pieces={pieces} material={g.material} label={label} />
+              </div>
+            )
+          }),
+        )}
+      </div>
     </div>
   )
 }
@@ -373,7 +400,9 @@ function BoardDrawing({
   const ky = height / stock.width
   // Hur mycket bredden är förstorad; 1 när brädan eller skivan står i rätt proportioner.
   const stretch = width > 0 ? ky / kx : 1
-  const fill = materialColor(material)
+  // Träfärgen tonad mot panelen: en antydan av träslaget, och texten (temats färg) går att läsa
+  // i både ljust och mörkt tema. Den riktiga färgen står i rutan vid gruppens rubrik.
+  const fill = `color-mix(in srgb, ${materialColor(material)} 40%, var(--color-panel))`
 
   return (
     <div ref={ref} className="flex w-full flex-col gap-1">
@@ -420,7 +449,7 @@ function BoardDrawing({
                   y={y}
                   width={Math.max(w, 1)}
                   height={Math.max(h, 1)}
-                  fill={fill}
+                  style={{ fill }}
                   className={selected ? 'stroke-accent' : 'stroke-black/25'}
                   strokeWidth={selected ? 2 : 0.75}
                 />
@@ -431,8 +460,7 @@ function BoardDrawing({
                     textAnchor="middle"
                     dominantBaseline="central"
                     fontSize={11}
-                    fill="#2a2724"
-                    className="pointer-events-none select-none"
+                    className="pointer-events-none fill-ink select-none"
                   >
                     {p.name}
                   </text>
