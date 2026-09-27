@@ -278,10 +278,13 @@ const STEPS = [
  * Nattduksbordet går isär när avsnittet kommer in i bild, och vrids sakta medan man läser.
  * Sidan scrollar som vanligt; ingen scroll går åt till att bara driva animationen. Stegen
  * står bredvid som en vanlig lista. På smal skärm står de under, och bilden stannar under
- * sidhuvudet medan de scrollar förbi, så att möbeln syns hela tiden.
+ * sidhuvudet medan de scrollar förbi, så att möbeln syns hela tiden (inte på låga skärmar,
+ * som en liggande telefon: där scrollar bilden med).
  */
 function Explode() {
   const wide = useMedia('(min-width: 900px)')
+  // Bilden stannar bara på smal skärm som är hög nog: liggande telefon har inte plats för både bild och text.
+  const sticky = useMedia('(max-width: 899px) and (min-height: 500px)')
   const section = useRef<HTMLElement>(null)
   const text = useRef<HTMLDivElement>(null)
   const stage = useRef<HTMLDivElement>(null)
@@ -297,7 +300,7 @@ function Explode() {
       const clamp = (x: number) => Math.min(1, Math.max(0, x))
       let apart: number
       let turn: number
-      if (wide) {
+      if (!sticky) {
         // Hur långt avsnittets överkant har kommit upp från skärmens underkant, i pixlar.
         const entered = innerHeight - r.top
         // Ihop när avsnittet kommer in, helt isär när överkanten är en fjärdedel från toppen.
@@ -326,7 +329,7 @@ function Explode() {
       removeEventListener('resize', on)
       cancelAnimationFrame(frame)
     }
-  }, [wide])
+  }, [sticky])
 
   return (
     <section
@@ -357,7 +360,7 @@ function Explode() {
       {/* Smal skärm: stannar under sidhuvudet (64 px), med bakgrund så att texten glider in under den. */}
       <div
         ref={stage}
-        className="h-[min(78svh,720px)] min-h-[440px] max-[899px]:sticky max-[899px]:top-[calc(env(safe-area-inset-top)+64px)] max-[899px]:z-10 max-[899px]:-mx-6 max-[899px]:h-[min(38svh,calc(100vw-48px))] max-[899px]:min-h-[200px] max-[899px]:bg-studio max-[899px]:px-6"
+        className="h-[min(78svh,720px)] min-h-[440px] [@media(max-width:899px)_and_(min-height:500px)]:sticky [@media(max-width:899px)_and_(min-height:500px)]:top-[calc(env(safe-area-inset-top)+64px)] max-[899px]:z-10 max-[899px]:-mx-6 max-[899px]:h-[min(38svh,calc(100vw-48px))] max-[899px]:min-h-[200px] max-[899px]:bg-studio max-[899px]:px-6"
       >
         <Stage
           view={nattduksbordView}
@@ -372,7 +375,7 @@ function Explode() {
         />
         <div
           aria-hidden
-          className="pointer-events-none absolute inset-x-0 top-full h-6 bg-linear-to-b from-studio to-transparent min-[900px]:hidden"
+          className="pointer-events-none absolute inset-x-0 top-full h-6 bg-linear-to-b from-studio to-transparent min-[900px]:hidden [@media(max-height:499px)]:hidden"
         />
       </div>
     </section>
