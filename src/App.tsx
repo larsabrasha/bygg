@@ -1,3 +1,4 @@
+import { AboutSheet } from './panel/AboutSheet'
 import { CatalogSheet } from './panel/CatalogSheet'
 import { CombineBar } from './panel/CombineBar'
 import { Gallery } from './panel/Gallery'
@@ -84,6 +85,7 @@ export function App() {
       <Drawing />
       {/* Material och färger öppnas från startvyn och från Egenskaper, och ligger över båda. */}
       <CatalogSheet />
+      <AboutSheet />
     </TipProvider>
   )
 }

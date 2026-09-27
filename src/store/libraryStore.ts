@@ -37,6 +37,8 @@ interface LibrarySnapshot {
   opening: { id: string; name: string } | null
   /** Sidan Material och färger är öppen, och vad som ska synas först. */
   catalogOpen: 'materials' | 'colors' | null
+  /** Rutan Om Bygg är öppen. */
+  aboutOpen: boolean
 }
 
 interface LibraryState extends LibrarySnapshot {
@@ -51,6 +53,7 @@ const initial: LibrarySnapshot = previous
   ? (({ models, thumbs, screen, pendingDelete, currentId, currentName, currentBase, status, error, notices }) => ({
       opening: null,
       catalogOpen: null,
+      aboutOpen: false,
       models,
       thumbs: thumbs ?? {},
       screen: screen ?? 'model',
@@ -75,6 +78,7 @@ const initial: LibrarySnapshot = previous
       notices: [],
       opening: null,
       catalogOpen: null,
+      aboutOpen: false,
     }
 
 let noticeSeq = 0
