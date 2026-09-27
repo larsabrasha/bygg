@@ -28,7 +28,9 @@ function page(c: Context, user: User, tokens: TokenInfo[], created?: string) {
     : ''
   return c.html(
     `<!doctype html><html lang="sv"><meta charset="utf-8"><meta name="viewport" content="width=device-width">` +
-      `<meta name="referrer" content="no-referrer"><title>Bygg – nycklar för CLI</title>` +
+      // same-origin, inte no-referrer: med no-referrer skickar webbläsaren Origin: null när formuläret
+      // postas, och origin-kontrollen i app.ts säger nej. Länkar ut från sidan får ändå ingen referer.
+      `<meta name="referrer" content="same-origin"><title>Bygg – nycklar för CLI</title>` +
       `<style>body{font-family:system-ui;max-width:560px;margin:0 auto;padding:24px 16px;line-height:1.4}` +
       `ul{padding:0;list-style:none}li{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:8px 0;border-top:1px solid #ddd}` +
       `button{font:inherit;border:0;border-radius:8px;padding:8px 14px;background:#e9e6df;cursor:pointer}` +

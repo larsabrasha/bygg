@@ -103,6 +103,12 @@ describe('nycklar', () => {
     const again = await (await app.request('/auth/cli')).text()
     expect(again).not.toMatch(/value="bygg_/)
   })
+
+  it('formulären skickar sin origin, så att origin-kontrollen släpper igenom dem', async () => {
+    // Med no-referrer skickar webbläsaren Origin: null för POST, och då blir svaret "Fel origin".
+    const html = await (await app.request('/auth/cli')).text()
+    expect(html).toContain('<meta name="referrer" content="same-origin">')
+  })
 })
 
 describe('takt för nycklar', () => {
