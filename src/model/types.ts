@@ -188,7 +188,5 @@ export interface Body {
 export type Face = 'u+' | 'u-' | 'v+' | 'v-' | 'n+' | 'n-'
 export const FACES: readonly Face[] = ['u+', 'u-', 'v+', 'v-', 'n+', 'n-']
 
-export const MATERIALS = ['furu', 'gran', 'ek', 'björk', 'ask', 'plywood'] as const
-
 /** Materialet en ny del får. */
 export const DEFAULT_MATERIAL = 'furu'

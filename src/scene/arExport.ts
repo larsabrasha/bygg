@@ -15,13 +15,14 @@ import {
 import { USDZExporter } from 'three/examples/jsm/exporters/USDZExporter.js'
 import { bodyExtents } from '../model/geometry'
 import type { Body } from '../model/types'
+import { materialSpec } from '../model/materials'
 import { materialColor } from './colors'
 import { loadManifold, solidGeometry } from './csg'
 import { cylinderGeometry } from './cylinder'
 import { DARKER } from './endGrain'
 import { frameQuaternion } from './frameTransform'
 import { grainUvs, hash01 } from './grainUv'
-import { loadWood, woodTone, type Wood } from './woodTexture'
+import { hasWoodTexture, loadWood, woodTone, type Wood } from './woodTexture'
 
 /** Appen ritar i millimeter, USDZ-filen är i meter. */
 const MM_TO_M = 0.001
@@ -39,7 +40,7 @@ export interface ArAssets {
 }
 
 export async function loadArAssets(bodies: readonly Body[]): Promise<ArAssets> {
-  const materials = [...new Set(bodies.map((b) => b.material))]
+  const materials = [...new Set(bodies.map((b) => b.material))].filter(hasWoodTexture)
   const [manifold, woods] = await Promise.all([
     bodies.some((b) => b.tools) ? loadManifold() : null,
     Promise.all(materials.map(async (m) => [m, await loadWood(m)] as const)),
@@ -135,7 +136,13 @@ export function buildArScene(bodies: readonly Body[], { manifold, woods }: ArAss
     } else {
       let m = flat.get(b.material)
       if (!m) {
-        m = new MeshStandardMaterial({ name: b.material, color: materialColor(b.material), roughness: 0.8 })
+        const { opacity } = materialSpec(b.material)
+        m = new MeshStandardMaterial({
+          name: b.material,
+          color: materialColor(b.material),
+          roughness: opacity ? 0.05 : 0.8,
+          ...(opacity && { transparent: true, opacity }),
+        })
         flat.set(b.material, m)
       }
       material = m

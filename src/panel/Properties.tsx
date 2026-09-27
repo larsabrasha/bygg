@@ -4,7 +4,8 @@ import { AXES, extent, widthAxis } from '../model/partAxes'
 import { anglesOf, restOf } from '../model/orientation'
 import { minCorner, WORLD_AXES } from '../model/placement'
 import { instanceCounts, resolveBodies } from '../model/resolve'
-import { MATERIALS, type Axis, type Body, type Instance, type PartDef } from '../model/types'
+import { MATERIAL_GROUPS, MATERIAL_SPECS, materialSpec } from '../model/materials'
+import type { Axis, Body, Instance, PartDef } from '../model/types'
 import { AXIS_COLORS } from '../scene/colors'
 import { useDocumentStore } from '../store/documentStore'
 import { beginPushPull } from '../tools/actions'
@@ -147,12 +148,15 @@ function GrainControls({ body, def }: { body: Body; def: PartDef }) {
           ))}
         </select>
       </label>
-      <Tip label="Byt längd och bredd: fibern går längs det andra måttet">
-        <button className={secondaryButton} onClick={() => updatePart(body.id, { grainAxis: widthAxis(def) })}>
-          <RotateCw size={16} strokeWidth={1.75} aria-hidden />
-          Vrid fibern 90°
-        </button>
-      </Tip>
+      {/* MDF, glas och annat utan fiber: L är bara det längsta måttet, inget att vrida. */}
+      {materialSpec(def.material).grain && (
+        <Tip label="Byt längd och bredd: fibern går längs det andra måttet">
+          <button className={secondaryButton} onClick={() => updatePart(body.id, { grainAxis: widthAxis(def) })}>
+            <RotateCw size={16} strokeWidth={1.75} aria-hidden />
+            Vrid fibern 90°
+          </button>
+        </Tip>
+      )}
     </div>
   )
 }
@@ -267,16 +271,25 @@ export function Properties() {
                 value={def.material}
                 onChange={(e) => updatePart(body.id, { material: e.target.value })}
               >
-                {MATERIALS.map((m) => (
-                  <option key={m} value={m}>
-                    {m}
-                  </option>
+                {MATERIAL_GROUPS.map((g) => (
+                  <optgroup key={g.kind} label={g.title}>
+                    {MATERIAL_SPECS.filter((m) => m.kind === g.kind).map((m) => (
+                      <option key={m.id} value={m.id}>
+                        {m.name}
+                      </option>
+                    ))}
+                  </optgroup>
                 ))}
+                {/* Ett material som inte finns i listan (från en nyare app) står kvar som det är. */}
+                {!MATERIAL_SPECS.some((m) => m.id === def.material) && (
+                  <option value={def.material}>{def.material}</option>
+                )}
               </select>
             </label>
           </Group>
 
-          <Group title="Mått" note="mm · L går längs fibern">
+          {/* Utan fiber (MDF, glas) följer fälten delens axlar; kaplistan tar det längsta som L. */}
+          <Group title="Mått" note={materialSpec(def.material).grain ? 'mm · L går längs fibern' : 'mm'}>
             <ExtentFields body={body} def={def} />
             <GrainControls body={body} def={def} />
             <p className="text-xs text-faint">

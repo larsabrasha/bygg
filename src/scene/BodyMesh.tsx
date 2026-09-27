@@ -12,6 +12,7 @@ import {
   type LineSegments,
 } from 'three'
 import { bodyExtents, type Box } from '../model/geometry'
+import { materialSpec } from '../model/materials'
 import { FACES, type Body, type Face, type Vec3 } from '../model/types'
 import { add } from '../model/vec'
 import { ACCENT, ACCENT_LIGHT, EDGE, materialColor } from './colors'
@@ -94,6 +95,8 @@ function BodyMeshImpl({
   )
 
   const color = materialColor(body.material)
+  // Glas och akryl: genomskinliga, med en blank yta.
+  const clear = materialSpec(body.material).opacity
   const wire = look === 'wireframe'
   const real = look === 'realistic' && !ghost
   // Medan texturen laddas ritas trät i sin färg.
@@ -121,7 +124,7 @@ function BodyMeshImpl({
   // Märgen för ändträet, utanför delen eller (rund del längs fibern) nära mitten,
   // och för plywood skikten på kanterna.
   const thickness = AXIS_INDEX[body.thicknessAxis]
-  const plywood = body.material === 'plywood'
+  const plywood = materialSpec(body.material).plies === true
   const endGrain = useMemo(() => {
     if (!real) return null
     geometry.computeBoundingBox()
@@ -168,15 +171,28 @@ function BodyMeshImpl({
       // Trä i det realistiska utseendet: ett tunt lager lack eller olja som glänser svagt i ljuset.
       const material = new (real ? MeshPhysicalMaterial : MeshStandardMaterial)({
         color: ghost ? ACCENT : wood ? tone : color,
-        ...(real && { roughness: 0.62, metalness: 0, clearcoat: 0.3, clearcoatRoughness: 0.35 }),
+        ...(real &&
+          (clear
+            ? { roughness: 0.05, metalness: 0 }
+            : { roughness: 0.62, metalness: 0, clearcoat: 0.3, clearcoatRoughness: 0.35 })),
         ...(wood && { map: wood.map, normalMap: wood.normalMap }),
         emissive: lit ? ACCENT : '#000000',
         emissiveIntensity: marked ? 0.45 : lit ? 0.2 : 0,
-        transparent: preview || ghost || faded,
-        opacity: ghost ? (selected ? 0.3 : 0.15) : faded ? FADED_OPACITY : preview ? 0.8 : 1,
+        transparent: preview || ghost || faded || !!clear,
+        opacity: ghost
+          ? selected
+            ? 0.3
+            : 0.15
+          : faded
+            ? FADED_OPACITY
+            : clear
+              ? Math.max(clear, lit ? 0.45 : 0)
+              : preview
+                ? 0.8
+                : 1,
         // Ett spöke skymmer inte det bakom sig, och syns genom det framför (en tapp inne i ett ben).
-        // En genomskinlig del (isolerat) skymmer inte heller den isolerade.
-        depthWrite: !ghost && !faded,
+        // En genomskinlig del (isolerat) skymmer inte heller den isolerade, och glas inte det bakom sig.
+        depthWrite: !ghost && !faded && !clear,
         depthTest: !ghost,
       })
       if (wood && real) grainUniforms.push(withEndGrain(material, grain, plywood ? thickness : null))
@@ -187,6 +203,7 @@ function BodyMeshImpl({
     hasSolid,
     round,
     color,
+    clear,
     selected,
     highlightFace,
     preview,
@@ -209,7 +226,8 @@ function BodyMeshImpl({
 
   const edge = selected || preview ? ACCENT : sibling ? ACCENT_LIGHT : wire && scheme === 'dark' ? WIRE_DARK : EDGE
   // Trä ritas utan kanter, som ett foto; det valda och kopiorna av det har dem ändå.
-  const plainReal = real && !selected && !sibling && !preview && !faded
+  // Glas har dem alltid: utan kanter syns det knappt.
+  const plainReal = real && !clear && !selected && !sibling && !preview && !faded
 
   return (
     <group position={offset ? add(body.frame.origin, offset) : body.frame.origin} quaternion={quaternion}>
@@ -224,7 +242,7 @@ function BodyMeshImpl({
         material={solid ? materials[0] : materials}
         geometry={geometry}
         // Skuggor bara i det realistiska utseendet (se RealisticLight).
-        castShadow={real && !faded}
+        castShadow={real && !faded && !clear}
         receiveShadow={real}
         userData={
           preview || faded

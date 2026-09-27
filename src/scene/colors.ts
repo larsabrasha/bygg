@@ -1,14 +1,7 @@
-const WOOD: Record<string, string> = {
-  furu: '#e3c28f',
-  gran: '#ead7b0',
-  ek: '#b98b57',
-  björk: '#efdcb8',
-  ask: '#d9c49e',
-  plywood: '#d8b98a',
-}
+import { materialSpec } from '../model/materials'
 
 export function materialColor(material: string): string {
-  return WOOD[material] ?? '#c8a878'
+  return materialSpec(material).color
 }
 
 export const ACCENT = '#1e6fd9'

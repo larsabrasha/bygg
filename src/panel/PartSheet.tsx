@@ -2,6 +2,7 @@ import { useMemo, type ReactNode } from 'react'
 import type { CutListRow } from '../model/cutlist'
 import { compactNames } from '../model/cutlistExport'
 import { numberFormat } from '../model/numberFormat'
+import { materialTitle } from '../model/materials'
 import {
   layoutPartSheet,
   scaleLabel,
@@ -15,8 +16,6 @@ import {
 } from '../model/partSheet'
 
 const num = numberFormat(1, true)
-
-const capitalize = (s: string) => s.charAt(0).toLocaleUpperCase('sv') + s.slice(1)
 
 /** Linjebredder i mm, som på en ritning: grova för synliga kanter, fina för mått. */
 const THICK = 0.5
@@ -52,7 +51,7 @@ export function PartSheet({ pos, row, geometry, modelName, date, sheet, sheets }
       cells={[
         { dx: 0, dy: 0, w: 95, h: 12, label: 'Benämning', value: names, size: 4, bold: true },
         { dx: 95, dy: 0, w: 30, h: 12, label: 'Pos', value: String(pos), size: 6, bold: true },
-        { dx: 0, dy: 12, w: 40, h: 9, label: 'Material', value: capitalize(row.material) },
+        { dx: 0, dy: 12, w: 40, h: 9, label: 'Material', value: materialTitle(row.material) },
         { dx: 40, dy: 12, w: 25, h: 9, label: 'Antal', value: `${row.count} st` },
         {
           dx: 65,

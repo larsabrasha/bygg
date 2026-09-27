@@ -15,6 +15,7 @@ import { compactNames, compactNumbers } from '../model/cutlistExport'
 import { numberFormat } from '../model/numberFormat'
 import { SHEET } from '../model/partSheet'
 import type { DrawingLayout } from '../scene/DrawingCanvas'
+import { materialTitle } from '../model/materials'
 
 /**
  * Ritningen som PDF, byggd i webbläsaren i stället för via utskriften: varje
@@ -211,7 +212,7 @@ function drawAssembly(doc: jsPDF, input: DrawingPdfInput) {
     text(doc, num.format(row.length), cols.l, base, size, { align: 'right' })
     text(doc, num.format(row.width), cols.b, base, size, { align: 'right' })
     text(doc, num.format(row.thickness), cols.t, base, size, { align: 'right' })
-    text(doc, capitalize(row.material), cols.mat, base, size)
+    text(doc, materialTitle(row.material), cols.mat, base, size)
     y += rowH
     line(doc, rx, y, rx + rw, y, 0.15, 190)
   })
@@ -357,7 +358,7 @@ function drawCutList(doc: jsPDF, input: DrawingPdfInput) {
     if (y + groupH > bottom && groupH <= fresh) newPage()
     else if (y + 6 + captionH + headH + (rows[0]?.h ?? 0) > bottom) newPage()
     else y += 6
-    const title = capitalize(g.material)
+    const title = materialTitle(g.material)
     caption(title, `${g.count} st · ${volume.format(g.volumeM3)} m³`)
     header()
     for (const r of rows) {
@@ -482,7 +483,7 @@ function drawCutPlan(doc: jsPDF, input: DrawingPdfInput, plan: CutPlan) {
     const first = layouts[0]
     if (y + 6 + captionH + (first ? stockH + boardH(first) : 0) > bottom) newPage()
     else y += 6
-    text(doc, `${capitalize(g.material)} ${num.format(g.thickness)} mm`, mx, y + 6.5, 4.4, { bold: true })
+    text(doc, `${materialTitle(g.material)} ${num.format(g.thickness)} mm`, mx, y + 6.5, 4.4, { bold: true })
     text(doc, `${groupCount(g)} · ${Math.round(g.waste * 100)} % spill`, mx + cw, y + 6.5, 3.2, {
       align: 'right',
       gray: 34,

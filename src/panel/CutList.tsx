@@ -8,11 +8,10 @@ import { EmptyState } from './EmptyState'
 import { CutPlanView } from './CutPlanView'
 import { CutListPicture } from './pictures'
 import { groupTitle, sectionTitle } from './ui'
+import { isOrdered, materialTitle } from '../model/materials'
 
 const num = numberFormat(1, true)
 const volume = numberFormat(4, true)
-
-const capitalize = (s: string) => s.charAt(0).toLocaleUpperCase('sv') + s.slice(1)
 
 // Kolumnerna för L, B och T har fast bredd, så att måtten står i linje mellan materialen.
 const dimCol = 'w-12 text-right tabular-nums'
@@ -61,9 +60,10 @@ export function CutList() {
                     style={{ background: materialColor(g.material) }}
                     aria-hidden
                   />
-                  <h3 className="text-[13px] font-semibold">{capitalize(g.material)}</h3>
+                  <h3 className="text-[13px] font-semibold">{materialTitle(g.material)}</h3>
                   <span className="ml-auto text-xs text-muted tabular-nums">
-                    {g.count} st · {volume.format(g.volumeM3)} m³
+                    {/* Glas köps per ruta, inte per kubikmeter. */}
+                    {g.count} st · {isOrdered(g.material) ? 'beställs tillskuret' : `${volume.format(g.volumeM3)} m³`}
                   </span>
                 </div>
                 <table className="w-full border-collapse text-[13px]">

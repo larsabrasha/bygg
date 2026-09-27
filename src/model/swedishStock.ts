@@ -1,3 +1,5 @@
+import { materialSpec } from './materials'
+
 /**
  * Svenska handelsmått för virke och skivor, i mm. Kapschemat föreslår lagermått
  * härifrån, och tjockleken på virket är den närmaste standardtjockleken som
@@ -10,7 +12,7 @@
  *   hyvlad furu 22 × 95–220 hos flera bygghandlare.
  * - Limfog av furu och gran: Bauhaus sortiment (18 och 27 tjockt, 200–900 brett, 800–2 400 långt).
  * - Limfog av ek: Ceos och Svensk Trähandel (12, 20, 27, 30, 40 tjockt; bänkskivor 600–900 breda).
- * - Plywood: björkplywood 1 220 × 2 440 hos XL-Bygg, NP Nilsson m.fl.; tjocklekar 4–24.
+ * - Skivor (plywood, MDF m.fl.): se materials.
  * Sortimentet skiljer sig mellan butiker; det här är de vanligaste måtten.
  */
 
@@ -27,17 +29,8 @@ export const PANEL = {
   lengths: [800, 1200, 1800, 2000, 2400],
 }
 
-const HARDWOODS = ['ek', 'ask', 'björk']
-
 /** Limfog av furu och gran finns i 18 och 27; av ek och annat lövträ i 20, 27 och 40. */
-export const panelThicknesses = (material: string) => (HARDWOODS.includes(material) ? [20, 27, 40] : [18, 27])
-
-/** Plywood: helskiva 1 220 × 2 440. */
-export const SHEET = {
-  thicknesses: [4, 6.5, 9, 12, 15, 18, 21, 24],
-  length: 2440,
-  width: 1220,
-}
+export const panelThicknesses = (material: string) => (materialSpec(material).hardwood ? [20, 27, 40] : [18, 27])
 
 /** Den minsta standardtjocklek som räcker för delen, eller delens egen om ingen räcker. */
 export const standardThickness = (thicknesses: readonly number[], part: number) =>

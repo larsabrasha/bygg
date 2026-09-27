@@ -20,6 +20,7 @@ import { CommitField } from './CommitField'
 import { plainNumber } from './numberStep'
 import { fieldLabel, ghostButton, groupTitle, ICON, iconButton, toggleButton } from './ui'
 import { useWidth } from './useWidth'
+import { materialTitle } from '../model/materials'
 
 const num = numberFormat(1, true)
 const plain = numberFormat(1)
@@ -192,7 +193,7 @@ function GroupView({ group: g, allowance }: { group: CutPlanGroup; allowance: nu
             aria-hidden
           />
           <h3 className="text-sm font-semibold">
-            {capitalize(g.material)} {num.format(g.thickness)} mm
+            {materialTitle(g.material)} {num.format(g.thickness)} mm
           </h3>
           <button
             className={`${ghostButton} -my-2 ml-auto`}

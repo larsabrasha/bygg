@@ -1,4 +1,5 @@
 import { bodyExtents } from './box'
+import { compareMaterials, materialSpec } from './materials'
 import { partDims } from './partAxes'
 import type { Body } from './types'
 
@@ -32,7 +33,8 @@ const round01 = (n: number) => Math.round(n * 10) / 10
 
 /**
  * Kaplista: L×B×T mäts i varje dels egen riktning (L längs fibern, T tjockleken),
- * så en roterad eller stående del får samma mått som en liggande.
+ * så en roterad eller stående del får samma mått som en liggande. Material utan
+ * fiber (MDF, glas) har L som det längre av de två måtten som inte är tjockleken.
  * Identiska delar (material + mått) blir en rad med antal.
  */
 export function buildCutList(bodies: readonly Body[]): CutList {
@@ -44,8 +46,9 @@ export function buildCutList(bodies: readonly Body[]): CutList {
     if (b.tool) continue
     // Med något tillagt (en tapp) kapas ämnet större än formens låda.
     const d = partDims({ ...(b.blank ?? b), grainAxis: b.grainAxis, thicknessAxis: b.thicknessAxis })
-    const length = round01(d.length)
-    const width = round01(d.width)
+    const flip = !materialSpec(b.material).grain && d.width > d.length
+    const length = round01(flip ? d.width : d.length)
+    const width = round01(flip ? d.length : d.width)
     const thickness = round01(d.thickness)
     const [du, , dn] = bodyExtents(b)
     const round = b.shape === 'circle' && !b.blank ? { diameter: round01(du), length: round01(dn) } : undefined
@@ -78,10 +81,7 @@ export function buildCutList(bodies: readonly Body[]): CutList {
 
   const rows = [...groups.values()].sort(
     (a, b) =>
-      a.material.localeCompare(b.material, 'sv') ||
-      b.thickness - a.thickness ||
-      b.length - a.length ||
-      b.width - a.width,
+      compareMaterials(a.material, b.material) || b.thickness - a.thickness || b.length - a.length || b.width - a.width,
   )
 
   return { rows, totalCount: bodies.filter((b) => !b.tool).length, totalVolumeM3 }
