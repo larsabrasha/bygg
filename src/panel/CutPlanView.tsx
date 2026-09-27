@@ -1,13 +1,21 @@
 import { RotateCcw } from 'lucide-react'
 import { useMemo, useRef } from 'react'
-import { buildCutPlan, countSame, isPanel, type CutPlanGroup, type PlacedPiece } from '../model/cutPlan'
+import {
+  buildCutPlan,
+  countSame,
+  isPanel,
+  purchaseList,
+  stockNoun,
+  type CutPlanGroup,
+  type PlacedPiece,
+} from '../model/cutPlan'
 import { numberFormat } from '../model/numberFormat'
 import type { Body, StockSize } from '../model/types'
 import { materialColor } from '../scene/colors'
 import { useDocumentStore } from '../store/documentStore'
 import { CommitField } from './CommitField'
 import { plainNumber } from './numberStep'
-import { fieldLabel, ghostButton, toggleButton } from './ui'
+import { fieldLabel, ghostButton, groupTitle, toggleButton } from './ui'
 import { useWidth } from './useWidth'
 
 const num = numberFormat(1, true)
@@ -38,9 +46,29 @@ export function CutPlanView({ bodies }: { bodies: readonly Body[] }) {
   const stock = useDocumentStore((s) => s.doc.stock)
   const setKerf = useDocumentStore((s) => s.setKerf)
   const plan = useMemo(() => buildCutPlan(bodies, stock), [bodies, stock])
+  const purchases = useMemo(() => purchaseList(plan), [plan])
 
   return (
     <div className="flex flex-col gap-6">
+      {purchases.length > 0 && (
+        <div className="flex flex-col gap-1.5 rounded-lg bg-hover px-3 py-2.5">
+          <h3 className={groupTitle}>Att köpa</h3>
+          <ul className="flex flex-col gap-1 text-[13px]">
+            {purchases.map((p) => (
+              <li key={p.key} className="flex items-baseline gap-2">
+                <span
+                  className="size-2.5 shrink-0 self-center rounded-[3px] ring-1 ring-black/15 ring-inset"
+                  style={{ background: materialColor(p.material) }}
+                  aria-hidden
+                />
+                <span className="tabular-nums">{p.text}</span>
+                {p.length && <span className="ml-auto text-xs text-muted tabular-nums">{p.length}</span>}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       <label className={`${fieldLabel} max-w-40`}>
         Sågblad
         <CommitField
@@ -72,7 +100,7 @@ function GroupView({ group: g }: { group: CutPlanGroup }) {
   const setStockSize = useDocumentStore((s) => s.setStockSize)
   const set = (patch: Partial<StockSize>) => setStockSize(g.key, { ...g.stock, ...patch })
   const panel = isPanel(g)
-  const noun = panel ? (g.boards.length === 1 ? 'skiva' : 'skivor') : g.boards.length === 1 ? 'bräda' : 'brädor'
+  const noun = stockNoun(panel, g.boards.length)
   const unit = panel ? 'Skiva' : 'Bräda'
 
   const sizeField = (label: string, key: 'length' | 'width') => (

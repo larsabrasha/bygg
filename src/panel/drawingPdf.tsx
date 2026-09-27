@@ -1,7 +1,7 @@
 import { jsPDF } from 'jspdf'
 import type { ReactElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { countSame, isPanel, type CutPlan } from '../model/cutPlan'
+import { countSame, isPanel, purchaseList, stockNoun, type CutPlan } from '../model/cutPlan'
 import { groupByMaterial, type CutList, type CutListRow } from '../model/cutlist'
 import { compactNames, compactNumbers } from '../model/cutlistExport'
 import { numberFormat } from '../model/numberFormat'
@@ -409,6 +409,22 @@ function drawCutPlan(doc: jsPDF, input: DrawingPdfInput, plan: CutPlan) {
   )
   y += 4
 
+  // Att köpa: en rad per lagermått, med en ruta att bocka av i bygghandeln.
+  const purchases = purchaseList(plan)
+  if (purchases.length > 0) {
+    y += 6
+    text(doc, 'ATT KÖPA', mx, y + 3, 2.6, { bold: true, gray: 51 })
+    y += 5
+    for (const p of purchases) {
+      doc.setLineWidth(0.3)
+      doc.setDrawColor(0)
+      doc.rect(mx, y + 1.2, 3.4, 3.4)
+      text(doc, p.text, mx + 6, y + 4.2, 3.6)
+      if (p.length) text(doc, p.length, mx + 90, y + 4.2, 3.4, { align: 'right', gray: 34 })
+      y += 5.6
+    }
+  }
+
   const newPage = () => {
     doc.addPage('a4', 'landscape')
     y = top
@@ -428,7 +444,7 @@ function drawCutPlan(doc: jsPDF, input: DrawingPdfInput, plan: CutPlan) {
     // Rubriken står aldrig ensam längst ner: den följs av minst en bräda.
     if (y + 6 + captionH + boardH > bottom) newPage()
     else y += 6
-    const noun = panel ? (g.boards.length === 1 ? 'skiva' : 'skivor') : g.boards.length === 1 ? 'bräda' : 'brädor'
+    const noun = stockNoun(panel, g.boards.length)
     text(doc, `${capitalize(g.material)} ${num.format(g.thickness)} mm`, mx, y + 6.5, 4.4, { bold: true })
     text(
       doc,

@@ -1,4 +1,5 @@
 import { buildCutList } from './cutlist'
+import { numberFormat } from './numberFormat'
 import { fitsBin, packGuillotine, type PackItem } from './guillotine'
 import type { Body, StockSettings, StockSize } from './types'
 
@@ -15,6 +16,10 @@ const SHEET: StockSize = { length: 2440, width: 1220 }
 
 /** Köps som skiva (skivmaterial eller limfogsskiva, bredare än någon bräda) eller som bräda. */
 export const isPanel = (g: { sheet: boolean; stock: StockSize }) => g.sheet || g.stock.width > BOARD_WIDTHS.at(-1)!
+
+/** "skiva", "skivor", "bräda" eller "brädor". */
+export const stockNoun = (panel: boolean, count: number) =>
+  panel ? (count === 1 ? 'skiva' : 'skivor') : count === 1 ? 'bräda' : 'brädor'
 
 /** Nyckeln för lagermåttet: material och tjocklek (samma avrundning som kaplistan). */
 export const stockKey = (material: string, thickness: number) => `${material}|${thickness}`
@@ -139,4 +144,36 @@ export function countSame(texts: readonly string[]): string[] {
   const counts = new Map<string, number>()
   for (const t of texts) counts.set(t, (counts.get(t) ?? 0) + 1)
   return [...counts].map(([t, n]) => (n > 1 ? `${n} × ${t}` : t))
+}
+
+const mm = numberFormat(1, true)
+const meters = numberFormat(1, true)
+
+export interface Purchase {
+  key: string
+  material: string
+  /** Antal skivor eller brädor. */
+  count: number
+  /** "2 brädor ek 22 × 145 × 2400": tjocklek × bredd × längd, som virke märks. */
+  text: string
+  /** Löpmeter för brädor ("4,8 m"); saknas för skivor. */
+  length?: string
+}
+
+/** Det som ska köpas: antal skivor och brädor per material, tjocklek och lagermått. */
+export function purchaseList(plan: CutPlan): Purchase[] {
+  return plan.groups
+    .filter((g) => g.boards.length > 0)
+    .map((g) => {
+      const panel = isPanel(g)
+      const count = g.boards.length
+      const size = [g.thickness, g.stock.width, g.stock.length].map((n) => mm.format(n)).join(' × ')
+      return {
+        key: g.key,
+        material: g.material,
+        count,
+        text: `${count} ${stockNoun(panel, count)} ${g.material} ${size}`,
+        ...(!panel && { length: `${meters.format((count * g.stock.length) / 1000)} m` }),
+      }
+    })
 }

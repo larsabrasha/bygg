@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildCutPlan, defaultStock, isPanel, stockKey } from './cutPlan'
+import { buildCutPlan, defaultStock, isPanel, purchaseList, stockKey } from './cutPlan'
 import { testBody } from './testFixtures'
 import type { Body } from './types'
 
@@ -101,5 +101,29 @@ describe('isPanel', () => {
     expect(isPanel({ sheet: true, stock: { length: 2440, width: 1220 } })).toBe(true)
     expect(isPanel({ sheet: false, stock: { length: 2400, width: 195 } })).toBe(false)
     expect(isPanel({ sheet: false, stock: { length: 2400, width: 600 } })).toBe(true)
+  })
+})
+
+describe('purchaseList', () => {
+  it('ger antal och mått per lagermått, med löpmeter för brädor', () => {
+    const plan = buildCutPlan([
+      part('ben1', 1300, 45, 45),
+      part('ben2', 1300, 45, 45),
+      part('sida', 720, 560, 18, { material: 'plywood' }),
+    ])
+    // Två 1300-ben går inte på en 2400-bräda i längd, och inte bredvid varandra på en 45 bred.
+    // Tusentalsavgränsaren är ett hårt mellanslag; här jämförs den som vanligt mellanslag.
+    const plain = (s?: string) => s?.replace(/\s/g, ' ')
+    expect(purchaseList(plan).map(({ text, length }) => [plain(text), plain(length)])).toEqual([
+      ['2 brädor furu 45 × 45 × 2 400', '4,8 m'],
+      ['1 skiva plywood 18 × 1 220 × 2 440', undefined],
+    ])
+  })
+
+  it('tar inte med grupper där inget fick plats', () => {
+    const plan = buildCutPlan([part('lång', 3000, 95, 22)], {
+      sizes: { [stockKey('furu', 22)]: { length: 2400, width: 95 } },
+    })
+    expect(purchaseList(plan)).toEqual([])
   })
 })
