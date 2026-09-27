@@ -430,6 +430,10 @@ function AppView() {
   )
 }
 
+// Linjen mellan raderna, som i appens listor (listRow i panel/ui.ts): börjar där texten börjar, går ut till kanten.
+// Den ritas i cellernas bakgrund, eftersom en tabellrad inte säkert kan bära ett eget element.
+const rowLine = 'bg-linear-to-r from-line/60 to-line/60 bg-[length:100%_1px] bg-no-repeat'
+
 function CutListCard() {
   const rows = bordCutList.rows
   return (
@@ -459,11 +463,11 @@ function CutListCard() {
         <tbody>
           {rows.map((r, i) => (
             <Row key={r.key} index={i}>
-              <td className="py-2.5 pl-5 text-faint">{r.count}×</td>
-              <td className="truncate py-2.5 pr-3">
+              <td className={`py-2.5 pl-5 text-faint ${i > 0 ? `${rowLine} bg-[position:20px_0]` : ''}`}>{r.count}×</td>
+              <td className={`truncate py-2.5 pr-3 ${i > 0 ? rowLine : ''}`}>
                 {r.names.length > 2 ? r.names[0]!.replace(/ \d+$/, '') : r.names.join(', ')}
               </td>
-              <td className="py-2.5 pr-5 text-right whitespace-nowrap text-muted">
+              <td className={`py-2.5 pr-5 text-right whitespace-nowrap text-muted ${i > 0 ? rowLine : ''}`}>
                 {mm.format(r.length)} <span className="text-faint">×</span> {mm.format(r.width)}{' '}
                 <span className="text-faint">×</span> {mm.format(r.thickness)}
               </td>

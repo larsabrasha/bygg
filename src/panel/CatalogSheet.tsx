@@ -20,6 +20,8 @@ import {
   fieldLabel,
   groupTitle,
   iconAction,
+  listCard,
+  listRow,
   primaryButton,
   quietDangerButton,
   secondaryButton,
@@ -229,10 +231,8 @@ function AllHeader({ title, ids }: { title: string; ids: readonly string[] }) {
   )
 }
 
-/** Ett kort med inbyggda saker, som korten i kaplistan: fylld yta i stället för linjer mellan raderna. */
-const ShownList = ({ children }: { children: ReactNode }) => (
-  <div className="flex flex-col rounded-lg bg-hover py-1">{children}</div>
-)
+/** Ett kort med inbyggda saker, som korten i kaplistan. */
+const ShownList = ({ children }: { children: ReactNode }) => <div className={listCard}>{children}</div>
 
 /** En inbyggd sak (material eller färg) med Visas: av betyder att den inte syns i väljaren. */
 function ShownRow({
@@ -251,7 +251,7 @@ function ShownRow({
   onChange: (shown: boolean) => void
 }) {
   return (
-    <div className="flex items-center gap-2 px-3 py-0.5">
+    <div className={`${listRow} flex items-center gap-2 px-3 py-1`}>
       <Swatch color={color} round={round} />
       <span className="min-w-0 flex-1 text-[13px]">
         {name}

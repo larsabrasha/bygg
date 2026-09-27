@@ -7,7 +7,7 @@ import { useBodies, useDocumentStore } from '../store/documentStore'
 import { EmptyState } from './EmptyState'
 import { CutPlanView } from './CutPlanView'
 import { CutListPicture } from './pictures'
-import { groupTitle, sectionTitle, segment, segmentGroup } from './ui'
+import { groupTitle, listCard, sectionTitle, selectableListRow, segment, segmentGroup } from './ui'
 import { firstUpper, isOrdered, materialTitle } from '../model/materials'
 
 const num = numberFormat(1, true)
@@ -81,7 +81,7 @@ export function CutList() {
                     </span>
                   </div>
                   {/* Ett kort per material, som korten i Kapschema. Markeringen går ut i kanten; kortet rundar den. */}
-                  <div role="rowgroup" className="flex flex-col overflow-hidden rounded-lg bg-hover">
+                  <div role="rowgroup" className={listCard}>
                     {g.rows.map((row) => (
                       <Row key={row.key} row={row} />
                     ))}
@@ -112,7 +112,7 @@ function Row({ row }: { row: CutListRow }) {
     <div
       role="row"
       aria-selected={isSelected}
-      className={`${cols} cursor-pointer px-1.5 py-2 hover:bg-button aria-selected:bg-accent-soft narrow:py-3`}
+      className={`${cols} ${selectableListRow} cursor-pointer px-1.5 py-2 hover:bg-button aria-selected:bg-accent-soft narrow:py-3`}
       onClick={() => {
         const id = row.bodyIds[0]
         if (id) select({ kind: 'body', id })

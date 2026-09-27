@@ -58,3 +58,14 @@ export const iconAction = 'grid size-10 shrink-0 cursor-pointer place-items-cent
  */
 export const bottomBox =
   'absolute bottom-3 left-1/2 w-max max-w-[calc(100%-24px)] -translate-x-1/2 rounded-xl border border-line bg-panel/90 p-2 shadow-lg backdrop-blur-md narrow:left-3 narrow:max-w-[calc(100%-5rem)] narrow:translate-x-0'
+
+/**
+ * Listor är fyllda kort (listCard) med en svag linje mellan raderna (listRow), som på iOS: linjen börjar
+ * där texten börjar, 12 px in, och går ut till kanten. Runt en vald (aria-selected) eller pekad rad göms
+ * den, så att markeringen blir en hel yta; kortet rundar markeringen överst och nederst.
+ */
+export const listCard = 'flex flex-col overflow-hidden rounded-lg bg-hover'
+export const listRow =
+  'relative before:absolute before:top-0 before:right-0 before:left-3 before:h-px before:bg-line first:before:hidden'
+/** listRow för en rad som går att välja: linjen göms mot markeringen och den pekade raden. */
+export const selectableListRow = `${listRow} aria-selected:before:hidden hover:before:hidden [[aria-selected=true]+&]:before:hidden [:hover+&]:before:hidden`
