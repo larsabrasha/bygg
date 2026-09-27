@@ -118,8 +118,9 @@ export function oidcAuth(opts: OidcOptions): Auth {
   let config: Promise<oidc.Configuration> | null = null
   const getConfig = () =>
     (config ??= oidc
-      // Pocket ID anger inte hur klienten ska visa hemligheten; då gäller standarden, Basic.
-      .discovery(new URL(opts.issuer), opts.clientId, undefined, oidc.ClientSecretBasic(opts.clientSecret), {
+      // Hemligheten i formuläret, inte Basic: openid-client URL-kodar id:t i Basic-headern som standarden
+      // säger (- blir %2D), men Pocket ID avkodar det inte och hittar då inte klienten ("Record not found").
+      .discovery(new URL(opts.issuer), opts.clientId, undefined, oidc.ClientSecretPost(opts.clientSecret), {
         ...(opts.testFetch && { [oidc.customFetch]: opts.testFetch, execute: [oidc.allowInsecureRequests] }),
       })
       .catch((e: unknown) => {

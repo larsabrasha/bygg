@@ -18,7 +18,8 @@ import { UserStorages } from './storage'
 
 const ISSUER = 'http://id.test'
 const APP = 'http://bygg.test'
-const CLIENT_ID = 'bygg'
+// Som Pocket ID:s: ett UUID, med tecken som URL-kodas i en Basic-header.
+const CLIENT_ID = '4e200c4b-9123-4f26-b545-7a0850842805'
 const CLIENT_SECRET = 'hemlig'
 const MODEL_ID = '11111111-2222-4333-8444-555555555555'
 const file = serialize({ sketches: [], defs: [], instances: [], params: [] }, new Date('2026-09-25T10:00:00Z'))
@@ -46,12 +47,12 @@ idp.get('/.well-known/openid-configuration', (c) =>
 idp.get('/.well-known/jwks.json', (c) => c.json({ keys: [jwk] }))
 idp.post('/api/oidc/token', async (c) => {
   const form = new URLSearchParams(await c.req.text())
-  // Som standarden när utgivaren inte säger något: hemligheten i Authorization (Basic).
-  const basic = c.req.header('authorization') ?? ''
-  const [id, secret] = Buffer.from(basic.replace(/^Basic /, ''), 'base64')
-    .toString()
-    .split(':')
-    .map(decodeURIComponent)
+  // Som Pocket ID: id och hemlighet i formuläret, annars i Basic-headern, men där utan URL-avkodning
+  // (standarden kräver avkodning; Pocket ID gör det inte, så ett kodat id hittas inte).
+  const basic = Buffer.from((c.req.header('authorization') ?? '').replace(/^Basic /, ''), 'base64').toString()
+  const [id, secret] = form.get('client_id')
+    ? [form.get('client_id'), form.get('client_secret')]
+    : [basic.slice(0, basic.indexOf(':')), basic.slice(basic.indexOf(':') + 1)]
   if (id !== CLIENT_ID || secret !== CLIENT_SECRET) return c.json({ error: 'invalid_client' }, 401)
   const grant = codes.get(form.get('code') ?? '')
   codes.delete(form.get('code') ?? '')
