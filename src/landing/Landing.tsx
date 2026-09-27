@@ -723,7 +723,8 @@ export function Landing({ openApp = false }: { openApp?: boolean }) {
   useWebPage()
   return (
     <OpenApp value={openApp}>
-      <div className="min-h-full bg-studio text-ink">
+      {/* clip: bladen i ritningen och bunten sticker ut åt sidan; sidan ska inte bli bredare (och går inte att dra i sidled). */}
+      <div className="min-h-full overflow-x-clip bg-studio text-ink">
         <Header />
         <main>
           <Hero />

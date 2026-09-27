@@ -18,8 +18,8 @@ const OrthoRenderer = lazy(() => import('../scene/OrthoRenderer').then((m) => ({
 /** Pixlar per mm på papperet, som i ritningen. */
 const PX_PER_MM = 8
 const NEXT_MS = 4500
-/** Så länge bladet som läggs undan är ute åt sidan innan det hamnar sist. */
-const OUT_MS = 380
+/** Så länge bladet som läggs undan är på väg ut; sedan är det osynligt och kan läggas sist. */
+const OUT_MS = 520
 
 const date = new Date().toLocaleDateString('sv-SE')
 const { details, size, sheets } = bordDrawing
@@ -37,14 +37,29 @@ const PLACE = [
   'translate(3.5%, -4%) rotate(2.6deg) scale(0.97)',
   'translate(-3%, -7%) rotate(-3.2deg) scale(0.94)',
 ]
-/** Bladet som läggs undan: ut åt höger, sedan sist i bunten. */
-const OUT = 'translate(36%, 9%) rotate(7deg) scale(0.98)'
+/**
+ * Bladet som läggs undan: helt ut åt vänster (bort från texten, ut över sidans kant, som
+ * Landing klipper), sedan sist i bunten.
+ */
+const OUT = 'translate(-110%, 5%) rotate(-7deg) scale(0.98)'
+/**
+ * Ut: kommer i gång direkt och tonar bort först när bladet är utanför bunten (annars
+ * syns två ritningar genom varandra). På plats (och tillbaka längst bak, osynligt):
+ * mjukt in. Bladet byter plats i bunten först när det är osynligt, så att det inte
+ * hoppar bakom de andra mitt i rörelsen.
+ */
+const OUT_TRANSITION = `transform ${OUT_MS}ms cubic-bezier(0.4, 0, 0.6, 1), opacity 160ms linear ${OUT_MS - 160}ms`
+const PLACE_TRANSITION = 'transform 600ms cubic-bezier(0.3, 0.7, 0.2, 1), opacity 400ms ease-out'
+/** Tillbaka i bunten: hoppar dit medan det är osynligt och tonar in, i stället för att glida tillbaka. */
+const BACK_MS = 400
+const BACK_TRANSITION = `opacity ${BACK_MS}ms ease-out`
 
 export function Sheets() {
   const [ref, near] = useInView<HTMLDivElement>(0)
   const [images, setImages] = useState<Partial<Record<MainView, string>>>({})
   const [top, setTop] = useState(0)
   const [leaving, setLeaving] = useState<number | null>(null)
+  const [returning, setReturning] = useState<number | null>(null)
   const [paused, setPaused] = useState(false)
   // Har man bläddrat själv bläddrar bunten inte längre av sig själv.
   const [manual, setManual] = useState(false)
@@ -60,15 +75,23 @@ export function Sheets() {
     }))
   }, [])
 
-  // Bladet som ska hamna överst när det som läggs undan är ute; ett nytt val under tiden vinner.
-  const wanted = useRef(0)
+  // Nästa blad kommer upp medan det översta läggs undan. Ett val under tiden tas när det är klart.
+  const current = useRef({ top: 0, busy: false, wanted: 0 })
   const goTo = (next: number) => {
-    wanted.current = next
-    if (leaving !== null || next === top) return
-    setLeaving(top)
+    const c = current.current
+    c.wanted = next
+    if (c.busy || next === c.top) return
+    c.busy = true
+    const out = c.top
+    setLeaving(out)
+    setTop(next)
+    c.top = next
     setTimeout(() => {
-      setTop(wanted.current)
+      c.busy = false
       setLeaving(null)
+      setReturning(out)
+      setTimeout(() => setReturning((r) => (r === out ? null : r)), BACK_MS)
+      if (c.wanted !== c.top) goTo(c.wanted)
     }, OUT_MS)
   }
 
@@ -117,7 +140,8 @@ export function Sheets() {
         aria-label={`Visa nästa blad. Nu: ${PAGES[top]!.label}.`}
         onClick={() => {
           setManual(true)
-          goTo((top + 1) % PAGES.length)
+          // Från det senast valda, så att snabba tryck under en bläddring inte går förlorade.
+          goTo((current.current.wanted + 1) % PAGES.length)
         }}
       >
         {PAGES.map((p, i) => {
@@ -127,15 +151,21 @@ export function Sheets() {
             <div
               key={p.key}
               aria-hidden={depth !== 0}
-              className="absolute inset-0 overflow-hidden rounded-[3px] bg-[#fdfcf9] text-left shadow-[0_1px_1px_rgba(40,25,10,0.08),0_8px_16px_-6px_rgba(40,25,10,0.18),0_36px_70px_-30px_rgba(40,25,10,0.5)] transition-[transform,filter] duration-500 ease-[cubic-bezier(0.3,0.7,0.2,1)] motion-reduce:transition-none"
+              className="absolute inset-0 overflow-hidden rounded-[3px] bg-[#fdfcf9] text-left shadow-[0_1px_1px_rgba(40,25,10,0.08),0_8px_16px_-6px_rgba(40,25,10,0.18),0_36px_70px_-30px_rgba(40,25,10,0.5)] will-change-transform motion-reduce:transition-none!"
               style={{
                 transform: out ? OUT : PLACE[depth],
-                // Bladet som läggs undan ligger kvar överst tills det är ute; sedan sist.
+                opacity: out ? 0 : 1,
+                // Bladet som läggs undan ligger kvar överst tills det är osynligt; sedan på sin plats.
                 zIndex: out ? PAGES.length + 1 : PAGES.length - depth,
-                filter: depth === 0 || out ? 'none' : `brightness(${1 - depth * 0.04})`,
+                transition: out ? OUT_TRANSITION : returning === i ? BACK_TRANSITION : PLACE_TRANSITION,
               }}
             >
               {page(p.key)}
+              {/* Bladen längre ner lite mörkare. En hinna i stället för filter, som målas om varje bildruta. */}
+              <div
+                className="pointer-events-none absolute inset-0 bg-black transition-opacity duration-500"
+                style={{ opacity: out ? 0 : depth * 0.04 }}
+              />
             </div>
           )
         })}
