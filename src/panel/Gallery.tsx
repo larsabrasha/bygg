@@ -277,8 +277,9 @@ export function Gallery() {
 
   return (
     <div className="fixed inset-0 z-40 flex flex-col bg-canvas print:hidden">
-      <header className="flex items-center gap-3 border-b border-line bg-panel px-4 py-2 pt-[max(8px,env(safe-area-inset-top))]">
-        <h1 className="flex items-center">
+      {/* Samma höjd och luft som verktygslisten i modellen (Toolbar), och loggan på samma ställe. */}
+      <header className="flex items-center gap-3 border-b border-line bg-panel px-2 py-1.5 pt-[max(6px,env(safe-area-inset-top))]">
+        <h1 className="flex h-10 items-center px-1.5 narrow:h-11">
           <Logo />
         </h1>
         <div className="min-w-0 flex-1">
