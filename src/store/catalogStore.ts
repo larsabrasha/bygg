@@ -26,6 +26,8 @@ interface CatalogState {
   removeMaterial: (id: string) => void
   /** Visar eller döljer ett inbyggt material i väljaren. */
   setHidden: (id: string, hidden: boolean) => void
+  /** Visar eller döljer flera inbyggda på en gång (Alla), som en ändring. */
+  setHiddenMany: (ids: readonly string[], hidden: boolean) => void
   addColor: (fields: ColorFields) => string
   updateColor: (id: string, fields: Partial<ColorFields>) => void
   removeColor: (id: string) => void
@@ -65,13 +67,12 @@ export const useCatalogStore = create<CatalogState>()((set, get) => {
         materials: c.materials.filter((m) => m.id !== id),
         removed: { ...c.removed, [id]: at },
       })),
-    setHidden: (id, hidden) => {
-      if (get().catalog.hidden.includes(id) === hidden) return
-      change((c, at) => ({
-        ...c,
-        hidden: hidden ? [...c.hidden, id] : c.hidden.filter((h) => h !== id),
-        hiddenAt: at,
-      }))
+    setHidden: (id, hidden) => get().setHiddenMany([id], hidden),
+    setHiddenMany: (ids, hidden) => {
+      const current = get().catalog.hidden
+      const next = hidden ? [...new Set([...current, ...ids])] : current.filter((h) => !ids.includes(h))
+      if (next.length === current.length && next.every((h) => current.includes(h))) return
+      change((c, at) => ({ ...c, hidden: next, hiddenAt: at }))
     },
     addColor: (fields) => {
       const id = newId()

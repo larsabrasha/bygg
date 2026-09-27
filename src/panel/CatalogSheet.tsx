@@ -168,7 +168,7 @@ function Materials() {
       </section>
 
       <section className="flex flex-col gap-1">
-        <h3 className={groupTitle}>Inbyggda material</h3>
+        <AllHeader title="Inbyggda material" ids={MATERIAL_SPECS.map((m) => m.id)} />
         <p className="mb-1 text-[13px] text-muted">
           Slå av dem du aldrig använder, så syns de inte i väljaren. Delar som redan har dem behåller dem.
         </p>
@@ -196,6 +196,21 @@ const Swatch = ({ color, round = false }: { color: string; round?: boolean }) =>
     style={{ background: color }}
   />
 )
+
+/** Rubriken över de inbyggda, med Alla: av om alla visas, annars på för alla. */
+function AllHeader({ title, ids }: { title: string; ids: readonly string[] }) {
+  const hidden = useCatalogStore((s) => s.catalog.hidden)
+  const setHiddenMany = useCatalogStore((s) => s.setHiddenMany)
+  const allShown = ids.every((id) => !hidden.includes(id))
+  return (
+    <div className="flex items-center justify-between gap-2">
+      <h3 className={groupTitle}>{title}</h3>
+      <Switch checked={allShown} onChange={(on) => setHiddenMany(ids, !on)}>
+        Alla
+      </Switch>
+    </div>
+  )
+}
 
 /** En inbyggd sak (material eller färg) med Visas: av betyder att den inte syns i väljaren. */
 function ShownRow({
@@ -416,7 +431,7 @@ function Colors() {
       </section>
 
       <section className="flex flex-col gap-1">
-        <h3 className={groupTitle}>Inbyggda färger</h3>
+        <AllHeader title="Inbyggda färger" ids={BUILT_IN_COLORS.map((c) => c.id)} />
         <p className="mb-1 text-[13px] text-muted">
           Vanliga kulörer på montrar och väggar. Färgen på skärmen är ungefärlig; det är koden som gäller.
         </p>
