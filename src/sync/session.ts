@@ -11,7 +11,8 @@ import { useViewStore } from '../store/viewStore'
 import { ApiError, CLIENT_ID, httpApi } from './api'
 import { forgetUser } from './auth'
 import { loadCatalog, saveCatalog, syncCatalog } from './catalogSync'
-import { syncOnce, type SyncEvent } from './engine'
+import { PREFETCH, syncOnce, type SyncEvent } from './engine'
+import { prefetched } from './prefetch'
 import { idbRepo, importLegacy, LEGACY_KEY, type LocalModel } from './localRepo'
 import { deleteHistory, getHistory, packHistory, putHistory, unpackHistory } from './history'
 import { parsePath, pathFor, type Route } from './route'
@@ -118,13 +119,16 @@ async function syncThumbs() {
     if (r === 'ok') unsentThumbs.delete(id)
   }
   const { models, thumbs, currentId } = lib()
-  for (const m of models) {
-    // Den öppna modellens bild tas här, av det som syns.
-    if (m.id === currentId) continue
-    const wanted = staleThumbs.has(m.id) || (!thumbs[m.id] && !noServerThumb.has(m.id))
-    if (!wanted) continue
+  // Den öppna modellens bild tas här, av det som syns.
+  const wanted = models.filter(
+    (m) => m.id !== currentId && (staleThumbs.has(m.id) || (!thumbs[m.id] && !noServerThumb.has(m.id))),
+  )
+  // Flera på väg samtidigt, som modellerna (se syncOnce).
+  const download = (m: (typeof wanted)[number]) => {
     staleThumbs.delete(m.id)
-    const url = await downloadThumbnail(m.id)
+    return downloadThumbnail(m.id)
+  }
+  for await (const [m, url] of prefetched(wanted, PREFETCH, download)) {
     if (!url) {
       noServerThumb.add(m.id)
       continue
@@ -330,8 +334,11 @@ async function handle(events: SyncEvent[], docAtStart: ModelDocument) {
   }
 }
 
-/** Synkar nu. Anrop under pågående synk ger en runda till efteråt. */
-export function syncNow(): Promise<void> {
+/**
+ * Synkar nu. Anrop under pågående synk ger en runda till efteråt. thumbs: false hoppar
+ * över bilderna i startvyn (openInitial väntar inte på dem; start() synkar strax igen).
+ */
+export function syncNow({ thumbs = true }: { thumbs?: boolean } = {}): Promise<void> {
   if (syncing) {
     rerun = true
     return syncing
@@ -362,7 +369,7 @@ export function syncNow(): Promise<void> {
       // Med kontakt och inloggning: lyssna på ändringar (igen, om strömmen stängts).
       connectEvents()
       await refreshList()
-      await syncThumbs()
+      if (thumbs) await syncThumbs()
     } catch (e) {
       if (e instanceof ApiError) lib().set({ status: STATUS_FOR[e.kind], error: e.message })
       else {
@@ -465,7 +472,8 @@ export async function openInitial() {
   // Ingen "Öppnar …" här: modellen ritas under startsidan, och brickan ska inte se upptagen ut.
   if (current && !current.deleted && showModel(current)) return
   // Ny enhet: hämta från servern först, så att vi inte laddar upp en tom modell i onödan.
-  if ((await repo.list()).length === 0) await syncNow()
+  // Utan bilderna: appen visas utan att vänta på dem, och start() synkar direkt efteråt.
+  if ((await repo.list()).length === 0) await syncNow({ thumbs: false })
   await openFallback()
 }
 
