@@ -235,28 +235,31 @@ export interface PaintChoice {
 const samePaint = (a: Paint, b: Paint) => a.color === b.color && (a.code ?? '') === (b.code ?? '')
 const cleanPaint = (p: Paint): Paint => ({ color: p.color, ...(p.code && { code: p.code }) })
 
-/** Standardfärgerna att välja bland: de inbyggda som inte är avslagna, sedan de egna. */
-export function standardColors(catalog: Catalog): PaintChoice[] {
-  return [...BUILT_IN_COLORS.filter((c) => !catalog.hidden.includes(c.id)), ...catalog.colors].map((c) => ({
-    paint: cleanPaint(c),
-    name: c.name,
-  }))
+export interface PaintRows {
+  /** De inbyggda som inte är avslagna. */
+  builtIn: PaintChoice[]
+  /** Användarens egna, i listans ordning. */
+  own: PaintChoice[]
+  /** De som finns i modellen men inte på raderna ovan. */
+  model: PaintChoice[]
 }
 
 /**
- * Färgerna att välja bland under Färg, på två rader: standardfärgerna och de
- * som finns i modellen men inte bland dem. Samma färg (och kod) bara en gång.
+ * Färgerna att välja bland under Färg, på tre rader: de inbyggda, de egna och
+ * de som bara finns i modellen. Samma färg (och kod) bara en gång, på den
+ * första raden där den finns.
  */
-export function paintChoices(catalog: Catalog, doc: ModelDocument): { standard: PaintChoice[]; model: PaintChoice[] } {
-  const standard = standardColors(catalog)
-  const model: PaintChoice[] = []
-  for (const d of doc.defs) {
-    const p = d.paint
-    if (p && ![...standard, ...model].some((c) => samePaint(c.paint, p))) model.push({ paint: cleanPaint(p) })
-  }
-  return { standard, model }
+export function paintChoices(catalog: Catalog, doc: ModelDocument): PaintRows {
+  const seen: PaintChoice[] = []
+  const row = (list: readonly (Paint & { name?: string })[]) =>
+    list.flatMap((c) => {
+      if (seen.some((s) => samePaint(s.paint, c))) return []
+      const choice: PaintChoice = { paint: cleanPaint(c), ...(c.name && { name: c.name }) }
+      seen.push(choice)
+      return [choice]
+    })
+  const builtIn = row(BUILT_IN_COLORS.filter((c) => !catalog.hidden.includes(c.id)))
+  const own = row(catalog.colors)
+  const model = row(doc.defs.flatMap((d) => (d.paint ? [d.paint] : [])))
+  return { builtIn, own, model }
 }
-
-/** Färgen finns bland standardfärgerna. */
-export const isSavedPaint = (catalog: Catalog, paint: Paint) =>
-  standardColors(catalog).some((c) => samePaint(c.paint, paint))

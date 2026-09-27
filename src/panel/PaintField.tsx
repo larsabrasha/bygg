@@ -1,5 +1,5 @@
 import { Ban, Plus } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { useMemo, useState, type ReactNode } from 'react'
 import { paintChoices, type PaintChoice } from '../model/catalog'
 import type { Paint, PartDef } from '../model/types'
 import { useCatalogStore } from '../store/catalogStore'
@@ -35,7 +35,7 @@ export function PaintField({ instanceId, def }: { instanceId: string; def: PartD
   const doc = useDocumentStore((s) => s.doc)
   const catalog = useCatalogStore((s) => s.catalog)
   const paint = def.paint
-  const { standard, model } = useMemo(() => paintChoices(catalog, doc), [catalog, doc])
+  const { builtIn, own, model } = useMemo(() => paintChoices(catalog, doc), [catalog, doc])
   // Rutan för en egen färg: ny (+) eller den valda ändrad (ett tryck till på den).
   const [custom, setCustom] = useState<'new' | 'edit' | null>(null)
 
@@ -70,7 +70,7 @@ export function PaintField({ instanceId, def }: { instanceId: string; def: PartD
   return (
     <div className={fieldLabel}>
       Färg
-      <div className="flex flex-wrap items-center gap-1">
+      <SwatchRow title="Standardfärger">
         <Tip label="Ingen färg: materialets egen">
           <button
             aria-label="Ingen färg"
@@ -81,7 +81,7 @@ export function PaintField({ instanceId, def }: { instanceId: string; def: PartD
             <Ban size={22} strokeWidth={1.5} aria-hidden />
           </button>
         </Tip>
-        {standard.map((c) => swatch(c, false))}
+        {builtIn.map((c) => swatch(c, false))}
         <Tip label="Egen färg">
           <button
             aria-label="Egen färg"
@@ -92,13 +92,9 @@ export function PaintField({ instanceId, def }: { instanceId: string; def: PartD
             <Plus {...ICON_SM} />
           </button>
         </Tip>
-      </div>
-      {model.length > 0 && (
-        <div className="flex flex-wrap items-center gap-1">
-          <span className="w-full text-xs text-faint">I modellen</span>
-          {model.map((c) => swatch(c, true))}
-        </div>
-      )}
+      </SwatchRow>
+      {own.length > 0 && <SwatchRow title="Egna färger">{own.map((c) => swatch(c, false))}</SwatchRow>}
+      {model.length > 0 && <SwatchRow title="I modellen">{model.map((c) => swatch(c, true))}</SwatchRow>}
       {custom && (
         <CustomColor
           // En ny ruta för varje del och läge: utkastet börjar om.
@@ -117,6 +113,16 @@ export function PaintField({ instanceId, def }: { instanceId: string; def: PartD
       >
         Redigera färglistan…
       </button>
+    </div>
+  )
+}
+
+/** En rad färgrutor med en liten rubrik över. */
+function SwatchRow({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <div className="flex flex-wrap items-center gap-1">
+      <span className="w-full text-xs text-faint">{title}</span>
+      {children}
     </div>
   )
 }

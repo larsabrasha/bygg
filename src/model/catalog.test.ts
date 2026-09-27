@@ -132,7 +132,7 @@ describe('tolkningen av det man skriver', () => {
 })
 
 describe('paintChoices', () => {
-  it('standardfärgerna på en rad, modellens övriga på en annan, var och en bara en gång', () => {
+  it('inbyggda, egna och modellens övriga på var sin rad, var och en bara en gång', () => {
     const saved = catalog({
       hidden: BUILT_IN_COLORS.slice(1).map((c) => c.id),
       colors: [{ id: 'c1', name: 'Monterblå', color: '#2f4a5c', code: 'NCS S 7020-B', updatedAt: 't' }],
@@ -145,8 +145,9 @@ describe('paintChoices', () => {
         { ...testDef('c'), paint: { color: '#123456' } },
       ],
     }
-    const { standard, model } = paintChoices(saved, doc)
-    expect(standard.map((c) => c.name)).toEqual([BUILT_IN_COLORS[0]!.name, 'Monterblå'])
+    const { builtIn, own, model } = paintChoices(saved, doc)
+    expect(builtIn.map((c) => c.name)).toEqual([BUILT_IN_COLORS[0]!.name])
+    expect(own.map((c) => c.name)).toEqual(['Monterblå'])
     expect(model.map((c) => c.paint)).toEqual([{ color: '#123456' }])
   })
 })
