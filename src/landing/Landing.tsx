@@ -10,6 +10,7 @@ import {
   ScanBox,
   Ruler,
   Share2,
+  SquareTerminal,
   Undo2,
   Variable,
   WifiOff,
@@ -27,6 +28,7 @@ import {
   type ReactNode,
 } from 'react'
 import { numberFormat } from '../model/numberFormat'
+import { GitHubMark, REPO_URL } from '../panel/GitHubMark'
 import { Logo } from '../panel/Logo'
 import { canLogIn, loginUrl, startWithoutAccount } from '../sync/auth'
 import { Boards } from './Boards'
@@ -153,8 +155,8 @@ function AccessNote({ className = '' }: { className?: string }) {
       <LockKeyhole size={14} aria-hidden className="mt-0.5 shrink-0" />
       <span>
         {canLogIn()
-          ? 'Logga in för att synka mellan dina enheter. Utan konto sparas allt bara i den här webbläsaren.'
-          : 'Det finns inga konton än. Allt sparas bara i den här webbläsaren.'}
+          ? 'Logga in, så synkas modellerna mellan dina enheter. Utan konto stannar allt i den här webbläsaren.'
+          : 'Det finns inga konton än. Allt stannar i den här webbläsaren.'}
       </span>
     </p>
   )
@@ -231,15 +233,15 @@ function Hero() {
           </Reveal>
           <Reveal delay={80}>
             <h1 className="text-[clamp(44px,7.4vw,88px)] leading-[0.95] font-semibold tracking-[-0.035em] text-balance">
-              Rita möbeln.
+              Från skiss
               <br />
-              <Wood>Få kaplistan.</Wood>
+              <Wood>till kaplista.</Wood>
             </h1>
           </Reveal>
           <Reveal delay={180}>
             <p className="mt-6 max-w-[440px] text-[17px] leading-relaxed text-muted text-pretty max-[899px]:text-[16px]">
-              Skissa på golvet, dra upp delarna med push/pull och se allt i riktigt trä. Bygg räknar ut varje bit och
-              lägger ut dem på brädorna åt dig.
+              Rita varje del som en rektangel, dra upp den i 3D och se möbeln i riktigt trä. Bygg tar sedan fram
+              kaplistan och visar hur delarna ska sågas ur brädorna.
             </p>
           </Reveal>
           <Reveal delay={280} className="mt-8">
@@ -267,16 +269,16 @@ function Hero() {
 
 const STEPS = [
   {
-    title: 'Varje del är en egen kropp.',
-    text: 'Rita en rektangel på golvet eller på en yta och dra ut den. Sidor, topp och lådfront får material och fiberriktning, som i verkstaden.',
+    title: 'Varje del ritas för sig.',
+    text: 'Rita en rektangel på golvet eller på en yta och dra upp den. Sidor, skiva och lådfront får var sitt träslag och sin egen fiberriktning.',
   },
   {
-    title: 'Kopior som hänger ihop.',
-    text: 'De två sidorna är en form och två placeringar. Ändra den ena, så följer den andra med. Mått kan styras av namngivna parametrar.',
+    title: 'Ändrar du en sida, följer den andra med.',
+    text: 'De två sidorna är samma del på två ställen. Mått kan också styras av parametrar med namn, som bredd och djup.',
   },
   {
     title: 'Se hur allt sitter ihop.',
-    text: 'Sprängskissen drar isär möbeln så att varje fog syns, innan du har sågat något.',
+    text: 'Sprängskissen drar isär möbeln så att du ser varje fog, innan du har sågat något.',
   },
 ]
 
@@ -433,11 +435,11 @@ function CutList() {
       <Reveal>
         <Eyebrow>Kaplistan</Eyebrow>
         <h2 className="text-[clamp(32px,4.4vw,54px)] leading-[1.02] font-semibold tracking-[-0.03em] text-balance">
-          Räknad ur modellen. <Wood>Inte ur huvudet.</Wood>
+          Alla mått räknas fram <Wood>ur modellen.</Wood>
         </h2>
         <p className="mt-6 max-w-[440px] text-[17px] leading-relaxed text-muted text-pretty">
-          Längd, bredd och tjocklek mäts längs varje dels egen fiber, hur den än står i möbeln. Lika delar blir en rad.
-          Det här är bordet ovanför, rad för rad.
+          Längd, bredd och tjocklek mäts längs varje dels egen fiber, hur den än står i möbeln. Lika delar hamnar på
+          samma rad. Här är bordet där uppe.
         </p>
       </Reveal>
       <Reveal delay={120}>
@@ -460,11 +462,11 @@ function CutPlan() {
         <Reveal className="mx-auto mb-14 max-w-[640px] text-center">
           <Eyebrow>Kapschemat</Eyebrow>
           <h2 className="text-[clamp(32px,4.4vw,54px)] leading-[1.02] font-semibold tracking-[-0.03em] text-balance">
-            Och lagt på brädorna.
+            Delarna läggs ut på brädorna.
           </h2>
           <p className="mt-6 text-[17px] leading-relaxed text-muted text-pretty">
-            Delarna läggs ut på svenska standardmått, med sågsnitt och rensade ändar. Du ser vad du ska köpa och hur
-            mycket som blir över. Här är allt virke till bordet.
+            Delarna läggs ut på brädor i svenska standardmått, med plats för sågsnitten och renkapade ändar. Du ser vad
+            du ska köpa på brädgården och vad som blir över till nästa projekt. Här är allt virke till bordet.
           </p>
         </Reveal>
         <div className="flex flex-col gap-8">
@@ -496,11 +498,12 @@ function Drawing() {
       <Reveal className="min-[900px]:order-2">
         <Eyebrow>Ritningen</Eyebrow>
         <h2 className="text-[clamp(32px,4.4vw,54px)] leading-[1.02] font-semibold tracking-[-0.03em] text-balance">
-          Ta med den <Wood>till verkstaden.</Wood>
+          Ta med ritningen <Wood>till verkstaden.</Wood>
         </h2>
         <p className="mt-6 max-w-[440px] text-[17px] leading-relaxed text-muted text-pretty">
           Bygg ritar hela möbeln på A4: en sammanställning med positioner, huvudvyer med yttermått och ett detaljblad
-          per del, med mått, hål och tappar. Sist kaplistan och kapschemat. Som PDF, att skriva ut eller dela.
+          för varje del, med mått, hål och tappar. Sist kommer kaplistan och kapschemat. Du får en PDF att skriva ut
+          eller dela.
         </p>
         <p className="mt-6 text-[13px] text-faint tabular-nums">
           Bordet: {bordDrawing.sheets} blad, {bordDrawing.details.length} detaljblad
@@ -525,37 +528,42 @@ const EASY: Feature[] = [
   {
     icon: Calculator,
     title: 'Sifferblock på skärmen',
-    text: 'På mobil och iPad täcker inget tangentbord halva vyn. Räkna direkt i fältet, till exempel 900 − 2 × 22.',
+    text: 'På mobil och iPad slipper du ett tangentbord som täcker halva vyn. Och du kan räkna direkt i fältet, till exempel 900 − 2 × 22.',
   },
   {
     icon: Puzzle,
-    title: 'Tapp och tapphål av sig själva',
-    text: 'Välj sargen och benet den ska in i. Bygg gör tappen och hålet med tumregler för måtten, och de passar alltid.',
+    title: 'Bygg gör tappen och tapphålet',
+    text: 'Välj sargen och benet den ska sitta i. Måtten följer vanliga tumregler, och delarna passar alltid ihop.',
   },
   {
     icon: Ruler,
     title: 'Virke som finns att köpa',
-    text: 'Push/pull snäpper till vanliga tjocklekar och säger varför. Kapschemat utgår från svenska standardmått.',
+    text: 'När du drar upp en del snäpper den till vanliga tjocklekar och säger varför. Kapschemat utgår från brädor som finns på brädgården.',
   },
   {
     icon: Undo2,
-    title: 'Ångra, också i morgon',
+    title: 'Ångra fungerar även i morgon',
     text: 'Historiken sparas med modellen. Ladda om sidan eller stäng appen, och ångra fungerar ändå.',
   },
   {
     icon: WifiOff,
-    title: 'Offline och synkat',
-    text: 'Allt sparas på enheten först. Har du ändrat på två enheter sparas båda; ingen version skrivs över.',
+    title: 'Fungerar utan nät',
+    text: 'Allt sparas på enheten först och synkas när nätet finns. Har du ändrat på två enheter sparas båda; ingen version skrivs över.',
   },
 ]
 
 /** Resten, kortare. */
 const MORE: Feature[] = [
   { icon: PencilLine, title: 'Apple Pencil', text: 'Pennan ritar, fingrarna vrider och zoomar.' },
-  { icon: Variable, title: 'Parametrar', text: 'Namngivna mått som styr resten.' },
-  { icon: ScanBox, title: 'AR på iOS', text: 'Möbeln i rummet, i verklig storlek.' },
+  { icon: Variable, title: 'Parametrar', text: 'Mått med namn som styr resten.' },
+  { icon: ScanBox, title: 'AR på iOS', text: 'Ställ möbeln i rummet och se om den får plats.' },
   { icon: RectangleGoggles, title: 'VR', text: 'Gå runt möbeln i headsetet.' },
   { icon: Share2, title: 'Export', text: 'GLB, OBJ, STL och 3MF för Blender, CAD och 3D-skrivare.' },
+  {
+    icon: SquareTerminal,
+    title: 'CLI',
+    text: 'Ändra modeller från terminalen, eller låt en AI-assistent som Claude rita åt dig.',
+  },
 ]
 
 function Features() {
@@ -563,9 +571,9 @@ function Features() {
     <section className="border-t border-line/70 bg-canvas/60 px-6 py-28 max-[899px]:py-20">
       <div className="mx-auto max-w-6xl">
         <Reveal className="mb-16 max-w-[640px] max-[899px]:mb-12">
-          <Eyebrow>Friktionsfritt</Eyebrow>
+          <Eyebrow>Inget krångel</Eyebrow>
           <h2 className="text-[clamp(32px,4.4vw,54px)] leading-[1.02] font-semibold tracking-[-0.03em] text-balance">
-            Gjord för att <Wood>inte stå i vägen.</Wood>
+            Verktyg som <Wood>inte står i vägen.</Wood>
           </h2>
         </Reveal>
         <div className="grid grid-cols-3 gap-x-10 gap-y-14 max-[899px]:grid-cols-2 max-[560px]:grid-cols-1 max-[560px]:gap-y-10">
@@ -580,7 +588,7 @@ function Features() {
           ))}
         </div>
         <Reveal className="mt-20 border-t border-line/70 pt-10 max-[899px]:mt-14">
-          <ul className="grid grid-cols-5 gap-x-8 gap-y-6 max-[899px]:grid-cols-2 max-[560px]:grid-cols-1">
+          <ul className="grid grid-cols-3 gap-x-8 gap-y-6 max-[899px]:grid-cols-2 max-[560px]:grid-cols-1">
             {MORE.map((f) => (
               <li key={f.title} className="flex gap-3">
                 <f.icon size={18} strokeWidth={1.75} aria-hidden className="mt-0.5 shrink-0 text-faint" />
@@ -706,7 +714,19 @@ export function Landing({ openApp = false }: { openApp?: boolean }) {
         </main>
         <footer className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-6 pt-6 pb-[max(32px,env(safe-area-inset-bottom))] text-[12px] text-faint">
           <Logo height={18} />
-          <span>Mått i millimeter. Data på din egen server.</span>
+          <div className="flex items-center gap-3">
+            <span>Mått i millimeter. Data på din egen server.</span>
+            <a
+              href={REPO_URL}
+              target="_blank"
+              rel="noreferrer"
+              aria-label="Bygg på GitHub"
+              title="Bygg på GitHub"
+              className="-m-2 grid size-10 shrink-0 place-items-center rounded-lg transition-colors hover:text-ink"
+            >
+              <GitHubMark size={18} />
+            </a>
+          </div>
         </footer>
       </div>
     </OpenApp>
