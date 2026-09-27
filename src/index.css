@@ -113,6 +113,20 @@
     -webkit-touch-callout: none;
   }
 
+  /* Startsidan (src/landing) är en webbsida, inte en app: text går att markera, iOS visar sin
+     meny vid långt tryck och sidan går att zooma. Landing sätter data-page. */
+  html[data-page='web'],
+  html[data-page='web'] body {
+    touch-action: auto;
+  }
+
+  html[data-page='web'] body {
+    overscroll-behavior: auto;
+    user-select: text;
+    -webkit-user-select: text;
+    -webkit-touch-callout: default;
+  }
+
   /* Fälten måste gå att markera i; i iOS Safari går det annars inte att skriva i dem. */
   input,
   textarea {

@@ -15,12 +15,22 @@ import {
   WifiOff,
   type LucideIcon,
 } from 'lucide-react'
-import { lazy, Suspense, useEffect, useRef, useState, type ComponentProps, type ReactNode } from 'react'
+import {
+  createContext,
+  lazy,
+  Suspense,
+  use,
+  useEffect,
+  useRef,
+  useState,
+  type ComponentProps,
+  type ReactNode,
+} from 'react'
 import { numberFormat } from '../model/numberFormat'
 import { Logo } from '../panel/Logo'
 import { canLogIn, loginUrl, startWithoutAccount } from '../sync/auth'
 import { Boards } from './Boards'
-import { bord, bordBoards, bordCutList, bordDrawing, nattduksbord } from './models'
+import { bordBoards, bordCutList, bordDrawing, bordView, nattduksbordView, type View } from './models'
 import { Sheets } from './Sheets'
 import type { StageControl } from './Stage'
 import { useInView, useMedia } from './useInView'
@@ -32,30 +42,85 @@ import { useInView, useMedia } from './useInView'
  * räknar fram ur bordet.
  */
 
-// 3D-vyn (three.js) laddas för sig, så att texten syns direkt; möblerna tonar in när de är klara.
+// 3D-vyn (three.js) laddas för sig, så att texten syns direkt. Under tiden visas en stillbild
+// av möbeln (npm run stills), som tonar över i 3D-vyn när den är klar.
 const LazyStage = lazy(() => import('./Stage').then((m) => ({ default: m.Stage })))
-const Stage = (props: ComponentProps<typeof LazyStage>) => (
-  <Suspense fallback={<div className={props.className} />}>
-    <LazyStage {...props} />
-  </Suspense>
-)
+const STILLS = import.meta.glob<string>('./stills/*.webp', { eager: true, query: '?url', import: 'default' })
+
+type StageProps = Omit<ComponentProps<typeof LazyStage>, 'bodies' | 'angle' | 'fill' | 'onReady'> & {
+  view: View
+  fill?: number
+}
+
+function Stage({ view, fill = view.fill, shift = [0, 0], className = '', ...props }: StageProps) {
+  const [loaded, setLoaded] = useState(false)
+  const [ready, setReady] = useState(false)
+  const light = STILLS[`./stills/${view.name}-light.webp`]
+  const dark = STILLS[`./stills/${view.name}-dark.webp`]
+  return (
+    <div className={className}>
+      {/* Mått i cqmin: bilden är lika stor som möbeln i 3D-vyn, som räknar ut sin storlek ur den kortaste sidan. */}
+      <div className="relative size-full [container-type:size]">
+        {light && dark && (
+          <picture>
+            <source srcSet={dark} media="(prefers-color-scheme: dark)" />
+            <img
+              src={light}
+              alt=""
+              onLoad={() => setLoaded(true)}
+              style={{
+                left: `${50 + shift[0] * 100}%`,
+                top: `${50 + shift[1] * 100}%`,
+                width: `${(100 * fill) / view.fill}cqmin`,
+                transitionDuration: ready ? '1000ms' : '400ms',
+              }}
+              className={`pointer-events-none absolute max-w-none -translate-x-1/2 -translate-y-1/2 transition-opacity select-none ${
+                loaded && !ready ? 'opacity-100' : 'opacity-0'
+              }`}
+            />
+          </picture>
+        )}
+        <Suspense fallback={null}>
+          <LazyStage
+            {...props}
+            bodies={view.bodies}
+            angle={view.angle}
+            fill={fill}
+            shift={shift}
+            className="absolute inset-0"
+            onReady={() => setReady(true)}
+          />
+        </Suspense>
+      </div>
+    </div>
+  )
+}
 
 const mm = numberFormat(0, true)
 const m3 = numberFormat(2)
 
-const login = () => location.assign(loginUrl())
+// Tillbaka till appen efter inloggningen, också från /intro.
+const login = () => location.assign(loginUrl('/'))
+const open = () => location.assign('/')
 
-/** Den mörka knappen. Utan inloggning på servern leder den i stället in i appen utan konto. */
+/** Sant på /intro för den som kommer in i appen utan att logga in: inloggad eller utan konto. */
+const OpenApp = createContext(false)
+
+/**
+ * Den mörka knappen. Utan inloggning på servern leder den i stället in i appen utan konto,
+ * och för den som redan kommer in (OpenApp) rakt in i appen.
+ */
 function LoginButton({ big = false, children = 'Logga in' }: { big?: boolean; children?: ReactNode }) {
+  const openApp = use(OpenApp)
   const on = canLogIn()
   return (
     <button
-      onClick={on ? login : () => void startWithoutAccount()}
+      onClick={openApp ? open : on ? login : () => void startWithoutAccount()}
       className={`group inline-flex shrink-0 cursor-pointer items-center justify-center gap-2 rounded-xl bg-ink font-medium text-canvas shadow-[0_12px_32px_-12px_rgba(30,20,10,0.6)] transition duration-200 hover:-translate-y-px hover:shadow-[0_16px_36px_-12px_rgba(30,20,10,0.7)] active:translate-y-0 ${
         big ? 'h-13 px-6 text-[15px]' : 'h-10 px-4 text-[13px]'
       }`}
     >
-      {on ? children : 'Börja bygga'}
+      {openApp ? 'Öppna Bygg' : on ? children : 'Börja bygga'}
       <ArrowRight
         size={big ? 18 : 16}
         aria-hidden
@@ -67,7 +132,7 @@ function LoginButton({ big = false, children = 'Logga in' }: { big?: boolean; ch
 
 /** Kör appen utan konto: allt sparas bara i den här webbläsaren. Utan inloggning gör LoginButton det. */
 function GuestButton({ big = false }: { big?: boolean }) {
-  if (!canLogIn()) return null
+  if (!canLogIn() || use(OpenApp)) return null
   return (
     <button
       onClick={() => void startWithoutAccount()}
@@ -82,6 +147,7 @@ function GuestButton({ big = false }: { big?: boolean }) {
 
 /** Vad de två vägarna in betyder, under knapparna. */
 function AccessNote({ className = '' }: { className?: string }) {
+  if (use(OpenApp)) return null
   return (
     <p className={`flex items-start gap-1.5 text-[13px] leading-snug text-faint ${className}`}>
       <LockKeyhole size={14} aria-hidden className="mt-0.5 shrink-0" />
@@ -152,11 +218,10 @@ function Hero() {
     <section className="relative h-svh min-h-[620px] overflow-hidden">
       <Stage
         key={wide ? 'wide' : 'narrow'}
-        bodies={bord}
+        view={bordView}
         className="absolute inset-0"
         shift={wide ? [0.2, 0.06] : [0, 0.24]}
-        fill={wide ? 0.64 : 0.74}
-        angle={-0.35}
+        fill={wide ? bordView.fill : 0.74}
         label="Ett bord i ek som snurrar långsamt. Dra i sidled för att vrida det."
       />
       <div className="pointer-events-none relative z-10 mx-auto flex h-full max-w-6xl flex-col justify-center px-6 max-[899px]:justify-start max-[899px]:pt-[calc(env(safe-area-inset-top)+104px)]">
@@ -285,12 +350,10 @@ function Explode() {
           </div>
         </div>
         <Stage
-          bodies={nattduksbord}
+          view={nattduksbordView}
           control={control}
           explodeScale={1.15}
           spin={0}
-          angle={-0.1}
-          fill={0.66}
           shift={[0, 0.02]}
           className="size-full max-[899px]:row-start-1"
           label="Ett nattduksbord i björk som delas upp i sina delar: sidor, topp, botten, hyllplan, rygg och lådfront med knopp."
@@ -608,23 +671,44 @@ function Closing() {
   )
 }
 
-export function Landing() {
+/**
+ * Sidan beter sig som en webbsida, inte som appen: text går att markera och sidan går att
+ * zooma (se index.css). Utan fält finns inget som Safari zoomar in på, så maximum-scale behövs inte.
+ */
+function useWebPage() {
+  useEffect(() => {
+    const root = document.documentElement
+    const viewport = document.querySelector<HTMLMetaElement>('meta[name="viewport"]')
+    const before = viewport?.content
+    root.dataset.page = 'web'
+    if (viewport && before) viewport.content = before.replace(/,\s*maximum-scale=[^,]*/, '')
+    return () => {
+      delete root.dataset.page
+      if (viewport && before) viewport.content = before
+    }
+  }, [])
+}
+
+export function Landing({ openApp = false }: { openApp?: boolean }) {
+  useWebPage()
   return (
-    <div className="min-h-full bg-studio text-ink">
-      <Header />
-      <main>
-        <Hero />
-        <Explode />
-        <CutList />
-        <CutPlan />
-        <Drawing />
-        <Features />
-        <Closing />
-      </main>
-      <footer className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-6 pt-6 pb-[max(32px,env(safe-area-inset-bottom))] text-[12px] text-faint">
-        <Logo height={18} />
-        <span>Mått i millimeter. Data på din egen server.</span>
-      </footer>
-    </div>
+    <OpenApp value={openApp}>
+      <div className="min-h-full bg-studio text-ink">
+        <Header />
+        <main>
+          <Hero />
+          <Explode />
+          <CutList />
+          <CutPlan />
+          <Drawing />
+          <Features />
+          <Closing />
+        </main>
+        <footer className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-6 pt-6 pb-[max(32px,env(safe-area-inset-bottom))] text-[12px] text-faint">
+          <Logo height={18} />
+          <span>Mått i millimeter. Data på din egen server.</span>
+        </footer>
+      </div>
+    </OpenApp>
   )
 }

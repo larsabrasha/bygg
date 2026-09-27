@@ -41,8 +41,8 @@ async function fetchMe(): Promise<MeResult> {
   }
 }
 
-/** Adressen till inloggningen, med vägen tillbaka hit. */
-export const loginUrl = () => `/auth/login?return=${encodeURIComponent(location.pathname + location.search)}`
+/** Adressen till inloggningen, med vägen tillbaka hit (eller till back). */
+export const loginUrl = (back = location.pathname + location.search) => `/auth/login?return=${encodeURIComponent(back)}`
 
 /** Om det går att logga in. Annars finns bara läget utan konto, och ingen inloggning ska visas. */
 export const canLogIn = () => loginOn
@@ -61,29 +61,44 @@ export async function forgetUser() {
   await idb.del(LAST_USER).catch(() => {})
 }
 
+type Start = { kind: 'guest' } | { kind: 'user'; me: MeResponse; fresh: boolean } | { kind: 'landing' }
+
+/**
+ * Vem appen startar som, utan att ändra något. Utan kontakt med servern fortsätter appen
+ * som sist, utan konto eller med den som senast var inloggad; finns ingen sådan visas
+ * startsidan, så att inga modeller öppnas utan att man vet vems de är.
+ */
+async function whoStarts(): Promise<Start> {
+  const r = await fetchMe()
+  if (r.kind === 'user') return { kind: 'user', me: r.me, fresh: true }
+  if ((await idb.get<boolean>(GUEST).catch(() => false)) === true) return { kind: 'guest' }
+  if (r.kind === 'logged-out') return { kind: 'landing' }
+  const last = await idb.get<MeResponse>(LAST_USER).catch(() => undefined)
+  return last ? { kind: 'user', me: last, fresh: false } : { kind: 'landing' }
+}
+
 /**
  * Vid start, före allt som läser den lokala lagringen. 'landing' = ingen är inloggad och
- * man har inte valt att köra utan konto: visa startsidan. Utan kontakt med servern
- * fortsätter appen som sist, utan konto eller med den som senast var inloggad; finns
- * ingen sådan visas startsidan, så att inga modeller öppnas utan att man vet vems de är.
+ * man har inte valt att köra utan konto: visa startsidan.
  */
 export async function startAuth(): Promise<'app' | 'landing'> {
-  const r = await fetchMe()
-  const guest = r.kind !== 'user' && (await idb.get<boolean>(GUEST).catch(() => false)) === true
-  if (guest) {
-    me = null
-    if (import.meta.hot) import.meta.hot.data.me = me
+  const start = await whoStarts()
+  me = start.kind === 'user' ? start.me : null
+  if (import.meta.hot) import.meta.hot.data.me = me
+  if (start.kind === 'landing') return 'landing'
+  if (start.kind === 'guest') {
     selectGuest()
     return 'app'
   }
-  if (r.kind === 'logged-out') return 'landing'
-  if (r.kind === 'user') {
-    me = r.me
-    await idb.set(LAST_USER, me).catch(() => {})
+  if (start.fresh) {
+    await idb.set(LAST_USER, start.me).catch(() => {})
     await idb.del(GUEST).catch(() => {})
-  } else me = (await idb.get<MeResponse>(LAST_USER).catch(() => undefined)) ?? null
-  if (import.meta.hot) import.meta.hot.data.me = me
-  if (!me) return 'landing'
-  await selectUser(me.sub)
+  }
+  await selectUser(start.me.sub)
   return 'app'
+}
+
+/** För /intro: om appen öppnas direkt härifrån, inloggad eller utan konto. Ändrar inget. */
+export async function canOpenApp(): Promise<boolean> {
+  return (await whoStarts()).kind !== 'landing'
 }

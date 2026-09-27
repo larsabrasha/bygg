@@ -25,7 +25,10 @@ och generera kaplistor. Self-hostad, körs i webbläsaren (PWA).
 - Utan konto (gästläget, "Prova utan konto" på startsidan): egen IndexedDB-databas,
   ingen synk, servern tillfrågas inte. Inloggning tar bort valet.
 - Utloggad ser startsidan (src/landing) med riktiga modeller, kaplista och kapschema
-  räknade med appens egen kod. Med ?startsida visas den också inloggad (i dev och i vite preview).
+  räknade med appens egen kod. På /intro visas den för alla, också inloggad (länk i Om Bygg);
+  då leder knapparna in i appen.
+  Medan 3D-vyn laddas visas stillbilder av möblerna (src/landing/stills, tas om med `npm run stills` när
+  en möbel eller studioljuset ändras).
 - Ingen CSG-kärna i början; manifold-3d läggs till vid behov
 - CLI (cli/, `npm run -s bygg -- help`): ändrar modeller med operationer som körs i appens egen documentStore.
   Nycklar för CLI:t skapas på /auth/cli (server/tokens.ts). Gränser för modeller och konto i src/model/limits.ts

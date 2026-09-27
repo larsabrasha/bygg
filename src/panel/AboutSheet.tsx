@@ -1,4 +1,4 @@
-import { ScrollText, X } from 'lucide-react'
+import { Presentation, ScrollText, X } from 'lucide-react'
 import { useEffect, type ReactNode } from 'react'
 import { useLibraryStore } from '../store/libraryStore'
 import { Logo } from './Logo'
@@ -8,6 +8,8 @@ import { iconAction } from './ui'
 const COMMIT = import.meta.env.BUILD_COMMIT
 /** Sidan med licenserna, som bygget lägger bredvid index.html (scripts/attributions.ts). */
 const LICENSES_URL = `${import.meta.env.BASE_URL}licenser.html`
+/** Startsidan, också för den som är inloggad (se main.tsx). */
+const INTRO_URL = `${import.meta.env.BASE_URL}intro`
 /** Källkoden. */
 const REPO_URL = 'https://github.com/larsabrasha/bygg'
 
@@ -55,11 +57,16 @@ export function AboutSheet() {
           <br />
           Koden hyvlad av Claude, tills Lars var nöjd.
         </p>
-        {/* Länkar ut ur appen (nya flikar), inte åtgärder: en lätt rad, som i en Om-ruta på macOS. */}
+        {/* Länkar ut ur appen, inte åtgärder: en lätt rad, som i en Om-ruta på macOS. Startsidan öppnas i
+            samma flik, så att appen inte är öppen i två (där leder "Öppna Bygg" tillbaka); resten i nya flikar. */}
         <nav
           aria-label="Länkar"
           className="flex w-full flex-wrap justify-center gap-x-2 gap-y-1 border-t border-line pt-3"
         >
+          <a href={INTRO_URL} className={outLink}>
+            <Presentation size={16} strokeWidth={1.75} aria-hidden />
+            Intro
+          </a>
           <a href={REPO_URL} target="_blank" rel="noreferrer" className={outLink}>
             <GitHubMark />
             GitHub

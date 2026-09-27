@@ -1,7 +1,7 @@
 import 'fake-indexeddb/auto'
 import * as idb from 'idb-keyval'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { forgetUser, startAuth } from './auth'
+import { canOpenApp, forgetUser, startAuth } from './auth'
 import { get, guestDb, isGuest, keys, selectGuest, selectUser, set, userDb } from './localStore'
 
 /**
@@ -127,5 +127,33 @@ describe('vid start', () => {
     server('b')
     await startAuth()
     expect(await keys()).toEqual([])
+  })
+})
+
+describe('/intro: kommer man in i appen härifrån', () => {
+  it('inloggad eller utan konto: ja; utloggad: nej', async () => {
+    server('a')
+    expect(await canOpenApp()).toBe(true)
+    server('logged-out')
+    expect(await canOpenApp()).toBe(false)
+    await idb.set('bygg:guest', true)
+    expect(await canOpenApp()).toBe(true)
+  })
+
+  it('ändrar inget: varken senaste användaren eller valet att köra utan konto', async () => {
+    await idb.set('bygg:guest', true)
+    server('a')
+    expect(await canOpenApp()).toBe(true)
+    expect(await idb.get('bygg:guest')).toBe(true)
+    expect(await idb.get('bygg:last-user')).toBeUndefined()
+  })
+
+  it('offline: ja bara om någon var inloggad här', async () => {
+    server('offline')
+    expect(await canOpenApp()).toBe(false)
+    server('a')
+    await startAuth()
+    server('offline')
+    expect(await canOpenApp()).toBe(true)
   })
 })

@@ -1,7 +1,8 @@
 /**
  * Adressen speglar vyn: startsidan med alla modeller är "/", en öppen modell
  * "/{id}" och dess ritning "/{id}/ritning". Servern och service workern svarar
- * med index.html på alla sökvägar.
+ * med index.html på alla sökvägar. /intro är startsidan (se main.tsx) och når aldrig
+ * appen; modell-id är UUID, så det krockar inte.
  */
 
 export type Route = { screen: 'gallery' } | { screen: 'model'; id: string; drawing: boolean }
