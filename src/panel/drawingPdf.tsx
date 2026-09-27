@@ -382,6 +382,25 @@ function drawCutList(doc: jsPDF, input: DrawingPdfInput) {
   }
 }
 
+/** Avståndet mellan ränderna i spillet, i mm på papperet. */
+const HATCH_MM = 1.6
+
+/**
+ * Sneda ränder (/) över en rektangel på sidan: spillet på en skiva eller bräda. Delarna
+ * ritas ovanpå, fyllda, så ränderna syns bara där det inte blir någon del.
+ */
+function hatch(doc: jsPDF, x: number, y: number, w: number, h: number) {
+  doc.setLineWidth(0.12)
+  doc.setDrawColor(150)
+  // Linjerna x + y = c, från hörnet uppe till vänster till hörnet nere till höger.
+  for (let c = x + y + HATCH_MM; c < x + w + y + h; c += HATCH_MM) {
+    const x1 = Math.max(x, c - (y + h))
+    const x2 = Math.min(x + w, c - y)
+    doc.line(x1, c - x1, x2, c - x2)
+  }
+  doc.setDrawColor(0)
+}
+
 /** Lägsta höjd (mm) på en ritad bräda, så att smala delar syns; som på skärmen ritas den då högre än skalan. */
 const MIN_BOARD_MM = 8
 /** Högsta höjd (mm) på en ritad skiva, så att två ryms på en sida. */
@@ -413,7 +432,7 @@ function drawCutPlan(doc: jsPDF, input: DrawingPdfInput, plan: CutPlan) {
   const intro = doc.splitTextToSize(
     `Mått i mm. Fibern går längs brädan. Sågblad ${num.format(plan.kerf)} mm` +
       (plan.lengthAllowance > 0 ? `, kapmån ${num.format(plan.lengthAllowance)} mm` : '') +
-      '. Det streckade sågas bort.',
+      '. Snett randigt är spill; streckade linjer visar det som sågas bort.',
     cw,
   ) as string[]
   intro.forEach((s, i) => text(doc, s, mx, y + i * 4.4, 3.2, { gray: 34 }))
@@ -511,6 +530,7 @@ function drawCutPlan(doc: jsPDF, input: DrawingPdfInput, plan: CutPlan) {
             gray: 90,
           })
         const by = y + 5
+        hatch(doc, mx, by, bw, bh)
         doc.setLineWidth(0.3)
         doc.setDrawColor(0)
         doc.rect(mx, by, bw, bh)

@@ -1,5 +1,5 @@
 import { ChevronDown, Plus, RotateCcw, SlidersHorizontal, X } from 'lucide-react'
-import { useMemo, useRef, useState } from 'react'
+import { useId, useMemo, useRef, useState } from 'react'
 import {
   buildCutPlan,
   countSame,
@@ -371,8 +371,9 @@ function StockRow({
 
 /**
  * En skiva eller bräda med delarna, i skala efter panelens bredd. En smal
- * bräda ritas högre än skalan (MIN_BOARD_PX), annars syns inte delarna. Det
- * som rensas bort avgränsas med en streckad linje.
+ * bräda ritas högre än skalan (MIN_BOARD_PX), annars syns inte delarna. Spillet,
+ * det som inte blir delar, är snett randigt (som på startsidan, landing/Boards), och
+ * det som rensas bort avgränsas med en streckad linje.
  */
 function BoardDrawing({
   stock,
@@ -388,6 +389,7 @@ function BoardDrawing({
   label: string
 }) {
   const ref = useRef<HTMLDivElement>(null)
+  const hatch = useId()
   const width = useWidth(ref)
   const selection = useDocumentStore((s) => s.selection)
   const select = useDocumentStore((s) => s.select)
@@ -416,7 +418,14 @@ function BoardDrawing({
       </div>
       {width > 0 && (
         <svg width={width} height={height} role="img" aria-label={label} className="block overflow-visible">
+          {/* Ränderna i skärmens pixlar, inte i brädans: de lutar lika mycket också när bredden är förstorad. */}
+          <defs>
+            <pattern id={hatch} width={6} height={6} patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+              <line x1={0} y1={0} x2={0} y2={6} strokeWidth={1.5} className="stroke-faint/60" />
+            </pattern>
+          </defs>
           <rect x={0.5} y={0.5} width={width - 1} height={height - 1} rx={2} className="fill-hover stroke-line" />
+          <rect x={0.5} y={0.5} width={width - 1} height={height - 1} rx={2} fill={`url(#${hatch})`} />
           {stock.trim > 0 && (
             <g fill="none" strokeDasharray="3 3" className="stroke-faint">
               {sheet ? (
