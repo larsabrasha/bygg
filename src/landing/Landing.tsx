@@ -4,9 +4,7 @@ import {
   ChevronDown,
   RectangleGoggles,
   Keyboard,
-  Layers,
   LockKeyhole,
-  Palette,
   PencilLine,
   Puzzle,
   ScanBox,
@@ -572,12 +570,6 @@ const EASY: Feature[] = [
 const MORE: Feature[] = [
   { icon: PencilLine, title: 'Apple Pencil', text: 'Pennan ritar, fingrarna vrider och zoomar.' },
   { icon: Variable, title: 'Parametrar', text: 'Mått med namn som styr resten.' },
-  {
-    icon: Layers,
-    title: 'Skivor och glas',
-    text: 'Plywood, MDF, spånskiva, masonit, akryl och glas, med svenska skivmått.',
-  },
-  { icon: Palette, title: 'Färg', text: 'En kulör med NCS-kod per del. På massivt trä syns ådringen genom färgen.' },
   { icon: ScanBox, title: 'AR på iOS', text: 'Ställ möbeln i rummet och se om den får plats.' },
   { icon: RectangleGoggles, title: 'VR', text: 'Gå runt möbeln i headsetet.' },
   { icon: Share2, title: 'Export', text: 'GLB, OBJ, STL och 3MF för Blender, CAD och 3D-skrivare.' },
@@ -610,7 +602,7 @@ function Features() {
           ))}
         </div>
         <Reveal className="mt-20 border-t border-line/70 pt-10 max-[899px]:mt-14">
-          <ul className="grid grid-cols-4 gap-x-8 gap-y-6 max-[899px]:grid-cols-2 max-[560px]:grid-cols-1">
+          <ul className="grid grid-cols-3 gap-x-8 gap-y-6 max-[899px]:grid-cols-2 max-[560px]:grid-cols-1">
             {MORE.map((f) => (
               <li key={f.title} className="flex gap-3">
                 <f.icon size={18} strokeWidth={1.75} aria-hidden className="mt-0.5 shrink-0 text-faint" />
