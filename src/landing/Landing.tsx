@@ -18,7 +18,7 @@ import {
 import { lazy, Suspense, useEffect, useRef, useState, type ComponentProps, type ReactNode } from 'react'
 import { numberFormat } from '../model/numberFormat'
 import { Logo } from '../panel/Logo'
-import { loginUrl, startWithoutAccount } from '../sync/auth'
+import { canLogIn, loginUrl, startWithoutAccount } from '../sync/auth'
 import { Boards } from './Boards'
 import { bord, bordBoards, bordCutList, bordDrawing, nattduksbord } from './models'
 import { Sheets } from './Sheets'
@@ -45,15 +45,17 @@ const m3 = numberFormat(2)
 
 const login = () => location.assign(loginUrl())
 
+/** Den mörka knappen. Utan inloggning på servern leder den i stället in i appen utan konto. */
 function LoginButton({ big = false, children = 'Logga in' }: { big?: boolean; children?: ReactNode }) {
+  const on = canLogIn()
   return (
     <button
-      onClick={login}
+      onClick={on ? login : () => void startWithoutAccount()}
       className={`group inline-flex shrink-0 cursor-pointer items-center justify-center gap-2 rounded-xl bg-ink font-medium text-canvas shadow-[0_12px_32px_-12px_rgba(30,20,10,0.6)] transition duration-200 hover:-translate-y-px hover:shadow-[0_16px_36px_-12px_rgba(30,20,10,0.7)] active:translate-y-0 ${
         big ? 'h-13 px-6 text-[15px]' : 'h-10 px-4 text-[13px]'
       }`}
     >
-      {children}
+      {on ? children : 'Börja bygga'}
       <ArrowRight
         size={big ? 18 : 16}
         aria-hidden
@@ -63,8 +65,9 @@ function LoginButton({ big = false, children = 'Logga in' }: { big?: boolean; ch
   )
 }
 
-/** Kör appen utan konto: allt sparas bara i den här webbläsaren. */
+/** Kör appen utan konto: allt sparas bara i den här webbläsaren. Utan inloggning gör LoginButton det. */
 function GuestButton({ big = false }: { big?: boolean }) {
+  if (!canLogIn()) return null
   return (
     <button
       onClick={() => void startWithoutAccount()}
@@ -82,7 +85,11 @@ function AccessNote({ className = '' }: { className?: string }) {
   return (
     <p className={`flex items-start gap-1.5 text-[13px] leading-snug text-faint ${className}`}>
       <LockKeyhole size={14} aria-hidden className="mt-0.5 shrink-0" />
-      <span>Logga in för att synka mellan dina enheter. Utan konto sparas allt bara i den här webbläsaren.</span>
+      <span>
+        {canLogIn()
+          ? 'Logga in för att synka mellan dina enheter. Utan konto sparas allt bara i den här webbläsaren.'
+          : 'Det finns inga konton än. Allt sparas bara i den här webbläsaren.'}
+      </span>
     </p>
   )
 }

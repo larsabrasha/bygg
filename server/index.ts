@@ -1,15 +1,19 @@
 import { serve } from '@hono/node-server'
 import { serveStatic } from '@hono/node-server/serve-static'
 import { createApp } from './app'
-import { oidcAuth } from './auth'
+import { noAuth, oidcAuth } from './auth'
 import { UserStorages } from './storage'
 import { TokenStore } from './tokens'
 
 /**
  * Produktionsserver: API under /api, inloggning under /auth och den byggda appen
  * (dist/) för allt annat. Sidan är öppen; utan inloggning visar den startsidan
- * (src/landing), och modellerna nås bara via API:t, som kräver inloggning. Miljövariabler:
- *   APP_URL             appens publika adress, t.ex. https://bygg.larsabrasha.com
+ * (src/landing), och modellerna nås bara via API:t, som kräver inloggning.
+ *
+ * Utan OIDC_CLIENT_ID, OIDC_CLIENT_SECRET och SESSION_SECRET har servern ingen inloggning:
+ * appen körs bara utan konto (allt i webbläsaren) och API:t svarar alltid 401. Anges
+ * någon av dem måste alla finnas. Miljövariabler:
+ *   APP_URL             appens publika adress, t.ex. https://bygg.larsabrasha.com (krävs med inloggning)
  *   OIDC_ISSUER         (https://id.larsabrasha.com)
  *   OIDC_CLIENT_ID      från OIDC-klienten i Pocket ID
  *   OIDC_CLIENT_SECRET  d:o
@@ -26,25 +30,32 @@ const staticDir = process.env.STATIC_DIR ?? './dist'
 function required(name: string, check: (v: string) => boolean = (v) => v.length > 0): string {
   const v = process.env[name] ?? ''
   if (!check(v)) {
-    console.error(`[bygg] ${name} saknas eller är ogiltig. Servern startar inte utan inloggning.`)
+    console.error(
+      `[bygg] ${name} saknas eller är ogiltig. Ange alla inställningar för inloggningen, eller ingen för att köra utan.`,
+    )
     process.exit(1)
   }
   return v
 }
 
 const storages = new UserStorages(dataDir)
-const auth = oidcAuth({
-  appUrl: required('APP_URL', (v) => URL.canParse(v)),
-  issuer: process.env.OIDC_ISSUER || 'https://id.larsabrasha.com',
-  clientId: required('OIDC_CLIENT_ID'),
-  clientSecret: required('OIDC_CLIENT_SECRET'),
-  sessionSecret: required('SESSION_SECRET', (v) => v.length >= 32),
-  // Den första som loggar in får modellerna från före inloggningen (se UserStorages).
-  onLogin: (user) => storages.for(user.sub),
-})
+const withLogin = ['OIDC_CLIENT_ID', 'OIDC_CLIENT_SECRET', 'SESSION_SECRET'].some((name) => process.env[name])
+const appUrl = process.env.APP_URL
+const auth = withLogin
+  ? oidcAuth({
+      appUrl: required('APP_URL', (v) => URL.canParse(v)),
+      issuer: process.env.OIDC_ISSUER || 'https://id.larsabrasha.com',
+      clientId: required('OIDC_CLIENT_ID'),
+      clientSecret: required('OIDC_CLIENT_SECRET'),
+      sessionSecret: required('SESSION_SECRET', (v) => v.length >= 32),
+      // Den första som loggar in får modellerna från före inloggningen (se UserStorages).
+      onLogin: (user) => storages.for(user.sub),
+    })
+  : noAuth(appUrl && URL.canParse(appUrl) ? appUrl : undefined)
+if (!withLogin) console.log('[bygg] Ingen inloggning: appen körs bara utan konto, och API:t är stängt.')
 
-// Nycklar för CLI:t skapas inloggad på /auth/cli.
-const app = createApp({ storages, auth, tokens: new TokenStore(dataDir) })
+// Nycklar för CLI:t skapas inloggad på /auth/cli. Utan inloggning finns inga.
+const app = createApp({ storages, auth, tokens: withLogin ? new TokenStore(dataDir) : undefined })
 
 // Filer med hash i namnet ändras aldrig; allt annat (index.html, sw.js, manifest)
 // måste kontrolleras varje gång, annars fastnar klienter på en gammal version.

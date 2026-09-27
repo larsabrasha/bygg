@@ -1,7 +1,7 @@
 import { Hono, type Context } from 'hono'
 import { deleteCookie, getSignedCookie, setSignedCookie } from 'hono/cookie'
 import * as oidc from 'openid-client'
-import type { MeResponse } from '../src/sync/protocol'
+import type { LoggedOutResponse, MeResponse } from '../src/sync/protocol'
 
 /**
  * Inloggning via OIDC mot en enda utgivare (Pocket ID). Servern sköter hela flödet
@@ -9,7 +9,8 @@ import type { MeResponse } from '../src/sync/protocol'
  * som JavaScript inte kan läsa. Den räcker i SESSION_DAYS från inloggningen och
  * förlängs inte: tas användaren bort i Pocket ID är hen ute senast då.
  *
- * I dev finns ingen inloggning (devAuth): alla anrop gäller dev-användaren.
+ * I dev finns ingen inloggning (devAuth): alla anrop gäller dev-användaren. En server
+ * utan OIDC-inställningar har ingen inloggning alls (noAuth): bara läget utan konto.
  */
 
 export interface User {
@@ -48,6 +49,27 @@ export function devAuth(): Auth {
   routes.get('/login', (c) => c.redirect(safeReturn(c.req.query('return'))))
   routes.post('/logout', (c) => c.json({ redirect: '/' }))
   return { user: async () => user, routes, origin: null }
+}
+
+/**
+ * Ingen inloggning: ingen är någonsin inloggad, så API:t svarar alltid 401 och appen
+ * kör bara utan konto (allt i webbläsaren). /auth/me säger login: false, så att appen
+ * inte visar någon inloggning.
+ */
+export function noAuth(appUrl?: string): Auth {
+  const routes = new Hono()
+  routes.get('/me', (c) => c.json<LoggedOutResponse>({ error: 'Inte inloggad', login: false }, 401))
+  // Från en gammal flik eller CLI:t. Ingen länk till /auth/login här: den leder bara hit igen.
+  routes.get('/login', (c) =>
+    c.html(
+      `<!doctype html><html lang="sv"><meta charset="utf-8"><meta name="viewport" content="width=device-width">` +
+        `<title>Bygg</title><body style="font-family:system-ui;padding:24px"><p>Det går inte att logga in här än. ` +
+        `Utan konto sparas allt i webbläsaren.</p><p><a href="/">Till Bygg</a></p></body></html>`,
+      404,
+    ),
+  )
+  routes.post('/logout', (c) => c.json({ redirect: '/' }))
+  return { user: async () => null, routes, origin: appUrl ? new URL(appUrl).origin : null }
 }
 
 export interface OidcOptions {
@@ -122,7 +144,9 @@ export function oidcAuth(opts: OidcOptions): Auth {
 
   routes.get('/me', async (c) => {
     const u = await user(c)
-    return u ? c.json<MeResponse>({ ...u, dev: false }) : c.json({ error: 'Inte inloggad' }, 401)
+    return u
+      ? c.json<MeResponse>({ ...u, dev: false })
+      : c.json<LoggedOutResponse>({ error: 'Inte inloggad', login: true }, 401)
   })
 
   routes.get('/login', async (c) => {

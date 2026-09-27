@@ -7,7 +7,7 @@ import { exportJWK, generateKeyPair, SignJWT } from 'jose'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { serialize } from '../src/persist/format'
 import { createApp } from './app'
-import { oidcAuth, safeReturn, type Auth } from './auth'
+import { noAuth, oidcAuth, safeReturn, type Auth } from './auth'
 import { UserStorages } from './storage'
 
 /**
@@ -151,7 +151,9 @@ describe('inloggning', () => {
 
   it('API:t kräver inloggning', async () => {
     expect((await app.request('/api/models')).status).toBe(401)
-    expect((await app.request('/auth/me')).status).toBe(401)
+    const me = await app.request('/auth/me')
+    expect(me.status).toBe(401)
+    expect(await me.json()).toEqual({ error: 'Inte inloggad', login: true })
     const { cookie } = await login()
     expect((await app.request('/api/models', { headers: { cookie } })).status).toBe(200)
   })
@@ -259,5 +261,34 @@ describe('modeller per användare', () => {
       { id: MODEL_ID, name: 'Gammal', revision: 3 },
     ])
     expect(await readdir(dir)).toEqual(['users'])
+  })
+})
+
+describe('utan inloggning', () => {
+  let bare: ReturnType<typeof createApp>
+  beforeEach(() => {
+    bare = createApp({ storages: new UserStorages(dir), auth: noAuth(APP) })
+  })
+
+  it('säger att det inte går att logga in, och API:t är stängt', async () => {
+    const me = await bare.request('/auth/me')
+    expect(me.status).toBe(401)
+    expect(await me.json()).toEqual({ error: 'Inte inloggad', login: false })
+    expect((await bare.request('/api/models')).status).toBe(401)
+    expect((await bare.request('/api/models', { headers: { authorization: 'Bearer x' } })).status).toBe(401)
+    expect((await bare.request('/api/health')).status).toBe(200)
+  })
+
+  it('inloggningen leder inte vidare, och det finns ingen sida för nycklar', async () => {
+    const r = await bare.request('/auth/login?return=/m/abc')
+    expect(r.status).toBe(404)
+    expect(await r.text()).not.toContain('/auth/login')
+    expect((await bare.request('/auth/cli')).status).toBe(404)
+    expect(await (await bare.request('/auth/logout', { method: 'POST' })).json()).toEqual({ redirect: '/' })
+  })
+
+  it('skriver inget på disk', async () => {
+    await bare.request('/api/models')
+    expect(await readdir(dir)).toEqual([])
   })
 })

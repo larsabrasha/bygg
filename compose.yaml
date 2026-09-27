@@ -1,6 +1,6 @@
 # Starta: docker compose up -d
-# Modellerna hamnar i volymen bygg-data, en mapp per användare (users/<id>/models, thumbs, trash).
-# Inloggning via Pocket ID. Hemligheterna läses från .env bredvid den här filen (se README).
+# Utan inloggning än: appen körs bara utan konto, och allt sparas i webbläsaren. Volymen används
+# först när inloggningen slås på; då hamnar modellerna där, en mapp per användare (users/<id>/models, thumbs, trash).
 services:
   bygg:
     build: .
@@ -8,10 +8,11 @@ services:
       - '8787:8787'
     environment:
       APP_URL: https://bygg.larsabrasha.com
-      OIDC_ISSUER: https://id.larsabrasha.com
-      OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:?saknas i .env}
-      OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:?saknas i .env}
-      SESSION_SECRET: ${SESSION_SECRET:?saknas i .env}
+      # Inloggning via Pocket ID: ta bort # på raderna nedan och lägg hemligheterna i .env (se README).
+      # OIDC_ISSUER: https://id.larsabrasha.com
+      # OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:?saknas i .env}
+      # OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:?saknas i .env}
+      # SESSION_SECRET: ${SESSION_SECRET:?saknas i .env}
     volumes:
       - bygg-data:/data
     restart: unless-stopped

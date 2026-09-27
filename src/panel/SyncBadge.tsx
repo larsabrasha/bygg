@@ -1,6 +1,6 @@
 import { CloudAlert, CloudOff, HardDrive, LogIn } from 'lucide-react'
 import { useLibraryStore, type SyncStatus } from '../store/libraryStore'
-import { loginUrl } from '../sync/auth'
+import { canLogIn, loginUrl } from '../sync/auth'
 import { saveNow, syncNow } from '../sync/session'
 import { Tip } from './Tip'
 
@@ -28,17 +28,18 @@ export function SyncBadge({ withLabel = true }: { withLabel?: boolean }) {
   if (status !== 'offline' && status !== 'error' && status !== 'logged-out' && status !== 'guest') return null
   const label = syncLabel(status, error)
   const guest = status === 'guest'
-  // Utan konto leder märket också till inloggningen.
-  const loggedOut = status === 'logged-out' || guest
+  // Utan konto leder märket också till inloggningen, om servern har någon; annars visar det bara texten.
+  const loggedOut = status === 'logged-out' || (guest && canLogIn())
   const Icon = guest ? HardDrive : loggedOut ? LogIn : status === 'offline' ? CloudOff : CloudAlert
+  const action = loggedOut ? 'Logga in' : guest ? null : 'Försök synka igen'
 
   return (
-    <Tip label={`${label}. Klicka för att ${loggedOut ? 'logga in' : 'försöka igen'}.`}>
+    <Tip label={action ? `${label}. Klicka för att ${loggedOut ? 'logga in' : 'försöka igen'}.` : label}>
       <button
         className={`flex min-h-9 max-w-full cursor-pointer items-center gap-1.5 rounded-md px-1.5 text-xs hover:bg-hover narrow:min-h-11 ${
           status === 'error' ? 'text-danger' : guest ? 'text-muted' : 'text-warn'
         }`}
-        aria-label={`${label}. ${loggedOut ? 'Logga in' : 'Försök synka igen'}.`}
+        aria-label={action ? `${label}. ${action}.` : label}
         onClick={() => {
           if (loggedOut) {
             void saveNow().finally(() => location.assign(loginUrl()))

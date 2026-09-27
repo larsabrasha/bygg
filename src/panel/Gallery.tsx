@@ -16,7 +16,7 @@ import {
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useLibraryStore, type ModelListItem } from '../store/libraryStore'
 import { nameFromFileName, readModelFile } from '../persist/modelFile'
-import { currentUser, loginUrl } from '../sync/auth'
+import { canLogIn, currentUser, loginUrl } from '../sync/auth'
 import { get as localGet, set as localSet } from '../sync/localStore'
 import {
   deleteWithUndo,
@@ -219,10 +219,12 @@ function GuestIntro() {
         </p>
       </div>
       <div className="flex items-center gap-1">
-        <button className={primaryButton} onClick={() => void saveNow().finally(() => location.assign(loginUrl()))}>
-          <LogIn size={16} aria-hidden />
-          Logga in
-        </button>
+        {canLogIn() && (
+          <button className={primaryButton} onClick={() => void saveNow().finally(() => location.assign(loginUrl()))}>
+            <LogIn size={16} aria-hidden />
+            Logga in
+          </button>
+        )}
         <button
           className="grid size-10 cursor-pointer place-items-center rounded-lg text-muted hover:bg-hover narrow:size-11"
           aria-label="Stäng"
