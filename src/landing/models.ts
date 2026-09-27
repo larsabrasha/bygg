@@ -22,6 +22,22 @@ function bodiesOf(file: unknown): Body[] {
 export const bord = bodiesOf(bordFile)
 export const nattduksbord = bodiesOf(nattduksbordFile)
 
+/**
+ * Hur en möbel står på startsidan: vinkeln vid start och hur stor den är i bilden (Stage).
+ * Stillbilderna som visas medan 3D-vyn laddas (npm run stills) tas likadant, så att
+ * bilden går över i 3D-vyn utan ryck.
+ */
+export interface View {
+  name: string
+  bodies: readonly Body[]
+  angle: number
+  fill: number
+}
+
+export const bordView: View = { name: 'bord', bodies: bord, angle: -0.35, fill: 0.64 }
+export const nattduksbordView: View = { name: 'nattduksbord', bodies: nattduksbord, angle: -0.1, fill: 0.66 }
+export const VIEWS = [bordView, nattduksbordView]
+
 export const bordCutList = buildCutList(bord)
 
 /**

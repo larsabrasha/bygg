@@ -8,6 +8,7 @@ import { add, scale } from '../model/vec'
 import { BodyMesh } from '../scene/BodyMesh'
 import { RealisticLight } from '../scene/studio'
 import { useColorScheme } from '../scene/useColorScheme'
+import { hasWoodTexture, loadWood } from '../scene/woodTexture'
 
 /**
  * En möbel i studioljus på en vridskiva, som i en produktbild. Samma delar och
@@ -36,6 +37,8 @@ interface Props {
   angle?: number
   label: string
   className?: string
+  /** När möbeln syns i bilden med sitt trä: första bilden är ritad och texturerna laddade. */
+  onReady?: () => void
 }
 
 const FOV = 28
@@ -109,9 +112,11 @@ function Model({
   shift,
   fill,
   table,
-}: Required<Omit<Props, 'label' | 'className' | 'control' | 'angle'>> & {
+  onDrawn,
+}: Required<Omit<Props, 'label' | 'className' | 'control' | 'angle' | 'onReady'>> & {
   control?: RefObject<StageControl>
   table: Turntable
+  onDrawn: () => void
 }) {
   const scheme = useColorScheme()
 
@@ -137,8 +142,13 @@ function Model({
   // över golvet och får då en suddig fläck under sig; den gäller bara hopsatt möbel.
   const [together, setTogether] = useState(true)
   const target = useMemo(() => new Vector3(), [])
+  const drawn = useRef(false)
 
   useFrame((frame, rawDt) => {
+    if (!drawn.current) {
+      drawn.current = true
+      onDrawn()
+    }
     const dt = Math.min(rawDt, 0.1)
     const camera = frame.camera as PerspectiveCamera
     const { size } = frame
@@ -202,12 +212,37 @@ export function Stage({
   angle = 0,
   label,
   className = '',
+  onReady,
 }: Props) {
   const wrapper = useRef<HTMLDivElement>(null)
   const [table] = useState(() => new Turntable(angle))
   // Ritar bara när bilden syns: två scener på samma sida ska inte båda gå hela tiden.
   const [visible, setVisible] = useState(false)
   const [ready, setReady] = useState(false)
+  // Klar när första bilden är ritad (det blir den först när bilden syns) och träet har laddats.
+  // Till dess står vridskivan still, så att möbeln står som i stillbilden (se Landing).
+  const [drawn, setDrawn] = useState(false)
+  const [textured, setTextured] = useState(false)
+
+  useEffect(() => {
+    let live = true
+    const materials = [...new Set(bodies.map((b) => b.material))].filter(hasWoodTexture)
+    void Promise.all(materials.map(loadWood)).then(() => live && setTextured(true))
+    return () => {
+      live = false
+    }
+  }, [bodies])
+
+  useEffect(() => {
+    if (!drawn || !textured) return
+    // En stund till, så att träet hinner komma med i bilden innan den tonar in.
+    const t = setTimeout(() => setReady(true), 250)
+    return () => clearTimeout(t)
+  }, [drawn, textured])
+
+  useEffect(() => {
+    if (ready) onReady?.()
+  }, [ready, onReady])
 
   useEffect(() => {
     const el = wrapper.current
@@ -253,8 +288,9 @@ export function Stage({
       ref={wrapper}
       role="img"
       aria-label={label}
-      // pan-y: uppåt och nedåt scrollar sidan; i sidled snurrar möbeln.
-      className={`cursor-grab touch-pan-y active:cursor-grabbing ${className}`}
+      // pan-y: uppåt och nedåt scrollar sidan; i sidled snurrar möbeln. select-none: att dra i
+      // möbeln markerar inte texten bredvid (startsidan går annars att markera, som en webbsida).
+      className={`cursor-grab touch-pan-y select-none active:cursor-grabbing ${className}`}
     >
       <div className={`size-full transition-opacity duration-1000 ${ready ? 'opacity-100' : 'opacity-0'}`}>
         <Canvas
@@ -264,16 +300,16 @@ export function Stage({
           frameloop={visible ? 'always' : 'never'}
           gl={{ alpha: true, antialias: true, powerPreference: 'high-performance' }}
           camera={{ fov: FOV, position: [3000, 2000, 3000] }}
-          onCreated={() => setTimeout(() => setReady(true), 250)}
         >
           <Model
             bodies={bodies}
             control={control}
             explodeScale={explodeScale}
-            spin={spin}
+            spin={ready ? spin : 0}
             shift={shift}
             fill={fill}
             table={table}
+            onDrawn={() => setDrawn(true)}
           />
         </Canvas>
       </div>

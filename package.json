@@ -20,7 +20,8 @@
     "bygg": "node cli/bygg.mjs",
     "format": "prettier --write src server",
     "icons": "pwa-assets-generator",
-    "textures": "tsx scripts/woodTextures.ts"
+    "textures": "tsx scripts/woodTextures.ts",
+    "stills": "tsx scripts/landingStills.ts"
   },
   "dependencies": {
     "@hono/node-server": "^2.1.1",
@@ -59,6 +60,7 @@
     "pdfjs-dist": "^6.3.289",
     "postprocessing": "^6.39.5",
     "prettier": "^3.9.9",
+    "puppeteer-core": "^25.12.0",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
     "sharp": "^0.35.4",
