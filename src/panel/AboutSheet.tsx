@@ -1,11 +1,11 @@
-import { ExternalLink, X } from 'lucide-react'
-import { useEffect, useState, type ReactNode } from 'react'
+import { ScrollText, X } from 'lucide-react'
+import { useEffect, type ReactNode } from 'react'
 import { useLibraryStore } from '../store/libraryStore'
 import { currentUser } from '../sync/auth'
 import { isGuest } from '../sync/localStore'
 import { Logo } from './Logo'
 import { Tip } from './Tip'
-import { iconAction, secondaryButton } from './ui'
+import { iconAction } from './ui'
 
 const COMMIT = import.meta.env.BUILD_COMMIT
 const built = new Intl.DateTimeFormat('sv-SE', { dateStyle: 'medium', timeStyle: 'short' }).format(
@@ -49,10 +49,7 @@ export function AboutSheet() {
             <X size={20} strokeWidth={1.75} aria-hidden />
           </button>
         </Tip>
-        <div className="flex flex-col items-center gap-2">
-          <Logo height={40} />
-          <p className="text-center text-muted">Möbler i 3D, med kaplista och kapschema.</p>
-        </div>
+        <Logo height={40} />
         <dl className="grid w-full grid-cols-[auto_1fr] gap-x-4 gap-y-2 rounded-lg bg-canvas p-3">
           <Row label="Version">
             <Commit />
@@ -65,25 +62,45 @@ export function AboutSheet() {
           <br />
           Koden hyvlad av Claude, tills Lars var nöjd.
         </p>
-        <div className="grid w-full grid-cols-2 gap-2 narrow:grid-cols-1">
-          <a href={REPO_URL} target="_blank" rel="noreferrer" className={secondaryButton}>
-            Källkoden på GitHub
-            <ExternalLink size={16} aria-hidden />
+        {/* Länkar ut ur appen (nya flikar), inte åtgärder: en lätt rad, som i en Om-ruta på macOS. */}
+        <nav
+          aria-label="Länkar"
+          className="flex w-full flex-wrap justify-center gap-x-2 gap-y-1 border-t border-line pt-3"
+        >
+          <a href={REPO_URL} target="_blank" rel="noreferrer" className={outLink}>
+            <GitHubMark />
+            GitHub
           </a>
-          <a href={LICENSES_URL} target="_blank" rel="noreferrer" className={secondaryButton}>
-            Licenser och tack
-            <ExternalLink size={16} aria-hidden />
+          <a href={LICENSES_URL} target="_blank" rel="noreferrer" className={outLink}>
+            <ScrollText size={16} strokeWidth={1.75} aria-hidden />
+            Licenser
           </a>
-        </div>
+        </nav>
       </div>
     </div>
   )
 }
 
+/** En länk i raden längst ner: som text, med en yta som är lätt att träffa med fingret. */
+const outLink =
+  'inline-flex h-9 items-center gap-1.5 rounded-md px-2 whitespace-nowrap text-accent hover:bg-hover narrow:h-11'
+
+/**
+ * GitHubs symbol (Octicons mark-github, MIT). lucide har inga varumärken sedan version 1.
+ * Färgen följer texten.
+ */
+function GitHubMark() {
+  return (
+    <svg viewBox="0 0 16 16" width={16} height={16} fill="currentColor" aria-hidden>
+      <path d="M8 0c4.42 0 8 3.58 8 8a8.013 8.013 0 0 1-5.45 7.59c-.4.08-.55-.17-.55-.38 0-.27.01-1.13.01-2.2 0-.75-.25-1.23-.54-1.48 1.78-.2 3.65-.88 3.65-3.95 0-.88-.31-1.59-.82-2.15.08-.2.36-1.02-.08-2.12 0 0-.67-.22-2.2.82-.64-.18-1.32-.27-2-.27-.68 0-1.36.09-2 .27-1.53-1.03-2.2-.82-2.2-.82-.44 1.1-.16 1.92-.08 2.12-.51.56-.82 1.28-.82 2.15 0 3.06 1.86 3.75 3.64 3.95-.23.2-.44.55-.51 1.07-.46.21-1.61.55-2.33-.66-.15-.24-.6-.83-1.23-.82-.67.01-.27.38.01.53.34.19.73.9.82 1.13.16.45.68 1.31 2.69.94 0 .67.01 1.3.01 1.49 0 .21-.15.45-.55.38A7.995 7.995 0 0 1 0 8c0-4.42 3.58-8 8-8Z" />
+    </svg>
+  )
+}
+
 const account = () => {
-  if (isGuest()) return 'Utan konto: allt sparas bara i den här webbläsaren'
+  if (isGuest()) return 'Utan konto'
   const user = currentUser()
-  if (user?.dev) return 'dev (ingen inloggning i dev)'
+  if (user?.dev) return 'dev'
   return user?.name ?? '–'
 }
 
@@ -96,9 +113,8 @@ function Row({ label, children }: { label: string; children: ReactNode }) {
   )
 }
 
-/** Commiten, kort och som länk till GitHub; knappen kopierar hela hashen (att klistra in i en felrapport). */
+/** Commiten, kort och som länk till GitHub. */
 function Commit() {
-  const [copied, setCopied] = useState(false)
   if (!COMMIT) return <span>okänd</span>
   const dirty = import.meta.env.BUILD_DIRTY
   return (
@@ -112,18 +128,11 @@ function Commit() {
       >
         {COMMIT.slice(0, 7)}
       </a>
-      {dirty && <span className="text-warn">med ändringar som inte är incheckade</span>}
-      <button
-        className="cursor-pointer text-accent hover:underline"
-        onClick={() =>
-          void navigator.clipboard?.writeText(COMMIT + (dirty ? ' (med ändringar)' : '')).then(() => {
-            setCopied(true)
-            setTimeout(() => setCopied(false), 1500)
-          })
-        }
-      >
-        {copied ? 'Kopierad' : 'Kopiera'}
-      </button>
+      {dirty && (
+        <span className="text-warn" title="Ändringar som inte är incheckade">
+          + lokala ändringar
+        </span>
+      )}
     </span>
   )
 }
