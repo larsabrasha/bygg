@@ -738,7 +738,7 @@ export function Landing({ openApp = false }: { openApp?: boolean }) {
         <footer className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-6 pt-6 pb-[max(32px,env(safe-area-inset-bottom))] text-[12px] text-faint">
           <Logo height={18} />
           <div className="flex items-center gap-3">
-            <span>Mått i millimeter. Data på din egen server.</span>
+            <span>Mått i millimeter. Kan köras på din egen server.</span>
             <a
               href={REPO_URL}
               target="_blank"
