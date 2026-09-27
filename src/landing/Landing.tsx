@@ -282,27 +282,47 @@ const STEPS = [
   },
 ]
 
-/** Nattduksbordet sprängs isär medan man scrollar genom avsnittet; texten byts i tre steg. */
+/**
+ * Nattduksbordet går isär när avsnittet kommer in i bild, och vrids sakta medan man läser.
+ * Sidan scrollar som vanligt; ingen scroll går åt till att bara driva animationen. Stegen
+ * står bredvid som en vanlig lista. På smal skärm står de under, och bilden stannar under
+ * sidhuvudet medan de scrollar förbi, så att möbeln syns hela tiden.
+ */
 function Explode() {
+  const wide = useMedia('(min-width: 900px)')
   const section = useRef<HTMLElement>(null)
+  const text = useRef<HTMLDivElement>(null)
+  const stage = useRef<HTMLDivElement>(null)
   const control = useRef<StageControl>({ explode: 0, turn: 0 })
-  const bar = useRef<HTMLDivElement>(null)
-  const [step, setStep] = useState(0)
 
   useEffect(() => {
     let frame = 0
     const update = () => {
       frame = 0
       const el = section.current
-      if (!el) return
+      if (!el || !text.current || !stage.current) return
       const r = el.getBoundingClientRect()
-      const p = Math.min(1, Math.max(0, -r.top / Math.max(1, r.height - innerHeight)))
-      // Isär under första halvan, stilla en stund, sedan vrids den.
-      const e = Math.min(1, p / 0.62)
-      control.current.explode = e * e * (3 - 2 * e)
-      control.current.turn = p * 1.1
-      if (bar.current) bar.current.style.transform = `scaleX(${p})`
-      setStep(p < 0.3 ? 0 : p < 0.66 ? 1 : 2)
+      const clamp = (x: number) => Math.min(1, Math.max(0, x))
+      let apart: number
+      let turn: number
+      if (wide) {
+        // Hur långt avsnittets överkant har kommit upp från skärmens underkant, i pixlar.
+        const entered = innerHeight - r.top
+        // Ihop när avsnittet kommer in, helt isär när överkanten är en fjärdedel från toppen.
+        apart = clamp((entered - innerHeight * 0.25) / (innerHeight * 0.5))
+        turn = clamp(entered / (r.height + innerHeight))
+      } else {
+        // Bilden står först i avsnittet och fastnar när den når sin top (under sidhuvudet).
+        // Den står still medan texten scrollar förbi, alltså så långt som texten är hög.
+        const top = parseFloat(getComputedStyle(stage.current).top)
+        const past = top - (r.top + parseFloat(getComputedStyle(el).paddingTop))
+        const run = Math.max(1, text.current.offsetHeight)
+        // Går isär först när den fastnat, och är helt isär vid det andra steget.
+        apart = clamp(past / (run * 0.55))
+        turn = clamp(past / run)
+      }
+      control.current.explode = apart * apart * (3 - 2 * apart)
+      control.current.turn = turn * 1.2
     }
     const on = () => (frame ||= requestAnimationFrame(update))
     update()
@@ -314,51 +334,53 @@ function Explode() {
       removeEventListener('resize', on)
       cancelAnimationFrame(frame)
     }
-  }, [])
+  }, [wide])
 
   return (
-    <section ref={section} className="relative h-[320svh]" aria-label="Så fungerar det">
-      <div className="sticky top-0 grid h-svh grid-cols-[minmax(0,5fr)_minmax(0,7fr)] overflow-hidden max-[899px]:grid-cols-1 max-[899px]:grid-rows-[minmax(0,1fr)_auto]">
-        <div className="relative z-10 mx-auto flex w-full max-w-[520px] flex-col justify-center px-6 max-[899px]:row-start-2 max-[899px]:pb-[max(32px,env(safe-area-inset-bottom))]">
+    <section
+      ref={section}
+      aria-label="Så fungerar det"
+      className="mx-auto grid max-w-6xl items-center gap-x-12 px-6 py-24 min-[900px]:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] max-[899px]:py-16"
+    >
+      <div ref={text} className="max-w-[480px] max-[899px]:order-2 max-[899px]:pt-6">
+        <Reveal>
           <Eyebrow>Så fungerar det</Eyebrow>
-          <ol className="grid">
-            {STEPS.map((s, i) => (
-              // Alla steg i samma ruta: höjden är den största, så att inget hoppar när de byts.
-              <li
-                key={s.title}
-                aria-current={step === i ? 'step' : undefined}
-                className={`[grid-area:1/1] transition-[opacity,translate] duration-500 ease-out motion-reduce:transition-none ${
-                  step === i
-                    ? 'translate-y-0 opacity-100'
-                    : i < step
-                      ? '-translate-y-4 opacity-0'
-                      : 'translate-y-4 opacity-0'
-                }`}
-              >
-                <h2 className="text-[clamp(30px,4vw,48px)] leading-[1.02] font-semibold tracking-[-0.03em] text-balance">
+        </Reveal>
+        <ol className="flex flex-col gap-10">
+          {STEPS.map((s, i) => (
+            <li key={s.title}>
+              <Reveal delay={i * 90}>
+                <p className="mb-2 text-[12px] font-medium text-faint tabular-nums">0{i + 1}</p>
+                <h2 className="text-[clamp(24px,2.6vw,30px)] leading-[1.1] font-semibold tracking-[-0.02em] text-balance">
                   {s.title}
                 </h2>
-                <p className="mt-5 max-w-[420px] text-[17px] leading-relaxed text-muted text-pretty max-[899px]:text-[15px]">
+                <p className="mt-3 text-[16px] leading-relaxed text-muted text-pretty max-[899px]:text-[15px]">
                   {s.text}
                 </p>
-              </li>
-            ))}
-          </ol>
-          <div className="mt-10 flex items-center gap-4">
-            <span className="text-[12px] font-medium text-faint tabular-nums">0{step + 1} / 03</span>
-            <div className="h-px flex-1 bg-line">
-              <div ref={bar} className="h-px origin-left scale-x-0 bg-ink" />
-            </div>
-          </div>
-        </div>
+              </Reveal>
+            </li>
+          ))}
+        </ol>
+      </div>
+      {/* Smal skärm: stannar under sidhuvudet (64 px), med bakgrund så att texten glider in under den. */}
+      <div
+        ref={stage}
+        className="h-[min(78svh,720px)] min-h-[440px] max-[899px]:sticky max-[899px]:top-[calc(env(safe-area-inset-top)+64px)] max-[899px]:z-10 max-[899px]:-mx-6 max-[899px]:h-[min(38svh,calc(100vw-48px))] max-[899px]:min-h-[200px] max-[899px]:bg-studio max-[899px]:px-6"
+      >
         <Stage
           view={nattduksbordView}
           control={control}
           explodeScale={1.15}
           spin={0}
-          shift={[0, 0.02]}
-          className="size-full max-[899px]:row-start-1"
+          // Smal skärm: texten står under, så möbeln fyller bilden mer och bilden är lägre.
+          fill={wide ? nattduksbordView.fill : 0.96}
+          shift={wide ? [0, 0.02] : [0, 0]}
+          className="size-full"
           label="Ett nattduksbord i björk som delas upp i sina delar: sidor, topp, botten, hyllplan, rygg och lådfront med knopp."
+        />
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-x-0 top-full h-6 bg-linear-to-b from-studio to-transparent min-[900px]:hidden"
         />
       </div>
     </section>
