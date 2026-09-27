@@ -213,22 +213,42 @@ export function buildCutPlan(bodies: readonly Body[], settings: StockSettings = 
       .map((_, i) => i)
       .sort((a, b) => stocks[a]!.width - stocks[b]!.width || stocks[a]!.length - stocks[b]!.length)
     let assign = parts.map((p) => order.find((i) => fits(p, i)) ?? -1)
-    const pack = (i: number, a: readonly number[]) =>
-      packGuillotine(
-        bins[i]!,
-        parts.filter((p) => a[p.index] === i).map((p) => item(p, i)),
-        kerf,
-      )
+    // Samma delar på samma mått packas bara en gång: sökningen nedan prövar samma utlägg många gånger.
+    const packs = new Map<string, ReturnType<typeof packGuillotine<Part>>>()
+    const pack = (i: number, a: readonly number[]) => {
+      const mine = parts.filter((p) => a[p.index] === i)
+      const key = `${i}|${bins[i]!.width}|${mine.map((p) => p.index).join(',')}`
+      let hit = packs.get(key)
+      if (!hit)
+        packs.set(
+          key,
+          (hit = packGuillotine(
+            bins[i]!,
+            mine.map((p) => item(p, i)),
+            kerf,
+          )),
+        )
+      return hit
+    }
 
     // I ett förslag får brädor och limfogsskivor den standardlängd som ger minst material:
     // fyra ben om 720 ryms på en bräda om 3000 i stället för två om 2400. Vid lika den kortaste.
     if (!saved && !sheet) {
       stocks.forEach((stock, i) => {
         const lengths = isPanel(false, stock) ? PANEL.lengths : BOARD.lengths
-        let best = { length: stock.length, cost: pack(i, assign).length * stock.length }
+        const count = pack(i, assign).length
+        let best = { length: stock.length, cost: count * stock.length }
+        // Ytan delarna tar ger ett lägsta antal brädor för varje längd; räcker det inte för att
+        // slå det bästa behöver den längden inte packas. Ryms allt på en är längre bara dyrare.
+        const need = parts
+          .filter((p) => assign[p.index] === i)
+          .reduce((sum, p) => sum + (p.length + allowance) * p.width, 0)
         for (const length of lengths.filter((l) => l > stock.length)) {
+          if (best.cost <= length || count === 0) break
+          const bin = binOf({ ...stock, length })
+          if (Math.ceil(need / (bin.width * bin.height)) * length >= best.cost) continue
           stocks[i] = { ...stock, length }
-          bins[i] = binOf(stocks[i]!)
+          bins[i] = bin
           const cost = pack(i, assign).length * length
           if (cost < best.cost) best = { length, cost }
         }

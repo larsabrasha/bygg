@@ -3,6 +3,12 @@ import type { Body, Instance, ModelDocument, PartDef, ToolShape } from './types'
 
 const cache = new WeakMap<ModelDocument, Body[]>()
 
+/**
+ * Verktygslistorna från förra gången, per innehåll. Samma verktyg ger samma array, så att
+ * BodyMesh (som jämför tools som referens) inte ritar om delar med verktyg vid varje ändring.
+ */
+let lastLists = new Map<string, readonly ToolShape[]>()
+
 interface Tools {
   /** Per form: gäller alla länkade kopior (urtag, tillägg och tappar). */
   byDef: Map<string, ToolShape[]>
@@ -22,6 +28,7 @@ function collectTools(doc: ModelDocument, defs: Map<string, PartDef>): Tools {
   const byId = new Map<string, Instance>(doc.instances.map((i) => [i.id, i]))
   const byDef = new Map<string, ToolShape[]>()
   const byInstance = new Map<string, ToolShape[]>()
+  const keys = new Map<ToolShape[], Set<string>>()
   const push = (
     out: Map<string, ToolShape[]>,
     key: string,
@@ -31,6 +38,7 @@ function collectTools(doc: ModelDocument, defs: Map<string, PartDef>): Tools {
     d: PartDef,
   ) => {
     const list = out.get(key) ?? []
+    const seen = keys.get(list) ?? new Set<string>()
     const shape: ToolShape = {
       op,
       profile: d.profile,
@@ -43,7 +51,11 @@ function collectTools(doc: ModelDocument, defs: Map<string, PartDef>): Tools {
     // skiva hamnar på samma ställe i den delade formen): räkna det bara en gång. Annars
     // ritades benen med fyra tappar på varandra, och manifold blev långsam på dem.
     const k = toolKey(shape)
-    if (!list.some((x) => toolKey(x) === k)) list.push(shape)
+    if (!seen.has(k)) {
+      seen.add(k)
+      list.push(shape)
+    }
+    keys.set(list, seen)
     out.set(key, list)
   }
   for (const t of doc.instances) {
@@ -71,13 +83,21 @@ export function resolveBodies(doc: ModelDocument): Body[] {
   // Tapphål skärs ut och ändrar inte ämnet, så det räcker med formens verktyg.
   const blanks = new Map([...byDef].map(([id, list]) => [id, blankBox(defs.get(id)!, list)]))
   const bodies: Body[] = []
+  const lists = new Map<string, readonly ToolShape[]>()
+  const stable = (list: readonly ToolShape[]) => {
+    const k = list.map(toolKey).join('|')
+    const same = lists.get(k) ?? lastLists.get(k) ?? list
+    lists.set(k, same)
+    return same
+  }
   for (const inst of doc.instances) {
     const d = defs.get(inst.defId)
     if (!d) continue
     const shared = byDef.get(d.id)
     const holes = byInstance.get(inst.id)
     // Utan tapphål delar länkade kopior samma lista, och därmed samma geometri.
-    const own = holes ? [...(shared ?? []), ...holes] : shared
+    const joined = holes ? [...(shared ?? []), ...holes] : shared
+    const own = joined && stable(joined)
     const blank = blanks.get(d.id)
     bodies.push({
       id: inst.id,
@@ -97,6 +117,7 @@ export function resolveBodies(doc: ModelDocument): Body[] {
       ...(blank && { blank }),
     })
   }
+  lastLists = lists
   cache.set(doc, bodies)
   return bodies
 }

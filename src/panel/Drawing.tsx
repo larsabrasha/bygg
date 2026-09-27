@@ -1,6 +1,5 @@
 import { FileDown, Loader2, Share } from 'lucide-react'
 import { lazy, Suspense, useEffect, useEffectEvent, useMemo, useRef, useState, type ReactNode } from 'react'
-import { buildCutPlan } from '../model/cutPlan'
 import { buildCutList } from '../model/cutlist'
 import { overallSize } from '../model/drawing'
 import { explodeOffsets } from '../model/explode'
@@ -16,6 +15,7 @@ import { downloadFile, TOUCH } from './fileOut'
 import { useLibraryStore } from '../store/libraryStore'
 import { useViewStore } from '../store/viewStore'
 import { MainViewsSheet } from './MainViewsSheet'
+import { useCutPlan } from './useCutPlan'
 import { PartSheet } from './PartSheet'
 import { DrawingBar } from './DrawingBar'
 import { ICON, primaryButton } from './ui'
@@ -132,10 +132,8 @@ function DrawingView() {
   const offsets = useMemo(() => explodeOffsets(bodies, amount), [bodies, amount])
   const cutList = useMemo(() => buildCutList(bodies), [bodies])
   const stock = useDocumentStore((s) => s.doc.stock)
-  const cutPlan = useMemo(() => {
-    const plan = buildCutPlan(bodies, stock)
-    return plan.groups.length > 0 ? plan : undefined
-  }, [bodies, stock])
+  const { plan, stale: planStale } = useCutPlan(bodies, stock)
+  const cutPlan = plan && plan.groups.length > 0 ? plan : undefined
   // En position per likadan del: samma ämne men olika hål eller tappar blir olika positioner.
   const positions = useMemo(() => drawingPositions(bodies), [bodies])
   const size = useMemo(() => overallSize(bodies), [bodies])
@@ -220,7 +218,10 @@ function DrawingView() {
     parts.length > 0 &&
     layout !== null &&
     Object.keys(mainImages).length === shots.length &&
-    (!needsManifold || manifold !== null)
+    (!needsManifold || manifold !== null) &&
+    // Kapschemat räknas i en worker; PDF:en väntar på det som hör till modellen.
+    plan !== null &&
+    !planStale
   const build = useEffectEvent(buildPdfFile)
   useEffect(() => {
     if (!ready || file) return
