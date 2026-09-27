@@ -41,8 +41,7 @@ export interface MaterialSpec {
  * - Plywood: Ljungberg Fritzoe, "Produktblad Björkplywood": 1 220 × 2 440 i 6,5–24,
  *   1 250 × 2 500 i 4, 1 525 × 1 525 i 6 och 8.
  * - MDF: Bauhaus och Hornbach, "MDF-skivor"; Beijer och Bygma: 1 220 × 2 440 i 6–25.
- * - Spånskiva: XL-Bygg och Hornbach, "Spånskivor": 1 200 × 2 500 i 12–22. Vitlaminerad:
- *   Beijer, K-Bygg och Optimera, 1 220 × 2 490 i 12–19; 2 070 × 2 800 hos skivgrossister.
+ * - Spånskiva: XL-Bygg och Hornbach, "Spånskivor": 1 200 × 2 500 i 12–22.
  * - Board (masonit): Bauhaus och Byggmax, 3 mm i 1 220 × 2 440, också 2,4 och oljehärdad 6.
  * - Akryl: Stocksundet, "Plexiglas akrylplast", och GOP: 3 050 × 2 050 och 2 050 × 1 520, 2–10.
  * - Glas: Glasjour, "Floatglas" och "Lamellglas". Floatglas 3–12, i montrar oftast 6 eller 8.
@@ -85,18 +84,6 @@ export const MATERIAL_SPECS: readonly MaterialSpec[] = [
     thicknesses: [12, 16, 19, 22],
     sheets: [{ length: 2500, width: 1200 }],
     color: '#cdb389',
-  },
-  {
-    id: 'vit spånskiva',
-    name: 'vit spånskiva',
-    kind: 'sheet',
-    grain: false,
-    thicknesses: [12, 16, 19],
-    sheets: [
-      { length: 2490, width: 1220 },
-      { length: 2800, width: 2070 },
-    ],
-    color: '#f1f0ec',
   },
   {
     id: 'masonit',
@@ -149,10 +136,10 @@ const unknown = (id: string): MaterialSpec => ({ id, name: id, kind: 'wood', gra
 export const materialSpec = (id: string): MaterialSpec => BY_ID.get(id) ?? unknown(id)
 
 /** Som det skrivs först i en rad eller rubrik: "Björkplywood", "MDF". */
-export const materialTitle = (id: string) => {
-  const name = materialSpec(id).name
-  return name.charAt(0).toLocaleUpperCase('sv') + name.slice(1)
-}
+export const materialTitle = (id: string) => firstUpper(materialSpec(id).name)
+
+/** Med stor första bokstav: "färg NCS S 0502-Y" → "Färg NCS S 0502-Y". */
+export const firstUpper = (s: string) => s.charAt(0).toLocaleUpperCase('sv') + s.slice(1)
 
 /** Skivor som sågas (plywood, MDF, akryl), inte massivt trä och inte glas. */
 export const isSheetMaterial = (id: string) => materialSpec(id).kind === 'sheet'

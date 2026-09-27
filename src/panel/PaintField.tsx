@@ -39,14 +39,14 @@ export function PaintField({ instanceId, def }: { instanceId: string; def: PartD
         onClick={() => updatePart(instanceId, { paint: { color: FIRST_COLOR } })}
       >
         <PaintBucket {...ICON_SM} />
-        Måla delen
+        Lägg till färg
       </button>
     )
   }
 
   return (
     <div className={fieldLabel}>
-      Målas i
+      Färg
       <div className="flex items-center gap-2">
         <input
           ref={picker}

@@ -114,5 +114,5 @@ export function groupByMaterial(rows: readonly CutListRow[]): MaterialGroup[] {
   return groups
 }
 
-/** "målas NCS S 0502-Y", eller bara "målas" när koden inte är skriven. */
-export const paintText = (paint: Paint) => (paint.code ? `målas ${paint.code}` : 'målas')
+/** "färg NCS S 0502-Y", eller bara "färg" när koden inte är skriven. */
+export const paintText = (paint: Paint) => (paint.code ? `färg ${paint.code}` : 'färg')

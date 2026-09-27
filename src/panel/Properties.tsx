@@ -4,7 +4,7 @@ import { AXES, extent, widthAxis } from '../model/partAxes'
 import { anglesOf, restOf } from '../model/orientation'
 import { minCorner, WORLD_AXES } from '../model/placement'
 import { instanceCounts, resolveBodies } from '../model/resolve'
-import { MATERIAL_GROUPS, MATERIAL_SPECS, materialSpec } from '../model/materials'
+import { MATERIAL_GROUPS, MATERIAL_SPECS, materialSpec, materialTitle } from '../model/materials'
 import type { Axis, Body, Instance, PartDef } from '../model/types'
 import { AXIS_COLORS } from '../scene/colors'
 import { useDocumentStore } from '../store/documentStore'
@@ -276,7 +276,7 @@ export function Properties() {
                   <optgroup key={g.kind} label={g.title}>
                     {MATERIAL_SPECS.filter((m) => m.kind === g.kind).map((m) => (
                       <option key={m.id} value={m.id}>
-                        {m.name}
+                        {materialTitle(m.id)}
                       </option>
                     ))}
                   </optgroup>

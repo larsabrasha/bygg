@@ -8,7 +8,7 @@ import { EmptyState } from './EmptyState'
 import { CutPlanView } from './CutPlanView'
 import { CutListPicture } from './pictures'
 import { groupTitle, sectionTitle } from './ui'
-import { isOrdered, materialTitle } from '../model/materials'
+import { firstUpper, isOrdered, materialTitle } from '../model/materials'
 
 const num = numberFormat(1, true)
 const volume = numberFormat(4, true)
@@ -129,7 +129,7 @@ function Row({ row }: { row: CutListRow }) {
                 style={{ background: row.paint.color }}
                 aria-hidden
               />
-              {paintText(row.paint)}
+              {firstUpper(paintText(row.paint))}
             </span>
           </span>
         )}

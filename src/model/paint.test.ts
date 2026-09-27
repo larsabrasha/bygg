@@ -34,8 +34,8 @@ describe('färg på en del', () => {
       testBody({ id: 'd' }),
     ]).rows
     expect(rows.map((r) => [r.count, r.paint && paintText(r.paint)])).toEqual([
-      [2, 'målas NCS S 0500-N'],
-      [1, 'målas'],
+      [2, 'färg NCS S 0500-N'],
+      [1, 'färg'],
       [1, undefined],
     ])
   })
