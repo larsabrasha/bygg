@@ -32,6 +32,8 @@ and generating cut lists. Self-hosted, runs in the browser (PWA).
   the share image (public/delningsbild.jpg). The screenshots of the app (src/landing/app) are taken with `npm run appshots`.
 - No CSG kernel at first; manifold-3d is added when needed
 - CLI (cli/, `npm run -s bygg -- help`): edits models with operations that run in the app's own documentStore.
+  Bundled into one file (scripts/buildCli.mjs → dist/cli/bygg.mjs) that the server hands out; `curl -fsSL <server>/install.sh | sh`
+  installs it with only Node (server/install.ts).
   Keys for the CLI are created on /auth/cli (server/tokens.ts). Limits for models and accounts in src/model/limits.ts
   apply everywhere: when drawing, on import, on the server and in the CLI.
 - The server pushes changes immediately (/api/events, SSE, server/events.ts); the app then syncs instead of

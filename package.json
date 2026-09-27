@@ -10,6 +10,7 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "build:server": "node scripts/buildServer.mjs",
+    "build:cli": "node scripts/buildCli.mjs",
     "typecheck": "tsc -b --noEmit",
     "lint": "eslint .",
     "test": "vitest run",

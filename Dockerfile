@@ -5,8 +5,9 @@ COPY package.json package-lock.json ./
 RUN npm ci
 COPY . .
 # The server is bundled into one file with its dependencies (scripts/buildServer.mjs),
-# so the image needs neither node_modules nor TypeScript at runtime.
-RUN npm run build && npm run build:server
+# so the image needs neither node_modules nor TypeScript at runtime. The CLI likewise
+# (scripts/buildCli.mjs), into dist/cli/, where /install.sh fetches it from.
+RUN npm run build && npm run build:server && npm run build:cli
 
 FROM node:24-alpine
 WORKDIR /app

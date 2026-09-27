@@ -15,16 +15,45 @@ npm run typecheck && npm run lint
 
 `bygg` reads and edits models from the terminal, for example on behalf of Claude (see `.claude/skills/bygg-cli`).
 
+### Install
+
+The server hands out the CLI as one file; installing needs Node 24 or later, not this repo:
+
 ```sh
-npm run -s bygg -- help                 # all commands; `ops` lists the operations for edit
-npm run -s bygg -- login --server https://bygg.larsabrasha.com
-npm run -s bygg -- new "Bord"
-npm run -s bygg -- edit "Bord" --ops '[{"op":"box","name":"Skiva","size":[900,22,500],"at":[0,698,0],"grain":"x"}]'
-npm run -s bygg -- cutlist "Bord"
+curl -fsSL https://bygg.larsabrasha.com/install.sh | sh
 ```
 
-`login` opens `/auth/cli`, where a signed-in user creates a key and pastes it in. The key is valid for 90 days
-and is stored in `~/.config/bygg/config.json`. The dev server needs no key. `npm link` gives you the `bygg` command.
+This puts `bygg` in `~/.local/bin` (`BYGG_BIN_DIR` picks another folder) and says so if that folder is not on
+your PATH. Run the same command again to update; `rm ~/.local/bin/bygg` removes it. The file is built by
+`npm run build:cli` (into `dist/cli/bygg.mjs`, as in the Docker image); the script is `server/install.ts`.
+
+To run the CLI from a clone instead, so that code changes take effect immediately: `npm install`, then `npm link`
+(or `npm run -s bygg -- <command>` without linking). `npm unlink -g bygg` removes the link.
+
+### Sign in
+
+```sh
+bygg login --server https://bygg.larsabrasha.com
+```
+
+This opens `<server>/auth/cli` in the browser (`--no-browser` just prints the address). Sign in there, create a key,
+paste it into the terminal and press Enter. The key is valid for 90 days and is stored with the server address in
+`~/.config/bygg/config.json`. `bygg whoami` checks it; `bygg logout` revokes it on the server and deletes it locally.
+
+Against the dev server (`npm run dev`, the default when no server is given) no key is needed: `bygg login` just saves the address.
+
+The address and key can also come from the environment (`BYGG_SERVER`, `BYGG_TOKEN`) or from `--server`.
+Order of precedence: flag, environment, config file.
+
+### Use
+
+```sh
+bygg help                 # all commands
+bygg ops                  # the operations `edit` accepts
+bygg new "Bord"
+bygg edit "Bord" --ops '[{"op":"box","name":"Skiva","size":[900,22,500],"at":[0,698,0],"grain":"x"}]'
+bygg cutlist "Bord"
+```
 
 The limits (`src/model/limits.ts`) apply in the app, on import, on the server and in the CLI: 500 models per account,
 2,000 parts per model and everything within 100 m of the origin, among others. A key may make 120 requests per minute and

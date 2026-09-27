@@ -5,7 +5,7 @@ description: Model furniture in the Bygg app from the terminal with the `bygg` C
 
 # Bygg CLI
 
-Run `npm run -s bygg -- <command>` in the repo (or `bygg` if it is linked with `npm link`).
+Run `npm run -s bygg -- <command>` in the repo, or `bygg` if it is installed (`curl -fsSL <server>/install.sh | sh`) or linked with `npm link`.
 First read `npm run -s bygg -- help` and `npm run -s bygg -- ops`; they describe all commands and operations.
 
 Workflow:

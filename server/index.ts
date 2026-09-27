@@ -5,6 +5,7 @@ import type { Context } from 'hono'
 import { createApp } from './app'
 import { noAuth, oidcAuth } from './auth'
 import { withAppUrl } from './indexHtml'
+import { installScript } from './install'
 import { UserStorages } from './storage'
 import { TokenStore } from './tokens'
 
@@ -75,6 +76,13 @@ const indexHtml = existsSync(indexFile) ? withAppUrl(readFileSync(indexFile, 'ut
 const sendIndex = indexHtml === null ? serveStatic({ path: indexFile }) : (c: Context) => c.html(indexHtml)
 app.get('/', sendIndex)
 app.get('/index.html', sendIndex)
+// CLI:t installeras med curl -fsSL <server>/install.sh | sh (se install.ts). Bara om det är byggt.
+if (existsSync(`${staticDir}/cli/bygg.mjs`))
+  app.get('/install.sh', (c) =>
+    c.text(installScript(appUrl ?? new URL(c.req.url).origin), 200, {
+      'content-type': 'text/x-shellscript; charset=utf-8',
+    }),
+  )
 app.use('/*', serveStatic({ root: staticDir }))
 // En asset som saknas (t.ex. gammal hash efter uppdatering) ska ge 404, inte index.html.
 app.get('/assets/*', (c) => c.text('Finns inte', 404))

@@ -102,9 +102,11 @@ export default defineConfig(({ mode }) => {
           // wasm: manifold-3d (lägg till och skär ut) ska fungera offline också; webp: trätexturerna;
           // mjs: pdf.js-workern (PDF-visaren i ritningen). html: också licenser.html (Om Bygg).
           globPatterns: ['**/*.{js,mjs,css,html,svg,png,webp,ico,webmanifest,wasm}'],
+          // The CLI (scripts/buildCli.mjs) is for the terminal, not the app.
+          globIgnores: ['cli/**'],
           // Appens sidor får index.html från cachen; API:t och inloggningen går alltid till nätet.
           navigateFallback: '/index.html',
-          navigateFallbackDenylist: [/^\/api\//, /^\/auth\//],
+          navigateFallbackDenylist: [/^\/api\//, /^\/auth\//, /^\/install\.sh$/, /^\/cli\//],
           runtimeCaching: [
             { urlPattern: /^\/api\//, handler: 'NetworkOnly' },
             // Handkontrollernas modeller i VR (WebXR Input Profiles): hämtas första gången, sedan offline.
