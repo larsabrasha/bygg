@@ -30,11 +30,18 @@ import {
 const num = numberFormat(1)
 const ICON_SM = { size: 16, strokeWidth: 1.75, 'aria-hidden': true } as const
 
-/** Slagen som de heter när man lägger till ett material: vad det betyder för kaplistan och kapschemat. */
+/** Slagen som de heter i listrutan och på materialets rad. Korta, så att listan inte radbryts på iOS. */
 const KIND_LABEL: Record<MaterialKind, string> = {
-  wood: 'Massivt trä: brädor och limfog',
-  sheet: 'Skiva: sågas, med kapschema',
-  ordered: 'Glas: beställs tillskuret, sågas inte',
+  wood: 'Massivt trä',
+  sheet: 'Skiva',
+  ordered: 'Beställs tillskuret',
+}
+
+/** Under listrutan: vad slaget betyder för kaplistan och kapschemat (se model/cutPlan). */
+const KIND_HINT: Record<MaterialKind, string> = {
+  wood: 'Kapschemat räknar på brädor och limfogsskivor i standardmått. Har alltid fiber.',
+  sheet: 'Kapschemat lägger ut delarna på hela skivor i måtten nedan.',
+  ordered: 'Står i kaplistan med måtten att beställa, men inte i kapschemat. Till exempel glas eller sten.',
 }
 
 /** Ett nytt eget material: en skiva, som de flesta egna material i en verkstad är. */
@@ -252,7 +259,7 @@ function ShownRow({
 
 /** "Skiva · 12, 16, 19 mm · 2 440 × 1 220": det viktigaste om ett material på en rad. */
 function summary(m: MaterialFields): string {
-  const kind = { wood: 'Massivt trä', sheet: 'Skiva', ordered: 'Glas' }[m.kind]
+  const kind = KIND_LABEL[m.kind]
   const thick =
     m.kind !== 'wood' && m.thicknesses?.length ? `${m.thicknesses.map((t) => num.format(t)).join(', ')} mm` : ''
   const sheet =
@@ -341,6 +348,7 @@ function MaterialForm({
             </option>
           ))}
         </select>
+        <span className="text-faint">{KIND_HINT[m.kind]}</span>
       </label>
       {m.kind !== 'wood' && (
         <label className={fieldLabel}>
