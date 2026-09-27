@@ -52,7 +52,7 @@ export function CutList() {
           {view === 'list' &&
             groups.map((g) => (
               <div key={g.material} className="flex flex-col gap-1">
-                <div className="flex items-center gap-2 px-1.5">
+                <div className="flex items-center gap-2 px-2">
                   <span
                     className="size-3 shrink-0 rounded-[3px] ring-1 ring-black/15 ring-inset"
                     style={{ background: materialColor(g.material) }}
@@ -65,7 +65,7 @@ export function CutList() {
                   </span>
                 </div>
                 <div role="table" aria-label={materialTitle(g.material)} className="text-[13px]">
-                  <div role="row" className={`${cols} ${groupTitle} border-b border-line py-1.5 [&>*]:font-semibold`}>
+                  <div role="row" className={`${cols} ${groupTitle} px-0.5 py-1.5 [&>*]:font-semibold`}>
                     <span role="columnheader" className="text-right">
                       St
                     </span>
@@ -80,9 +80,12 @@ export function CutList() {
                       T
                     </span>
                   </div>
-                  {g.rows.map((row) => (
-                    <Row key={row.key} row={row} />
-                  ))}
+                  {/* Ett kort per material, som korten i Kapschema. Radens hörn följer kortets: 6 + 2 = 8 px. */}
+                  <div role="rowgroup" className="flex flex-col rounded-lg bg-hover p-0.5">
+                    {g.rows.map((row) => (
+                      <Row key={row.key} row={row} />
+                    ))}
+                  </div>
                 </div>
               </div>
             ))}
@@ -105,51 +108,48 @@ function Row({ row }: { row: CutListRow }) {
   const select = useDocumentStore((s) => s.select)
   const isSelected = selection?.kind === 'body' && row.bodyIds.includes(selection.id)
 
-  // Markeringen är en rundad ruta med luft mot linjerna runt om, inte en fylld remsa mellan dem.
   return (
-    <div className="border-b border-line py-0.5">
-      <div
-        role="row"
-        aria-selected={isSelected}
-        className={`${cols} cursor-pointer rounded-md py-1.5 hover:bg-hover aria-selected:bg-accent-soft narrow:py-2.5`}
-        onClick={() => {
-          const id = row.bodyIds[0]
-          if (id) select({ kind: 'body', id })
-        }}
-      >
-        <span role="cell" className="text-right font-semibold tabular-nums">
-          {row.count}
-        </span>
-        <span role="cell">
-          {compactNames(row.names)}
-          {/* L×B×T är ämnet; en rund del får sin diameter under namnet. */}
-          {row.round && (
-            <span className="block text-xs text-muted tabular-nums">Rund, Ø {num.format(row.round.diameter)}</span>
-          )}
-          {/* Kulören får gå ut under måtten, där raden är tom, i stället för att brytas i den smala kolumnen. */}
-          {row.paint && (
-            <span className="relative block h-4">
-              <span className="absolute inset-y-0 left-0 flex items-center gap-1.5 text-xs whitespace-nowrap text-muted">
-                <span
-                  className="size-2.5 shrink-0 rounded-full ring-1 ring-black/15 ring-inset"
-                  style={{ background: row.paint.color }}
-                  aria-hidden
-                />
-                {firstUpper(paintText(row.paint))}
-              </span>
+    <div
+      role="row"
+      aria-selected={isSelected}
+      className={`${cols} cursor-pointer rounded-md py-2 hover:bg-button aria-selected:bg-accent-soft narrow:py-3`}
+      onClick={() => {
+        const id = row.bodyIds[0]
+        if (id) select({ kind: 'body', id })
+      }}
+    >
+      <span role="cell" className="text-right font-semibold tabular-nums">
+        {row.count}
+      </span>
+      <span role="cell">
+        {compactNames(row.names)}
+        {/* L×B×T är ämnet; en rund del får sin diameter under namnet. */}
+        {row.round && (
+          <span className="block text-xs text-muted tabular-nums">Rund, Ø {num.format(row.round.diameter)}</span>
+        )}
+        {/* Kulören får gå ut under måtten, där raden är tom, i stället för att brytas i den smala kolumnen. */}
+        {row.paint && (
+          <span className="relative block h-4">
+            <span className="absolute inset-y-0 left-0 flex items-center gap-1.5 text-xs whitespace-nowrap text-muted">
+              <span
+                className="size-2.5 shrink-0 rounded-full ring-1 ring-black/15 ring-inset"
+                style={{ background: row.paint.color }}
+                aria-hidden
+              />
+              {firstUpper(paintText(row.paint))}
             </span>
-          )}
-        </span>
-        <span role="cell" className={dim}>
-          {num.format(row.length)}
-        </span>
-        <span role="cell" className={dim}>
-          {num.format(row.width)}
-        </span>
-        <span role="cell" className={dim}>
-          {num.format(row.thickness)}
-        </span>
-      </div>
+          </span>
+        )}
+      </span>
+      <span role="cell" className={dim}>
+        {num.format(row.length)}
+      </span>
+      <span role="cell" className={dim}>
+        {num.format(row.width)}
+      </span>
+      <span role="cell" className={dim}>
+        {num.format(row.thickness)}
+      </span>
     </div>
   )
 }
