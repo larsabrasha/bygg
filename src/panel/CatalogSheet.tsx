@@ -413,8 +413,7 @@ function Colors() {
       <section className="flex flex-col gap-2">
         <h3 className={groupTitle}>Egna färger</h3>
         <p className="text-[13px] text-muted">
-          Kulörerna ni brukar använda, t.ex. utställningens grafiska profil. De syns under Färg på en del, i alla
-          modeller.
+          Kulörerna du brukar måla med, t.ex. en NCS-kod från färgburken. De syns under Färg på en del, i alla modeller.
         </p>
         {catalog.colors.map((c) => (
           <SavedColorRow key={c.id} color={c} />
