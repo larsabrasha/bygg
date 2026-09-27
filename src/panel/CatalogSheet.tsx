@@ -39,12 +39,11 @@ const KIND_LABEL: Record<MaterialKind, string> = {
   ordered: 'Beställs tillskuret',
 }
 
-/** Under listrutan: vad slaget betyder för kaplistan och kapschemat (se model/cutPlan). */
+/** Vid varje slag i formuläret: vad det betyder för kaplistan och kapschemat (se model/cutPlan). Kort, det ska gå att se i farten. */
 const KIND_HINT: Record<MaterialKind, string> = {
-  wood: 'Kapschemat räknar på brädor och limfogsskivor i standardmått. Har alltid fiber.',
-  sheet: 'Kapschemat lägger ut delarna på hela skivor i måtten nedan.',
-  ordered:
-    'Beställs färdigt tillskuret, till exempel glas eller sten. Står i kaplistan med måtten, men inte i kapschemat.',
+  wood: 'Brädor i standardmått',
+  sheet: 'Läggs ut på hela skivor',
+  ordered: 'Glas, sten – bara i kaplistan',
 }
 
 /** Ett nytt eget material: en skiva, som de flesta egna material i en verkstad är. */
@@ -359,7 +358,8 @@ function MaterialDialog({
         role="dialog"
         aria-modal
         aria-label={title}
-        className="flex max-h-full w-[min(440px,100%)] flex-col overflow-hidden rounded-xl border border-line bg-panel shadow-2xl narrow:h-dvh narrow:w-full narrow:rounded-none narrow:border-0"
+        // Fast höjd, efter det högsta slaget (Skiva): rutan ska inte hoppa när man byter slag och fälten ändras.
+        className="flex h-[min(100%,var(--material-dialog-h))] w-[min(440px,100%)] flex-col overflow-hidden rounded-xl border border-line bg-panel shadow-2xl [--material-dialog-h:720px] narrow:h-dvh narrow:w-full narrow:rounded-none narrow:border-0"
       >
         <header className="flex items-center gap-2 border-b border-line px-4 py-2 pt-[max(8px,env(safe-area-inset-top))]">
           <h2 className="min-w-0 flex-1 truncate text-base font-semibold">{title}</h2>
@@ -369,21 +369,17 @@ function MaterialDialog({
             </button>
           </Tip>
         </header>
-        <div className="flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto p-4 pb-[max(16px,env(safe-area-inset-bottom))]">
+        <div className="min-h-0 flex-1 overflow-y-auto p-4">
           <MaterialForm value={value} onChange={onChange} />
-          {children}
         </div>
+        {/* Knapparna står still längst ner, vad slaget än är. */}
+        <footer className="border-t border-line px-4 py-3 pb-[max(12px,env(safe-area-inset-bottom))]">
+          {children}
+        </footer>
       </div>
     </div>,
     document.body,
   )
-}
-
-/** Slagen på knapparna i formuläret: kortare än KIND_LABEL, så att de tre ryms bredvid varandra på mobilen. */
-const KIND_SEGMENT: Record<MaterialKind, string> = {
-  wood: 'Massivt trä',
-  sheet: 'Skiva',
-  ordered: 'Tillskuret',
 }
 
 /**
@@ -430,22 +426,30 @@ function MaterialForm({
         </div>
       </div>
 
-      <section className="flex flex-col gap-2">
-        <div className={segmentGroup} role="group" aria-label="Slag">
-          {(Object.keys(KIND_SEGMENT) as MaterialKind[]).map((k) => (
-            <button
-              key={k}
-              className={segment}
-              aria-pressed={m.kind === k}
-              // Massivt trä har alltid fiber och standardvirkets mått (se swedishStock).
-              onClick={() => onChange(k === 'wood' ? { kind: k, grain: true } : { kind: k })}
+      {/* Slaget är ett val om vad materialet är, inte en vy att byta till: rader med förklaringen vid varje val. */}
+      <div role="radiogroup" aria-label="Slag" className={listCard}>
+        {(Object.keys(KIND_LABEL) as MaterialKind[]).map((k) => (
+          <button
+            key={k}
+            role="radio"
+            aria-checked={m.kind === k}
+            className={`${selectableListRow} group/kind flex cursor-pointer items-start gap-3 px-3 py-2.5 text-left hover:bg-button aria-checked:bg-accent-soft aria-checked:before:hidden [[aria-checked=true]+&]:before:hidden`}
+            // Massivt trä har alltid fiber och standardvirkets mått (se swedishStock).
+            onClick={() => onChange(k === 'wood' ? { kind: k, grain: true } : { kind: k })}
+          >
+            <span
+              aria-hidden
+              className="mt-0.5 grid size-4 shrink-0 place-items-center rounded-full border-2 border-disabled group-aria-checked/kind:border-accent"
             >
-              {KIND_SEGMENT[k]}
-            </button>
-          ))}
-        </div>
-        <p className="text-xs text-muted">{KIND_HINT[m.kind]}</p>
-      </section>
+              <span className="size-1.5 rounded-full bg-accent opacity-0 group-aria-checked/kind:opacity-100" />
+            </span>
+            <span className="min-w-0">
+              <span className="block text-[13px] font-semibold">{KIND_LABEL[k]}</span>
+              <span className="block text-xs text-muted">{KIND_HINT[k]}</span>
+            </span>
+          </button>
+        ))}
+      </div>
 
       {m.kind !== 'wood' && (
         <section className="flex flex-col gap-4">
