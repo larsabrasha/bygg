@@ -96,12 +96,24 @@ export function tenonFor(host: Body, into: Body): Tenon | string {
   }
 }
 
-/** Det i en kopia som påverkar var en tapp sitter: läget och formens mått. */
-function fitKey(doc: ModelDocument, id: string): string | null {
-  const inst = doc.instances.find((i) => i.id === id)
-  const def = inst && doc.defs.find((d) => d.id === inst.defId)
-  if (!inst || !def) return null
-  return JSON.stringify([inst.frame, def.profile, def.shape, def.z0, def.z1])
+/** Det i en kopia som påverkar var en tapp sitter: läget och formens mått. Som referenser: storen byter bara ut det som ändras. */
+function fitKeys(doc: ModelDocument) {
+  const instances = new Map(doc.instances.map((i) => [i.id, i]))
+  const defs = new Map(doc.defs.map((d) => [d.id, d]))
+  return (id: string) => {
+    const inst = instances.get(id)
+    const def = inst && defs.get(inst.defId)
+    return inst && def ? { inst, def } : null
+  }
+}
+
+/** Har kopian flyttats eller formen ändrat mått? Jämför som text bara när referenserna skiljer sig. */
+function fitChanged(a: ReturnType<ReturnType<typeof fitKeys>>, b: typeof a): boolean {
+  if (!a || !b) return a !== b
+  if (a.inst.frame === b.inst.frame && a.def === b.def) return false
+  const key = ({ inst, def }: NonNullable<typeof a>) =>
+    JSON.stringify([inst.frame, def.profile, def.shape, def.z0, def.z1])
+  return key(a) !== key(b)
 }
 
 /**
@@ -113,21 +125,30 @@ function fitKey(doc: ModelDocument, id: string): string | null {
  * carryTools). before är dokumentet före ändringen.
  */
 export function refitJoints(before: ModelDocument, after: ModelDocument): ModelDocument {
-  const changed = (id: string) => fitKey(before, id) !== fitKey(after, id)
+  const was = fitKeys(before)
+  const now = fitKeys(after)
+  const memo = new Map<string, boolean>()
+  const changed = (id: string) => {
+    let c = memo.get(id)
+    if (c === undefined) memo.set(id, (c = fitChanged(was(id), now(id))))
+    return c
+  }
   const joints = after.instances.filter(
     (t) => t.combine?.op === 'joint' && t.combine.into && (changed(t.combine.host) || changed(t.combine.into)),
   )
   if (joints.length === 0) return after
-  const bodies = resolveBodies(after)
+  const bodies = new Map(resolveBodies(after).map((b) => [b.id, b]))
+  const users = new Map<string, number>()
+  for (const i of after.instances) users.set(i.defId, (users.get(i.defId) ?? 0) + 1)
   const instances = new Map(after.instances.map((i) => [i.id, i]))
   const defs = new Map(after.defs.map((d) => [d.id, d]))
   for (const t of joints) {
-    const host = bodies.find((b) => b.id === t.combine!.host)
-    const into = bodies.find((b) => b.id === t.combine!.into)
+    const host = bodies.get(t.combine!.host)
+    const into = bodies.get(t.combine!.into!)
     const def = defs.get(t.defId)
     // En tapp vars form delas med en annan kopia räknas inte om (den andra skulle ändras med),
     // och inte heller en vars mått eller läge man styr med uttryck: där bestämmer man själv.
-    const shared = after.instances.some((i) => i.defId === t.defId && i.id !== t.id)
+    const shared = (users.get(t.defId) ?? 0) > 1
     if (!host || !into || !def || shared || def.dims || t.pos) continue
     const tenon = tenonFor(host, into)
     if (typeof tenon === 'string') continue

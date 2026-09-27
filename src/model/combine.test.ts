@@ -64,6 +64,15 @@ describe('lägg till och skär ut', () => {
     expect(docs().selection).toEqual({ kind: 'body', id: 'ben1' })
   })
 
+  it('samma verktyg ger samma lista när dokumentet ändras, så att delen inte ritas om', () => {
+    expect(docs().combine('hål', 'subtract', 'ben1')).toBeNull()
+    const before = bodies()[0]!.tools
+    docs().moveInstance('ben2', [10, 0, 0])
+    expect(bodies()[0]!.tools).toBe(before)
+    docs().pushPullBody('hål', 'n+', 5)
+    expect(bodies()[0]!.tools).not.toBe(before)
+  })
+
   it('ett tillägg gör ämnet större', () => {
     const box = def('regel', 400, 60, 20)
     // Tappen i regelns egna koordinater: 30 ut från änden längs u.

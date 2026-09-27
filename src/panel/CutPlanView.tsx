@@ -1,7 +1,6 @@
 import { ChevronDown, Plus, RotateCcw, SlidersHorizontal, X } from 'lucide-react'
 import { useId, useMemo, useRef, useState } from 'react'
 import {
-  buildCutPlan,
   countSame,
   groupCount,
   nextStock,
@@ -15,6 +14,7 @@ import {
 import { numberFormat } from '../model/numberFormat'
 import type { Body, StockSize } from '../model/types'
 import { materialColor } from '../scene/colors'
+import { useCutPlan } from './useCutPlan'
 import { useDocumentStore } from '../store/documentStore'
 import { CommitField } from './CommitField'
 import { plainNumber } from './numberStep'
@@ -69,11 +69,16 @@ function stockSummary(l: StockLayout, sheet: boolean): string {
  */
 export function CutPlanView({ bodies }: { bodies: readonly Body[] }) {
   const stock = useDocumentStore((s) => s.doc.stock)
-  const plan = useMemo(() => buildCutPlan(bodies, stock), [bodies, stock])
-  const materials = useMemo(() => materialList(plan), [plan])
+  const { plan, stale } = useCutPlan(bodies, stock)
+  const materials = useMemo(() => (plan ? materialList(plan) : []), [plan])
+  if (!plan) return <p className="text-sm text-muted">Räknar fram kapschemat …</p>
 
   return (
-    <div className="flex flex-col gap-6">
+    // Medan ett nytt schema räknas syns det gamla, svagare. Fördröjt, så att det inte blinkar när det går fort.
+    <div
+      className={`flex flex-col gap-6 transition-opacity ${stale ? 'opacity-50 delay-300' : 'delay-0'}`}
+      aria-busy={stale}
+    >
       {/* Överblicken: materialet som behövs och sågen, som två kort tätt ihop. */}
       <div className="flex flex-col gap-3">
         {materials.length > 0 && (
