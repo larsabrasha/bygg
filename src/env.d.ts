@@ -4,6 +4,4 @@ interface ImportMetaEnv {
   readonly BUILD_COMMIT: string
   /** Fanns det ändringar som inte var incheckade när appen byggdes. */
   readonly BUILD_DIRTY: boolean
-  /** När appen byggdes (i dev: när servern startade), ISO 8601. */
-  readonly BUILD_TIME: string
 }
