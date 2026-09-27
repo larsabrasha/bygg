@@ -1,5 +1,6 @@
 import { FileDown, Loader2, Share } from 'lucide-react'
 import { lazy, Suspense, useEffect, useEffectEvent, useMemo, useRef, useState, type ReactNode } from 'react'
+import { buildCutPlan } from '../model/cutPlan'
 import { buildCutList } from '../model/cutlist'
 import { overallSize } from '../model/drawing'
 import { explodeOffsets } from '../model/explode'
@@ -10,7 +11,7 @@ import type { Vec3 } from '../model/types'
 import { useManifold } from '../scene/csg'
 import { DrawingCanvas, type DrawingLayout } from '../scene/DrawingCanvas'
 import { OrthoRenderer, type OrthoShot } from '../scene/OrthoRenderer'
-import { useBodies } from '../store/documentStore'
+import { useBodies, useDocumentStore } from '../store/documentStore'
 import { downloadFile, TOUCH } from './fileOut'
 import { useLibraryStore } from '../store/libraryStore'
 import { useViewStore } from '../store/viewStore'
@@ -103,7 +104,7 @@ export function Drawing() {
 
 /**
  * Ritningen som PDF, visad direkt i appen (PdfViewer). Sammanställningen med
- * sprängskissen, huvudvyerna, ett detaljblad per position och sist kaplistan
+ * sprängskissen, huvudvyerna, ett detaljblad per position, kaplistan och sist kapschemat
  * (drawingPdf.tsx). Bilderna till den ritas först, osynligt bakom visaren: sprängskissen
  * med positionsnummer, modellen hopsatt och huvudvyerna. När PDF:en är klar tas de
  * bort, så att deras grafikminne släpps. Utskrift, delning och nedladdning använder
@@ -130,6 +131,11 @@ function DrawingView() {
   const parts = useMemo(() => bodies.filter((b) => !b.tool), [bodies])
   const offsets = useMemo(() => explodeOffsets(bodies, amount), [bodies, amount])
   const cutList = useMemo(() => buildCutList(bodies), [bodies])
+  const stock = useDocumentStore((s) => s.doc.stock)
+  const cutPlan = useMemo(() => {
+    const plan = buildCutPlan(bodies, stock)
+    return plan.groups.length > 0 ? plan : undefined
+  }, [bodies, stock])
   // En position per likadan del: samma ämne men olika hål eller tappar blir olika positioner.
   const positions = useMemo(() => drawingPositions(bodies), [bodies])
   const size = useMemo(() => overallSize(bodies), [bodies])
@@ -153,8 +159,8 @@ function DrawingView() {
   // Med hål och tappar väntar bilderna på manifold-3d (samma som delarna ritas med).
   const needsManifold = parts.some((b) => b.tools)
   const manifold = useManifold(needsManifold)
-  // Sammanställningen, huvudvyerna, ett detaljblad per position och sist kaplistan.
-  const sheets = (size ? 2 : 1) + details.length + 1
+  // Sammanställningen, huvudvyerna, ett detaljblad per position, kaplistan och sist kapschemat.
+  const sheets = (size ? 2 : 1) + details.length + 1 + (cutPlan ? 1 : 0)
   const date = new Date().toLocaleDateString('sv-SE')
 
   /** PDF:en för modellen, med bilderna som de ritats. */
@@ -171,6 +177,7 @@ function DrawingView() {
       size: size ? `${num.format(size.width)} × ${num.format(size.depth)} × ${num.format(size.height)}` : '–',
       positions,
       cutList,
+      cutPlan,
       exploded: exploded && { ...exploded, layout },
       assembled: picture(canvases.current.assembled),
       svgSheets: [
@@ -196,7 +203,7 @@ function DrawingView() {
             geometry={geometry}
             modelName={name}
             date={date}
-            sheet={sheets - details.length + i}
+            sheet={(size ? 3 : 2) + i}
             sheets={sheets}
           />
         )),

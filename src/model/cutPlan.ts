@@ -1,0 +1,142 @@
+import { buildCutList } from './cutlist'
+import { fitsBin, packGuillotine, type PackItem } from './guillotine'
+import type { Body, StockSettings, StockSize } from './types'
+
+/** Material som köps som skivor. Övriga köps som brädor eller limfogsskivor av massivt trä. */
+export const SHEET_MATERIALS: readonly string[] = ['plywood']
+
+export const DEFAULT_KERF = 3
+
+/** Hyvlat virke säljs i dessa bredder och i längder med 300 mm steg. */
+const BOARD_WIDTHS = [45, 70, 95, 120, 145, 170, 195]
+const BOARD_LENGTH = 2400
+const PANEL_WIDTH = 600
+const SHEET: StockSize = { length: 2440, width: 1220 }
+
+/** Köps som skiva (skivmaterial eller limfogsskiva, bredare än någon bräda) eller som bräda. */
+export const isPanel = (g: { sheet: boolean; stock: StockSize }) => g.sheet || g.stock.width > BOARD_WIDTHS.at(-1)!
+
+/** Nyckeln för lagermåttet: material och tjocklek (samma avrundning som kaplistan). */
+export const stockKey = (material: string, thickness: number) => `${material}|${thickness}`
+
+const roundUp = (n: number, step: number) => Math.ceil(n / step) * step
+
+/**
+ * Lagermåttet när inget är inställt. Skivmaterial: en hel skiva. Massivt trä:
+ * en bräda som räcker för den bredaste delen, eller en limfogsskiva om ingen
+ * bräda är bred nog; 2400 lång, eller längre om den längsta delen kräver det.
+ */
+export function defaultStock(material: string, parts: readonly { length: number; width: number }[]): StockSize {
+  if (SHEET_MATERIALS.includes(material)) return SHEET
+  const longest = Math.max(0, ...parts.map((p) => p.length))
+  const widest = Math.max(0, ...parts.map((p) => p.width))
+  const length = longest <= BOARD_LENGTH ? BOARD_LENGTH : roundUp(longest, 300)
+  const width = BOARD_WIDTHS.find((w) => w >= widest) ?? Math.max(PANEL_WIDTH, roundUp(widest, 100))
+  return { length, width }
+}
+
+export interface PlacedPiece {
+  bodyId: string
+  name: string
+  /** Läge och mått på skivan: x längs skivans längd, y längs dess bredd. */
+  x: number
+  y: number
+  length: number
+  width: number
+  /** Liggande tvärs skivans fiber. */
+  rotated: boolean
+}
+
+export interface CutPlanGroup {
+  key: string
+  material: string
+  thickness: number
+  sheet: boolean
+  stock: StockSize
+  /** Lagermåttet är inte inställt utan gissat (defaultStock). */
+  isDefault: boolean
+  /** En lista per skiva eller bräda. */
+  boards: PlacedPiece[][]
+  /** Delar som inte går in på en hel skiva eller bräda. */
+  tooBig: { bodyId: string; name: string; length: number; width: number }[]
+  /** Andel av skivornas yta som blir spill, 0–1. */
+  waste: number
+}
+
+export interface CutPlan {
+  groups: CutPlanGroup[]
+  kerf: number
+}
+
+interface Piece {
+  bodyId: string
+  name: string
+}
+
+/**
+ * Kapschemat: kaplistans delar utlagda på skivor och brädor, en grupp per
+ * material och tjocklek. Delens längd (L, längs fibern) ligger längs skivans
+ * längd, utom där skivan får vridas.
+ */
+export function buildCutPlan(bodies: readonly Body[], settings: StockSettings = {}): CutPlan {
+  const kerf = settings.kerf ?? DEFAULT_KERF
+  const names = new Map(bodies.map((b) => [b.id, b.name]))
+  const byKey = new Map<
+    string,
+    { material: string; thickness: number; parts: (Piece & { length: number; width: number })[] }
+  >()
+
+  for (const row of buildCutList(bodies).rows) {
+    if (row.length <= 0 || row.width <= 0) continue
+    const key = stockKey(row.material, row.thickness)
+    let group = byKey.get(key)
+    if (!group) byKey.set(key, (group = { material: row.material, thickness: row.thickness, parts: [] }))
+    for (const bodyId of row.bodyIds)
+      group.parts.push({ bodyId, name: names.get(bodyId) ?? '', length: row.length, width: row.width })
+  }
+
+  const groups: CutPlanGroup[] = []
+  for (const [key, { material, thickness, parts }] of byKey) {
+    const sheet = SHEET_MATERIALS.includes(material)
+    const saved = settings.sizes?.[key]
+    const stock = saved ?? defaultStock(material, parts)
+    const bin = { width: stock.length, height: stock.width }
+    const rotatable = sheet && stock.rotate === true
+
+    const items: PackItem<Piece>[] = []
+    const tooBig: CutPlanGroup['tooBig'] = []
+    for (const p of parts) {
+      const item = { width: p.length, height: p.width, rotatable, data: { bodyId: p.bodyId, name: p.name } }
+      if (fitsBin(bin, item)) items.push(item)
+      else tooBig.push({ bodyId: p.bodyId, name: p.name, length: p.length, width: p.width })
+    }
+
+    const boards = packGuillotine(bin, items, kerf).map((placed) =>
+      placed.map((p) => ({ ...p.data, x: p.x, y: p.y, length: p.width, width: p.height, rotated: p.rotated })),
+    )
+    const used = boards.flat().reduce((sum, p) => sum + p.length * p.width, 0)
+    const total = boards.length * stock.length * stock.width
+    groups.push({
+      key,
+      material,
+      thickness,
+      sheet,
+      stock,
+      isDefault: !saved,
+      boards,
+      tooBig,
+      waste: total > 0 ? 1 - used / total : 0,
+    })
+  }
+
+  // Samma ordning som kaplistan: material, sedan tjockast först.
+  groups.sort((a, b) => a.material.localeCompare(b.material, 'sv') || b.thickness - a.thickness)
+  return { groups, kerf }
+}
+
+/** Lika texter en gång, med antal före: "2 × Sarg (900 × 95)". */
+export function countSame(texts: readonly string[]): string[] {
+  const counts = new Map<string, number>()
+  for (const t of texts) counts.set(t, (counts.get(t) ?? 0) + 1)
+  return [...counts].map(([t, n]) => (n > 1 ? `${n} × ${t}` : t))
+}

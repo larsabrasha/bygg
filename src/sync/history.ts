@@ -22,6 +22,8 @@ interface PackedEntry {
   defs: number[]
   instances: number[]
   params: number[]
+  /** Lagermåtten, om modellen har några. */
+  stock?: number
   selection: Selection | null
 }
 
@@ -61,6 +63,7 @@ export function packHistory(
     defs: doc.defs.map(ref),
     instances: doc.instances.map(ref),
     params: doc.params.map(ref),
+    ...(doc.stock && { stock: ref(doc.stock) }),
     selection,
   })
   return { version: FORMAT_VERSION, savedAt, pool, past: past.map(pack), future: future.map(pack) }
@@ -86,12 +89,14 @@ export function unpackHistory(raw: unknown, savedAt: string): { past: HistoryEnt
   if (!Array.isArray(pool) || !Array.isArray(past) || !Array.isArray(future)) return null
   const unpack = (e: unknown): HistoryEntry | null => {
     if (!isObj(e)) return null
-    const doc: Record<string, unknown[]> = {}
+    const isRef = (i: unknown): i is number => Number.isInteger(i) && (i as number) >= 0 && (i as number) < pool.length
+    const doc: Record<string, unknown> = {}
     for (const key of KEYS) {
       const refs = e[key]
-      if (!Array.isArray(refs) || !refs.every((i) => Number.isInteger(i) && i >= 0 && i < pool.length)) return null
+      if (!Array.isArray(refs) || !refs.every(isRef)) return null
       doc[key] = refs.map((i: number) => pool[i])
     }
+    if (isRef(e.stock)) doc.stock = pool[e.stock]
     // Samma kontroll som när en modell öppnas, så att en trasig post inte kan krascha appen.
     const r = migrate({ version: FORMAT_VERSION, doc })
     return r.ok ? { doc: r.doc, selection: selectionOf(e.selection) } : null

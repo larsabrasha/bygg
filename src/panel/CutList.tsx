@@ -1,5 +1,5 @@
 import { Download } from 'lucide-react'
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { buildCutList, groupByMaterial, type CutListRow } from '../model/cutlist'
 import { compactNames } from '../model/cutlistExport'
 import { numberFormat } from '../model/numberFormat'
@@ -8,6 +8,7 @@ import { useBodies, useDocumentStore } from '../store/documentStore'
 import { useLibraryStore } from '../store/libraryStore'
 import { downloadCutListCsv } from './cutlistActions'
 import { EmptyState } from './EmptyState'
+import { CutPlanView } from './CutPlanView'
 import { CutListPicture } from './pictures'
 import { groupTitle, secondaryButton, sectionTitle } from './ui'
 
@@ -19,11 +20,16 @@ const capitalize = (s: string) => s.charAt(0).toLocaleUpperCase('sv') + s.slice(
 // Kolumnerna för L, B och T har fast bredd, så att måtten står i linje mellan materialen.
 const dimCol = 'w-12 text-right tabular-nums'
 
+/** En knapp i en rad där en är vald (Lista, Kapschema). */
+const segment =
+  'h-9 flex-1 cursor-pointer rounded-md text-[13px] font-medium text-muted aria-pressed:bg-accent-soft aria-pressed:text-accent narrow:h-10'
+
 export function CutList() {
   const bodies = useBodies()
   const cutList = useMemo(() => buildCutList(bodies), [bodies])
   const groups = useMemo(() => groupByMaterial(cutList.rows), [cutList])
   const modelName = useLibraryStore((s) => s.currentName)
+  const [view, setView] = useState<'list' | 'plan'>('list')
 
   return (
     <section className="group-data-[tab=params]/sheet:hidden group-data-[tab=properties]/sheet:hidden">
@@ -41,47 +47,65 @@ export function CutList() {
             <Stat label="Volym" value={volume.format(cutList.totalVolumeM3)} unit="m³" />
           </dl>
 
-          {groups.map((g) => (
-            <div key={g.material} className="flex flex-col gap-1">
-              <div className="flex items-center gap-2 px-1.5">
-                <span
-                  className="size-3 shrink-0 rounded-[3px] ring-1 ring-black/15 ring-inset"
-                  style={{ background: materialColor(g.material) }}
-                  aria-hidden
-                />
-                <h3 className="text-[13px] font-semibold">{capitalize(g.material)}</h3>
-                <span className="ml-auto text-xs text-muted tabular-nums">
-                  {g.count} st · {volume.format(g.volumeM3)} m³
-                </span>
-              </div>
-              <table className="w-full border-collapse text-[13px]">
-                <thead className={groupTitle}>
-                  <tr className="border-b border-line [&_th]:px-1.5 [&_th]:py-1.5 [&_th]:font-semibold">
-                    <th className="w-8 text-right">St</th>
-                    <th className="text-left">Del</th>
-                    <th className={dimCol}>L</th>
-                    <th className={dimCol}>B</th>
-                    <th className={`${dimCol} w-10`}>T</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {g.rows.map((row) => (
-                    <Row key={row.key} row={row} />
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          ))}
-
-          <div className="flex flex-col gap-3">
-            <p className="text-xs text-faint">Mått i mm. L längs fibern, T tjocklek.</p>
-            <div className="flex flex-wrap gap-2">
-              <button className={secondaryButton} onClick={() => downloadCutListCsv(cutList, modelName)}>
-                <Download size={16} strokeWidth={1.75} aria-hidden />
-                Ladda ner CSV
+          <div className="flex rounded-lg bg-button p-0.5" role="group" aria-label="Visa">
+            {(
+              [
+                ['list', 'Lista'],
+                ['plan', 'Kapschema'],
+              ] as const
+            ).map(([v, label]) => (
+              <button key={v} className={segment} aria-pressed={view === v} onClick={() => setView(v)}>
+                {label}
               </button>
-            </div>
+            ))}
           </div>
+
+          {view === 'plan' && <CutPlanView bodies={bodies} />}
+
+          {view === 'list' &&
+            groups.map((g) => (
+              <div key={g.material} className="flex flex-col gap-1">
+                <div className="flex items-center gap-2 px-1.5">
+                  <span
+                    className="size-3 shrink-0 rounded-[3px] ring-1 ring-black/15 ring-inset"
+                    style={{ background: materialColor(g.material) }}
+                    aria-hidden
+                  />
+                  <h3 className="text-[13px] font-semibold">{capitalize(g.material)}</h3>
+                  <span className="ml-auto text-xs text-muted tabular-nums">
+                    {g.count} st · {volume.format(g.volumeM3)} m³
+                  </span>
+                </div>
+                <table className="w-full border-collapse text-[13px]">
+                  <thead className={groupTitle}>
+                    <tr className="border-b border-line [&_th]:px-1.5 [&_th]:py-1.5 [&_th]:font-semibold">
+                      <th className="w-8 text-right">St</th>
+                      <th className="text-left">Del</th>
+                      <th className={dimCol}>L</th>
+                      <th className={dimCol}>B</th>
+                      <th className={`${dimCol} w-10`}>T</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {g.rows.map((row) => (
+                      <Row key={row.key} row={row} />
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ))}
+
+          {view === 'list' && (
+            <div className="flex flex-col gap-3">
+              <p className="text-xs text-faint">Mått i mm. L längs fibern, T tjocklek.</p>
+              <div className="flex flex-wrap gap-2">
+                <button className={secondaryButton} onClick={() => downloadCutListCsv(cutList, modelName)}>
+                  <Download size={16} strokeWidth={1.75} aria-hidden />
+                  Ladda ner CSV
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </section>

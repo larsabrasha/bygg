@@ -1,5 +1,5 @@
 import { axesFromLegacyGrain } from '../model/partAxes'
-import type { ModelDocument } from '../model/types'
+import type { ModelDocument, StockSettings } from '../model/types'
 
 /** Höj när formatet ändras, och lägg till en konvertering i migrate. */
 export const FORMAT_VERSION = 7
@@ -74,6 +74,26 @@ function isModelDocument(x: unknown): x is ModelDocument {
   )
 }
 
+const isStockSize = (x: unknown) =>
+  isObj(x) &&
+  isNum(x.length) &&
+  isNum(x.width) &&
+  x.length > 0 &&
+  x.width > 0 &&
+  (x.rotate === undefined || typeof x.rotate === 'boolean')
+
+/** Lagermåtten som ser rimliga ut; resten släpps, så att standardvärdena gäller och modellen ändå läses. */
+function cleanStock(x: unknown): StockSettings | undefined {
+  if (!isObj(x)) return undefined
+  const out: StockSettings = {}
+  if (isNum(x.kerf) && x.kerf >= 0) out.kerf = x.kerf
+  if (isObj(x.sizes)) {
+    const sizes = Object.entries(x.sizes).filter(([, v]) => isStockSize(v))
+    if (sizes.length) out.sizes = Object.fromEntries(sizes) as StockSettings['sizes']
+  }
+  return Object.keys(out).length ? out : undefined
+}
+
 export type LoadResult = { ok: true; doc: ModelDocument } | { ok: false; reason: string }
 
 /**
@@ -106,6 +126,11 @@ export function migrate(raw: unknown): LoadResult {
   // 5 → 6: kopior kan ha combine (verktyg som läggs till eller skärs ut), och skisser on
   // (delen de ritades på). Frivilliga fält.
   // 6 → 7: combine kan vara en tapp (op 'joint', into). Äldre appar skulle avvisa den.
+  // (7) dokumentet kan ha stock (kapschemats lagermått). Frivilligt och ofarligt att tappa, så
+  // versionen höjs inte: en server med äldre kod skulle annars neka att spara.
   if (!isModelDocument(doc)) return { ok: false, reason: 'Trasigt dokument' }
-  return { ok: true, doc }
+  if (doc.stock === undefined) return { ok: true, doc }
+  const { stock, ...rest } = doc
+  const clean = cleanStock(stock)
+  return { ok: true, doc: clean ? { ...rest, stock: clean } : rest }
 }

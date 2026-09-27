@@ -1,6 +1,7 @@
 import { jsPDF } from 'jspdf'
 import type { ReactElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
+import { countSame, isPanel, type CutPlan } from '../model/cutPlan'
 import { groupByMaterial, type CutList, type CutListRow } from '../model/cutlist'
 import { compactNames, compactNumbers } from '../model/cutlistExport'
 import { numberFormat } from '../model/numberFormat'
@@ -29,13 +30,15 @@ export interface PdfPicture {
 export interface DrawingPdfInput {
   name: string
   date: string
-  /** Antal blad; kaplistan är det sista. */
+  /** Antal blad; kaplistan är det sista, eller näst sista när kapschemat finns. */
   sheets: number
   /** Yttermåtten som text, "470 × 370 × 538". */
   size: string
   /** Stycklistan: en rad per position. */
   positions: readonly CutListRow[]
   cutList: CutList
+  /** Kapschemat, sist efter kaplistan. Saknas när inget finns att lägga ut. */
+  cutPlan?: CutPlan
   /** Sprängskissen, med ballongerna i samma pixlar som bilden. */
   exploded?: PdfPicture & { layout: DrawingLayout | null }
   assembled?: PdfPicture
@@ -59,6 +62,7 @@ export async function buildDrawingPdf(input: DrawingPdfInput): Promise<Blob> {
     await drawSvg(doc, sheet)
   }
   drawCutList(doc, input)
+  if (input.cutPlan) drawCutPlan(doc, input, input.cutPlan)
   return doc.output('blob')
 }
 
@@ -285,7 +289,8 @@ function drawCutList(doc: jsPDF, input: DrawingPdfInput) {
   text(doc, 'KAPLISTA', mx, y + 3, 2.6, { bold: true, gray: 51 })
   text(doc, input.name, mx, y + 10.5, 7, { bold: true })
   text(doc, input.date, mx + cw, y + 5, 3.2, { align: 'right', gray: 34 })
-  text(doc, `Blad ${input.sheets} (${input.sheets})`, mx + cw, y + 10, 3.2, { align: 'right', gray: 34 })
+  const sheet = input.cutPlan ? input.sheets - 1 : input.sheets
+  text(doc, `Blad ${sheet} (${input.sheets})`, mx + cw, y + 10, 3.2, { align: 'right', gray: 34 })
   y += 13.5
   line(doc, mx, y, mx + cw, y, 0.5)
   doc.setFont('helvetica', 'normal')
@@ -364,5 +369,114 @@ function drawCutList(doc: jsPDF, input: DrawingPdfInput) {
       y += r.h
       line(doc, mx, y, mx + cw, y, 0.2, 170)
     }
+  }
+}
+
+/** Lägsta höjd (mm) på en ritad bräda, så att smala delar syns; som på skärmen ritas den då högre än skalan. */
+const MIN_BOARD_MM = 8
+/** Högsta höjd (mm) på en ritad skiva, så att två ryms på en sida. */
+const MAX_BOARD_MM = 72
+
+/**
+ * Kapschemat på liggande A4, en eller flera sidor: per material och tjocklek
+ * lagermåttet och varje skiva eller bräda med delarna utlagda. Alla i en grupp
+ * i samma skala. Delarna har namn och mått där de ryms.
+ */
+function drawCutPlan(doc: jsPDF, input: DrawingPdfInput, plan: CutPlan) {
+  const { w: W, h: H } = PAGE
+  const mx = 12
+  const top = 12
+  const bottom = H - 12
+  const cw = W - 2 * mx
+
+  doc.addPage('a4', 'landscape')
+  let y = top
+  text(doc, 'KAPSCHEMA', mx, y + 3, 2.6, { bold: true, gray: 51 })
+  text(doc, input.name, mx, y + 10.5, 7, { bold: true })
+  text(doc, input.date, mx + cw, y + 5, 3.2, { align: 'right', gray: 34 })
+  text(doc, `Blad ${input.sheets} (${input.sheets})`, mx + cw, y + 10, 3.2, { align: 'right', gray: 34 })
+  y += 13.5
+  line(doc, mx, y, mx + cw, y, 0.5)
+  y += 5.5
+  text(
+    doc,
+    `Mått i mm. Delens längd (fibern) längs brädans och skivans längd. Sågblad ${num.format(plan.kerf)} mm. ` +
+      'Alla snitt går tvärs över biten. Smala brädor är ritade högre än skalan.',
+    mx,
+    y,
+    3.2,
+    { gray: 34 },
+  )
+  y += 4
+
+  const newPage = () => {
+    doc.addPage('a4', 'landscape')
+    y = top
+  }
+
+  for (const g of plan.groups) {
+    if (g.boards.length === 0 && g.tooBig.length === 0) continue
+    const k = Math.min(cw / g.stock.length, MAX_BOARD_MM / g.stock.width)
+    const bw = g.stock.length * k
+    const bh = Math.max(g.stock.width * k, MIN_BOARD_MM)
+    const ky = bh / g.stock.width
+    const panel = isPanel(g)
+    const unit = panel ? 'Skiva' : 'Bräda'
+    const captionH = 12
+    const boardH = 5 + bh + 4
+
+    // Rubriken står aldrig ensam längst ner: den följs av minst en bräda.
+    if (y + 6 + captionH + boardH > bottom) newPage()
+    else y += 6
+    const noun = panel ? (g.boards.length === 1 ? 'skiva' : 'skivor') : g.boards.length === 1 ? 'bräda' : 'brädor'
+    text(doc, `${capitalize(g.material)} ${num.format(g.thickness)} mm`, mx, y + 6.5, 4.4, { bold: true })
+    text(
+      doc,
+      `${unit} ${num.format(g.stock.length)} × ${num.format(g.stock.width)} · ${g.boards.length} ${noun} · ` +
+        `${Math.round(g.waste * 100)} % spill`,
+      mx + cw,
+      y + 6.5,
+      3.2,
+      { align: 'right', gray: 34 },
+    )
+    y += 9
+    line(doc, mx, y, mx + cw, y, 0.4)
+    y += 3
+    if (g.tooBig.length > 0) {
+      const names = countSame(g.tooBig.map((p) => `${p.name} (${num.format(p.length)} × ${num.format(p.width)})`)).join(
+        ', ',
+      )
+      doc.setFont('helvetica', 'normal')
+      doc.setFontSize(3.2 * PT)
+      const lines = doc.splitTextToSize(`Får inte plats på en hel ${unit.toLowerCase()}: ${names}`, cw) as string[]
+      lines.forEach((s, i) => text(doc, s, mx, y + 3 + i * 4.2, 3.2))
+      y += lines.length * 4.2 + 2
+    }
+
+    g.boards.forEach((pieces, i) => {
+      if (y + boardH > bottom) newPage()
+      text(doc, `${unit} ${i + 1}`, mx, y + 3.2, 3, { gray: 51 })
+      const by = y + 5
+      doc.setLineWidth(0.3)
+      doc.setDrawColor(0)
+      doc.rect(mx, by, bw, bh)
+      for (const p of pieces) {
+        const px = mx + p.x * k
+        const py = by + p.y * ky
+        const pw = p.length * k
+        const ph = p.width * ky
+        doc.setFillColor(222, 222, 222)
+        doc.setLineWidth(0.2)
+        doc.rect(px, py, pw, ph, 'FD')
+        // Namn och mått om de ryms, annars bara namnet, annars inget.
+        doc.setFont('helvetica', 'normal')
+        doc.setFontSize(2.8 * PT)
+        const dims = `${num.format(p.length)} × ${num.format(p.width)}`
+        const full = `${p.name} ${dims}`
+        const label = [full, p.name].find((t) => doc.getTextWidth(t) <= pw - 1.5)
+        if (label && ph >= 3.6) text(doc, label, px + pw / 2, py + ph / 2, 2.8, { align: 'center', baseline: 'middle' })
+      }
+      y += boardH
+    })
   }
 }

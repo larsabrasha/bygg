@@ -102,3 +102,22 @@ describe('format', () => {
     },
   )
 })
+
+describe('lagermått', () => {
+  it('läser lagermått och sågblad', () => {
+    const withStock = { ...doc, stock: { kerf: 2.5, sizes: { 'ek|22': { length: 2400, width: 145 } } } }
+    expect(migrate(JSON.parse(JSON.stringify(serialize(withStock))))).toEqual({ ok: true, doc: withStock })
+  })
+
+  it('släpper trasiga lagermått men läser modellen', () => {
+    const broken = {
+      ...doc,
+      stock: { kerf: -1, sizes: { 'ek|22': { length: 'lång', width: 145 }, 'ek|18': { length: 2400, width: 600 } } },
+    }
+    expect(migrate({ version: FORMAT_VERSION, savedAt: '', doc: broken })).toEqual({
+      ok: true,
+      doc: { ...doc, stock: { sizes: { 'ek|18': { length: 2400, width: 600 } } } },
+    })
+    expect(migrate({ version: FORMAT_VERSION, savedAt: '', doc: { ...doc, stock: 'x' } })).toEqual({ ok: true, doc })
+  })
+})

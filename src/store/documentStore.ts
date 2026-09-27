@@ -31,6 +31,7 @@ import type {
   PartDef,
   Rect,
   Shape,
+  StockSize,
   Vec3,
   WorldAxis,
 } from '../model/types'
@@ -95,6 +96,10 @@ interface DocumentState extends Snapshot {
   /** False om parametern används någonstans. */
   deleteParam: (id: string) => boolean
   /** Tar bort det valda. En del som har verktyg tar dem med sig. */
+  /** Lagermåttet för ett material och en tjocklek (stockKey); null går tillbaka till standardmåttet. */
+  setStockSize: (key: string, size: StockSize | null) => void
+  /** Sågbladets bredd för kapschemat, i mm. */
+  setKerf: (kerf: number) => void
   deleteSelection: () => void
   /**
    * Gör toolId till ett verktyg som läggs till på eller skärs ut ur hostId.
@@ -403,6 +408,19 @@ export const useDocumentStore = create<DocumentState>()((set, get) => {
       const inst = isConstant(text) ? placed : { ...placed, pos: { ...placed.pos, [axis]: text.trim() } }
       commit({ ...doc, instances: doc.instances.map((i) => (i.id === instanceId ? inst : i)) })
       return null
+    },
+
+    setStockSize: (key, size) => {
+      const { doc } = get()
+      const { [key]: _old, ...others } = doc.stock?.sizes ?? {}
+      void _old
+      const sizes = size ? { ...others, [key]: size } : others
+      commit({ ...doc, stock: { ...doc.stock, sizes } })
+    },
+
+    setKerf: (kerf) => {
+      const { doc } = get()
+      commit({ ...doc, stock: { ...doc.stock, kerf } })
     },
 
     addParam: () => {
