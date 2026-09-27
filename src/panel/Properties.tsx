@@ -47,38 +47,47 @@ function ExtentFields({ body, def }: { body: Body; def: PartDef }) {
   const setExtent = useDocumentStore((s) => s.setExtent)
   const name = (axis: Axis) => (axis === def.grainAxis ? 'Längd' : axis === def.thicknessAxis ? 'Tjocklek' : 'Bredd')
   // En cylinder har två mått: diametern (u och v är samma) och måttet längs den.
-  const fields: [string, Axis][] =
+  const fields: [string, string, Axis][] =
     def.shape === 'circle'
       ? [
-          ['Diameter', 'u'],
-          [name('n'), 'n'],
+          ['Diameter', 'Ø', 'u'],
+          [name('n'), name('n')[0]!, 'n'],
         ]
       : [
-          ['Längd', def.grainAxis],
-          ['Bredd', widthAxis(def)],
-          ['Tjocklek', def.thicknessAxis],
+          ['Längd', 'L', def.grainAxis],
+          ['Bredd', 'B', widthAxis(def)],
+          ['Tjocklek', 'T', def.thicknessAxis],
         ]
   return (
     <div className={`grid gap-2 ${fields.length === 2 ? 'grid-cols-2' : 'grid-cols-3'}`}>
-      {fields.map(([label, axis]) => {
+      {fields.map(([label, letter, axis]) => {
         const expr = def.dims?.[axis]?.expr
         const size = extent(body, axis)
         return (
-          <label key={label} className={fieldLabel}>
-            {label}
+          <div key={label} className="flex min-w-0 flex-col gap-1">
             <CommitField
               key={`${body.id}:${axis}`}
+              label={label}
+              prefix={<Letter>{letter}</Letter>}
+              quiet
               expr
               value={expr ?? fmt.format(size)}
               onCommit={(t) => setExtent(body.id, axis, t)}
             />
             {expr && <Computed value={size} />}
-          </label>
+          </div>
         )
       })}
     </div>
   )
 }
+
+/** L, B eller T före måttet, som etiketterna i 3D-vyn. */
+const Letter = ({ children }: { children: string }) => (
+  <span aria-hidden className="text-xs font-bold text-muted">
+    {children}
+  </span>
+)
 
 /**
  * Läget för delens hörn närmast origo, per världsaxel (som axelkorset).
@@ -97,6 +106,7 @@ function PositionFields({ inst, def }: { inst: Instance; def: PartDef }) {
               key={`${inst.id}:${axis}`}
               label={`Placering ${axis.toUpperCase()}`}
               prefix={<AxisTag index={i as 0 | 1 | 2} />}
+              quiet
               expr
               value={expr ?? fmt.format(corner[i]!)}
               onCommit={(t) => setPosition(inst.id, axis, t)}
@@ -112,6 +122,7 @@ function PositionFields({ inst, def }: { inst: Instance; def: PartDef }) {
 /**
  * Vinklar runt världens X, Y och Z i grader, räknat från hur delen låg innan
  * den vreds första gången. Delen vrids runt sin mitt. Uttryck beräknas men sparas inte.
+ * Enheten står i gruppens rubrik, som mm för måtten: i ett tyst fält hamnar den långt från talet.
  */
 function AngleFields({ inst }: { inst: Instance }) {
   const setAngle = useDocumentStore((s) => s.setAngle)
@@ -123,7 +134,7 @@ function AngleFields({ inst }: { inst: Instance }) {
           key={`${inst.id}:${axis}`}
           label={`Vinkel runt ${axis.toUpperCase()}`}
           prefix={<AxisTag index={i as 0 | 1 | 2} />}
-          suffix="°"
+          quiet
           expr
           value={fmt.format(angles[i]!)}
           onCommit={(t) => setAngle(inst.id, axis, t)}
@@ -310,11 +321,14 @@ export function Properties() {
 
           {/* Utan fiber (MDF, glas) följer fälten delens axlar; kaplistan tar det längsta som L. */}
           <Group title="Mått" note={materialSpec(def.material).grain ? 'mm · L går längs fibern' : 'mm'}>
-            <ExtentFields body={body} def={def} />
+            {/* Tipset om parametrar syns bara medan man ändrar ett mått. */}
+            <div className="group/dims flex flex-col gap-1.5">
+              <ExtentFields body={body} def={def} />
+              <p className="hidden text-xs text-faint group-focus-within/dims:block">
+                Skriv ett parameternamn, t.ex. <code>tjocklek</code>, så följer måttet parametern.
+              </p>
+            </div>
             <GrainControls body={body} def={def} />
-            <p className="text-xs text-faint">
-              Skriv ett parameternamn, t.ex. <code>tjocklek</code>, så följer måttet parametern.
-            </p>
           </Group>
 
           {inst && (
@@ -322,7 +336,7 @@ export function Properties() {
               <Group title="Placering" note="mm · hörnet närmast origo">
                 <PositionFields inst={inst} def={def} />
               </Group>
-              <Group title="Vinkel" note="runt delens mitt">
+              <Group title="Vinkel" note="grader · runt delens mitt">
                 <AngleFields inst={inst} />
               </Group>
             </>

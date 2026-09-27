@@ -15,6 +15,7 @@ export function CommitField({
   label,
   placeholder,
   expr = false,
+  quiet = false,
 }: {
   value: string
   /** Returnerar felmeddelande, eller null om värdet sparades. */
@@ -31,6 +32,11 @@ export function CommitField({
   placeholder?: string
   /** Fältet tar uttryck: föreslå parametrar och visa dem som badges. */
   expr?: boolean
+  /**
+   * Ser ut som text tills man pekar på fältet eller trycker i det: för tal som
+   * man läser oftare än ändrar (mått, placering, vinkel). Kräver prefix eller suffix.
+   */
+  quiet?: boolean
 }) {
   const [text, setText] = useDraft(value)
   const [error, setError] = useState<string | null>(null)
@@ -91,7 +97,7 @@ export function CommitField({
       {prefix || suffix ? (
         <span
           data-field-box
-          className={`flex h-10 items-center gap-1.5 rounded-lg border bg-field px-2.5 focus-within:border-accent focus-within:ring-2 focus-within:ring-accent-soft narrow:h-11 ${error ? 'border-danger' : 'border-line'}`}
+          className={`flex h-10 items-center gap-1.5 rounded-lg border px-2.5 focus-within:border-accent focus-within:ring-2 focus-within:ring-accent-soft narrow:h-11 ${quiet ? 'cursor-text focus-within:bg-field hover:not-focus-within:bg-hover' : 'bg-field'} ${error ? 'border-danger' : quiet ? 'border-transparent' : 'border-line'}`}
         >
           {prefix}
           {input}
