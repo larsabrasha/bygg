@@ -87,8 +87,8 @@ export function Boards({ material, layout }: { material: string; layout: StockLa
         )
       })}
       <p className="sr-only">
-        {layout.boards.length} brädor {mm.format(width)} × {mm.format(length)} mm med{' '}
-        {layout.boards.reduce((s, b) => s + b.length, 0)} delar.
+        {layout.boards.length} {layout.boards.length === 1 ? 'bräda' : 'brädor'} {mm.format(width)} ×{' '}
+        {mm.format(length)} mm med {layout.boards.reduce((s, b) => s + b.length, 0)} delar.
       </p>
     </div>
   )
