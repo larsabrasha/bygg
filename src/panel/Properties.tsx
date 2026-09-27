@@ -13,6 +13,7 @@ import { useCatalogStore } from '../store/catalogStore'
 import { useDocumentStore } from '../store/documentStore'
 import { useLibraryStore } from '../store/libraryStore'
 import { beginPushPull } from '../tools/actions'
+import { HostTools, ToolCard } from './CombineGroup'
 import { CommitField } from './CommitField'
 import { Group } from './Group'
 import { dangerButton, field, fieldLabel, primaryButton, secondaryButton, sectionTitle } from './ui'
@@ -196,75 +197,6 @@ function GrainControls({ body, def }: { body: Body; def: PartDef }) {
 
 const ICON_SM = { size: 16, strokeWidth: 1.75, 'aria-hidden': true } as const
 
-/**
- * Verktyg: vilken del det läggs till på eller skärs ut ur, och Lossa.
- * Värd: dess verktyg (tryck för att välja ett), och att det gäller alla länkade kopior.
- */
-function CombineGroup({ body }: { body: Body }) {
-  const doc = useDocumentStore((s) => s.doc)
-  const select = useDocumentStore((s) => s.select)
-  const detach = useDocumentStore((s) => s.detach)
-  const bodies = resolveBodies(doc)
-  const link = (id: string) => (
-    <button className="cursor-pointer font-semibold text-accent" onClick={() => select({ kind: 'body', id })}>
-      {bodies.find((b) => b.id === id)?.name}
-    </button>
-  )
-  if (body.tool) {
-    const { op, host, into } = body.tool
-    return (
-      <Group title={{ subtract: 'Skärs ut', add: 'Läggs till', joint: 'Tapp' }[op]}>
-        <p className="text-[13px] text-muted">
-          {op === 'joint' && into ? (
-            <>
-              Tapp på {link(host)}, med tapphål i {link(into)}. Tapphålet har samma form som tappen, så de passar alltid
-              ihop. Tappen finns på alla länkade kopior av {link(host)}, men tapphålet bara i den här {link(into)}, inte
-              i dess länkade kopior.
-            </>
-          ) : (
-            <>
-              {op === 'subtract' ? 'Skärs ut ur' : 'Läggs till på'} {link(host)}. Det gäller alla länkade kopior.
-            </>
-          )}{' '}
-          Flytta eller ändra den här delen så följer resultatet med.
-        </p>
-        <button className={secondaryButton} onClick={() => detach(body.id)}>
-          <Unlink {...ICON_SM} />
-          Lossa
-        </button>
-      </Group>
-    )
-  }
-  // Verktyg på delen, och tappar från andra delar som går in i den (tapphål).
-  const tools = bodies.filter((b) => b.tool?.host === body.id || b.tool?.into === body.id)
-  if (tools.length === 0) return null
-  const label = (t: Body) =>
-    t.tool!.op === 'joint'
-      ? t.tool!.into === body.id
-        ? 'tapphål'
-        : 'tapp'
-      : t.tool!.op === 'subtract'
-        ? 'skärs ut'
-        : 'läggs till'
-  return (
-    <Group title="Urskärningar och tillägg">
-      <ul className="flex flex-col">
-        {tools.map((t) => (
-          <li key={t.id}>
-            <button
-              className="flex h-9 w-full cursor-pointer items-center justify-between gap-2 rounded-md px-2 text-left text-[13px] hover:bg-hover narrow:h-11"
-              onClick={() => select({ kind: 'body', id: t.id })}
-            >
-              <span className="font-semibold">{t.name}</span>
-              <span className="text-muted">{label(t)}</span>
-            </button>
-          </li>
-        ))}
-      </ul>
-    </Group>
-  )
-}
-
 export function Properties() {
   const selection = useDocumentStore((s) => s.selection)
   const doc = useDocumentStore((s) => s.doc)
@@ -287,6 +219,8 @@ export function Properties() {
       <h2 className={sectionTitle}>Egenskaper</h2>
       {body && def ? (
         <div className="flex flex-col gap-4">
+          {/* Ett verktyg: först vad det formar. Material, färg, fiber och kopior gäller det inte. */}
+          {body.tool && <ToolCard body={body} />}
           <Group title="Del">
             {/* Samma ord som i kaplistan och på ritningen. */}
             <label className={fieldLabel}>
@@ -302,42 +236,47 @@ export function Properties() {
                 }}
               />
             </label>
-            <label className={fieldLabel}>
-              Material
-              <select
-                className={field}
-                value={def.material}
-                onChange={(e) => {
-                  if (e.target.value === EDIT_MATERIALS) useLibraryStore.getState().set({ catalogOpen: 'materials' })
-                  else updatePart(body.id, { material: e.target.value })
-                }}
-              >
-                {MATERIAL_GROUPS.map((g) => {
-                  const list = choices.filter((m) => m.kind === g.kind)
-                  return (
-                    list.length > 0 && (
-                      <optgroup key={g.kind} label={g.title}>
-                        {list.map((m) => (
-                          <option key={m.id} value={m.id}>
-                            {firstUpper(m.name)}
-                          </option>
-                        ))}
-                      </optgroup>
-                    )
-                  )
-                })}
-                {/* Ett dolt, borttaget eller okänt material står kvar för den del som har det. */}
-                {!choices.some((m) => m.id === def.material) && (
-                  <option value={def.material}>{materialTitle(def.material)}</option>
-                )}
-                <option value={EDIT_MATERIALS}>Redigera materiallistan…</option>
-              </select>
-            </label>
-            <PaintField instanceId={body.id} def={def} />
+            {!body.tool && (
+              <>
+                <label className={fieldLabel}>
+                  Material
+                  <select
+                    className={field}
+                    value={def.material}
+                    onChange={(e) => {
+                      if (e.target.value === EDIT_MATERIALS)
+                        useLibraryStore.getState().set({ catalogOpen: 'materials' })
+                      else updatePart(body.id, { material: e.target.value })
+                    }}
+                  >
+                    {MATERIAL_GROUPS.map((g) => {
+                      const list = choices.filter((m) => m.kind === g.kind)
+                      return (
+                        list.length > 0 && (
+                          <optgroup key={g.kind} label={g.title}>
+                            {list.map((m) => (
+                              <option key={m.id} value={m.id}>
+                                {firstUpper(m.name)}
+                              </option>
+                            ))}
+                          </optgroup>
+                        )
+                      )
+                    })}
+                    {/* Ett dolt, borttaget eller okänt material står kvar för den del som har det. */}
+                    {!choices.some((m) => m.id === def.material) && (
+                      <option value={def.material}>{materialTitle(def.material)}</option>
+                    )}
+                    <option value={EDIT_MATERIALS}>Redigera materiallistan…</option>
+                  </select>
+                </label>
+                <PaintField instanceId={body.id} def={def} />
+              </>
+            )}
           </Group>
 
           {/* Utan fiber (MDF, glas) följer fälten delens axlar; kaplistan tar det längsta som L. */}
-          <Group title="Mått" note={materialSpec(def.material).grain ? 'mm · L går längs fibern' : 'mm'}>
+          <Group title="Mått" note={materialSpec(def.material).grain && !body.tool ? 'mm · L går längs fibern' : 'mm'}>
             {/* Tipset om parametrar syns bara medan man ändrar ett mått. */}
             <div className="group/dims flex flex-col gap-1.5">
               <ExtentFields body={body} def={def} />
@@ -345,7 +284,7 @@ export function Properties() {
                 Skriv ett parameternamn, t.ex. <code>tjocklek</code>, så följer måttet parametern.
               </p>
             </div>
-            <GrainControls body={body} def={def} />
+            {!body.tool && <GrainControls body={body} def={def} />}
           </Group>
 
           {inst && (
@@ -359,30 +298,46 @@ export function Properties() {
             </>
           )}
 
-          <CombineGroup body={body} />
-
-          <Group title="Kopior" note={copies > 1 && <span className="text-accent">{copies} länkade</span>}>
-            {copies > 1 && <p className="text-[13px] text-muted">De delar form: ändrar du måtten här ändras alla.</p>}
-            <div className="grid grid-cols-2 gap-2">
-              <button className={secondaryButton} onClick={() => duplicateLinked(body.id)}>
-                <Copy {...ICON_SM} />
-                Länkad kopia
-              </button>
-              {copies > 1 && (
-                <Tip label="Ge den här kopian en egen form">
-                  <button className={secondaryButton} onClick={() => makeUnique(body.id)}>
-                    <Unlink {...ICON_SM} />
-                    Gör unik
+          {!body.tool && (
+            <>
+              <HostTools body={body} />
+              {/* Länkade kopior delar form (PartDef); det är så man gör fyra likadana ben. */}
+              <Group title="Likadana delar" note={copies > 1 && <span className="text-accent">{copies} st</span>}>
+                <p className="text-[13px] text-muted">
+                  {copies > 1 ? (
+                    <>
+                      {def.name} finns {copies} gånger, länkade: ändrar du måtten på en ändras alla. Gör unik om just
+                      den här ska få egna mått.
+                    </>
+                  ) : (
+                    <>
+                      Behöver du fler likadana, t.ex. fyra ben? En länkad kopia får samma mått och följer med när du
+                      ändrar dem.
+                    </>
+                  )}
+                </p>
+                <div className="grid grid-cols-2 gap-2">
+                  <button className={secondaryButton} onClick={() => duplicateLinked(body.id)}>
+                    <Copy {...ICON_SM} />
+                    Länkad kopia
                   </button>
-                </Tip>
-              )}
-            </div>
-          </Group>
+                  {copies > 1 && (
+                    <Tip label="Ge den här kopian en egen form">
+                      <button className={secondaryButton} onClick={() => makeUnique(body.id)}>
+                        <Unlink {...ICON_SM} />
+                        Gör unik
+                      </button>
+                    </Tip>
+                  )}
+                </div>
+              </Group>
 
-          <button className={`${dangerButton} w-full`} onClick={deleteSelection}>
-            <Trash2 {...ICON_SM} />
-            Ta bort del
-          </button>
+              <button className={`${dangerButton} w-full`} onClick={deleteSelection}>
+                <Trash2 {...ICON_SM} />
+                Ta bort del
+              </button>
+            </>
+          )}
         </div>
       ) : sketch ? (
         <div className="flex flex-col gap-4">

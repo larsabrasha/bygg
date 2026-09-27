@@ -53,6 +53,7 @@ function Scene() {
   const explodeShown = useViewStore((s) => s.explodeShown)
   const showDims = useViewStore((s) => s.showDims)
   const look = useViewStore((s) => s.look)
+  const peekTools = useViewStore((s) => s.peekTools)
   const scheme = useColorScheme()
   const inVr = useInVr()
   const exploded = useViewStore((s) => s.exploded) || explodeShown > 0
@@ -89,7 +90,7 @@ function Scene() {
   // I Välj visas den valda delens mått vid kanterna (etiketterna i panel/DimensionLabels).
   const dims = exploded ? null : dimensionsFor(doc, op, shownDimensionsOf(showDims, tool, op, selection))
 
-  // Verktyg (tillägg och urskärningar) syns som spöken när deras värd, eller de själva, är valda.
+  // Verktyg (tillägg och urtag) syns som spöken när deras värd, eller de själva, är valda.
   const shownHost = selectedBody?.tool?.host ?? selectedBody?.id
 
   return (
@@ -110,6 +111,7 @@ function Scene() {
             look={look}
             preview={preview?.affected.has(b.id)}
             selected={selectedBody?.id === b.id}
+            peek={!!b.tool && !!peekTools?.includes(b.id)}
             sibling={!!selectedBody && !b.tool && selectedBody.id !== b.id && selectedBody.defId === b.defId}
             highlightFace={
               active?.kind === 'body' && active.id === b.id

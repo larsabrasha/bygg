@@ -164,3 +164,84 @@ describe('tapp och tapphål', () => {
     })
   })
 })
+
+describe('tvillingar: tappar från länkade ben in i samma skiva', () => {
+  /** Två länkade ben 40×40×700 (längs z) under en skiva 500×100×20 som ligger på deras ändar. */
+  function table(): ModelDocument {
+    return {
+      sketches: [],
+      params: [],
+      defs: [def('ben', 40, 40, 700), def('skiva', 500, 100, 20)],
+      instances: [
+        { id: 'ben1', defId: 'ben', frame: identity(0, 0, 0) },
+        { id: 'ben2', defId: 'ben', frame: identity(400, 0, 0) },
+        { id: 'skiva', defId: 'skiva', frame: identity(-30, -30, 700) },
+      ],
+    }
+  }
+  const tenons = () => docs().doc.instances.filter((i) => i.combine?.op === 'joint')
+  const tenonOn = (host: string) => bodies().find((b) => b.tool?.host === host)!
+  const size = (id: string) => {
+    const b = bodies().find((x) => x.id === id)!
+    return [b.profile.x1 - b.profile.x0, b.profile.y1 - b.profile.y0, b.z1 - b.z0]
+  }
+
+  beforeEach(() => {
+    docs().load(table())
+    expect(docs().joint('ben1', 'skiva')).toBeNull()
+  })
+
+  it('en tapp på ett ben blir en tapp på båda, i en grupp', () => {
+    expect(tenons().map((t) => t.combine!.host)).toEqual(['ben1', 'ben2'])
+    const [a, b] = tenons()
+    expect(a!.combine!.group).toBeDefined()
+    expect(a!.combine!.group).toBe(b!.combine!.group)
+    expect(docs().joint('ben2', 'skiva')).toBe('ben har redan en tapp i skiva')
+  })
+
+  it('ett länkat ben som inte står under skivan får ingen tapp', () => {
+    docs().load({
+      ...table(),
+      instances: table().instances.map((i) => (i.id === 'ben2' ? { ...i, frame: identity(400, 0, -50) } : i)),
+    })
+    expect(docs().joint('ben1', 'skiva')).toBeNull()
+    expect(tenons()).toHaveLength(1)
+    expect(tenons()[0]!.combine!.group).toBeUndefined()
+  })
+
+  it('ändras måttet på en tapp ändras den andra, och benen har fortfarande en tapp', () => {
+    const [a, b] = [tenonOn('ben1').id, tenonOn('ben2').id]
+    expect(docs().setExtent(a, 'n', '15')).toBeNull()
+    expect(size(b)).toEqual(size(a))
+    expect(size(a)[2]).toBe(15)
+    // De länkade benen delar form: samma tapp från båda räknas en gång.
+    expect(bodies().find((x) => x.id === 'ben1')!.tools).toHaveLength(1)
+    // Skivan har två hål, ett för varje ben.
+    expect(bodies().find((x) => x.id === 'skiva')!.tools).toHaveLength(2)
+  })
+
+  it('flyttas en tapp flyttas den andra lika mycket på sitt ben', () => {
+    const [a, b] = [tenonOn('ben1').id, tenonOn('ben2').id]
+    const before = docs().doc.instances.find((i) => i.id === b)!.frame.origin
+    docs().moveInstance(a, [5, 0, 0])
+    expect(docs().doc.instances.find((i) => i.id === b)!.frame.origin).toEqual([before[0]! + 5, before[1], before[2]])
+    docs().undo()
+    expect(docs().doc.instances.find((i) => i.id === b)!.frame.origin).toEqual(before)
+  })
+
+  it('namnet följer med', () => {
+    docs().updatePart(tenonOn('ben1').id, { name: 'Dymling' })
+    expect(tenonOn('ben2').name).toBe('Dymling')
+  })
+
+  it('tas en tapp bort eller lossas, gäller det båda', () => {
+    docs().select({ kind: 'body', id: tenonOn('ben1').id })
+    docs().deleteSelection()
+    expect(tenons()).toHaveLength(0)
+    expect(bodies().find((x) => x.id === 'skiva')!.tools).toBeUndefined()
+    docs().undo()
+    docs().detach(tenonOn('ben2').id)
+    expect(tenons()).toHaveLength(0)
+    expect(docs().doc.instances).toHaveLength(5)
+  })
+})

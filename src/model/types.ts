@@ -104,6 +104,11 @@ export interface Combine {
   host: string
   /** Bara för joint: delen tappen går in i. */
   into?: string
+  /**
+   * Bara för joint: tappar med samma group hör ihop. De sitter på var sin länkad kopia (fyra ben)
+   * och går in i samma del (skivan); det man gör med en görs med alla (se syncJointTwins).
+   */
+  group?: string
 }
 
 /** En placerad kopia av en PartDef. */

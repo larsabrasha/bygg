@@ -1,10 +1,12 @@
 import { cleanMaterialSpec } from '../model/catalog'
+import { groupLegacyJoints } from '../model/combine'
+import { newId } from '../model/id'
 import { isBuiltInMaterial, type MaterialSpec } from '../model/materials'
 import { axesFromLegacyGrain } from '../model/partAxes'
 import type { ModelDocument, Paint, PartDef, StockSettings } from '../model/types'
 
 /** Höj när formatet ändras, och lägg till en konvertering i migrate. */
-export const FORMAT_VERSION = 7
+export const FORMAT_VERSION = 8
 
 export interface SavedFile {
   version: number
@@ -67,7 +69,8 @@ function isModelDocument(x: unknown): x is ModelDocument {
           (isObj(i.combine) &&
             (i.combine.op === 'add' || i.combine.op === 'subtract' || i.combine.op === 'joint') &&
             typeof i.combine.host === 'string' &&
-            (i.combine.into === undefined || typeof i.combine.into === 'string'))),
+            (i.combine.into === undefined || typeof i.combine.into === 'string') &&
+            (i.combine.group === undefined || typeof i.combine.group === 'string'))),
     ) &&
     Array.isArray(params) &&
     params.every(
@@ -164,10 +167,15 @@ export function migrate(raw: unknown): LoadResult {
   // (7) dokumentet kan ha stock (kapschemats lagermått). Frivilligt och ofarligt att tappa, så
   // versionen höjs inte: en server med äldre kod skulle annars neka att spara.
   // (7) former kan ha paint (färgen delen målas i). Frivilligt och ofarligt att tappa, som stock.
+  // 7 → 8: tappar kan ha group (de som hör ihop). Äldre filer får grupper för tappar som
+  // uppenbart hör ihop (groupLegacyJoints), en gång, när de läses.
   if (!isModelDocument(doc)) return { ok: false, reason: 'Trasigt dokument' }
+  const grouped = raw.version < 8 ? groupLegacyJoints(doc, newId) : doc
   // (7) dokumentet kan ha materials (kopior av egna material). Frivilligt: utan det ritas delarna
   // som okänt trä, men måtten stämmer. En äldre app behåller fältet när den sparar.
-  const painted = doc.defs.some((d) => d.paint !== undefined) ? { ...doc, defs: doc.defs.map(cleanDefPaint) } : doc
+  const painted = grouped.defs.some((d) => d.paint !== undefined)
+    ? { ...grouped, defs: grouped.defs.map(cleanDefPaint) }
+    : grouped
   const withMaterials = cleanDocMaterials(painted)
   if (withMaterials.stock === undefined) return { ok: true, doc: withMaterials }
   const { stock, ...rest } = withMaterials

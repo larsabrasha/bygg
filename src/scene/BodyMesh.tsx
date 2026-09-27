@@ -48,6 +48,8 @@ interface Props {
   preview?: boolean
   /** Ett verktyg (läggs till eller skärs ut): genomskinligt med streckade kanter. */
   ghost?: boolean
+  /** Ett spöke man pekar på i Egenskaper: tydligare än ett valt, så att man ser vilket det är. */
+  peek?: boolean
   /** Hur långt delen flyttats i sprängskissen, i världen. */
   offset?: Vec3
   /**
@@ -75,6 +77,7 @@ function BodyMeshImpl({
   highlightFace = null,
   preview = false,
   ghost = false,
+  peek = false,
   offset,
   faded = false,
   look = 'shaded',
@@ -195,9 +198,11 @@ function BodyMeshImpl({
         emissiveIntensity: marked ? 0.45 : lit ? 0.2 : 0,
         transparent: preview || ghost || faded || !!clear,
         opacity: ghost
-          ? selected
-            ? 0.3
-            : 0.15
+          ? peek
+            ? 0.6
+            : selected
+              ? 0.3
+              : 0.15
           : faded
             ? FADED_OPACITY
             : clear
@@ -225,6 +230,7 @@ function BodyMeshImpl({
     highlightFace,
     preview,
     ghost,
+    peek,
     faded,
     wire,
     real,
@@ -270,8 +276,8 @@ function BodyMeshImpl({
         {ghost ? (
           <Edges
             color={ACCENT}
-            lineWidth={selected ? 2 : 1.5}
-            dashed
+            lineWidth={peek ? 2.5 : selected ? 2 : 1.5}
+            dashed={!peek}
             dashSize={10}
             gapSize={6}
             depthTest={false}
@@ -388,6 +394,7 @@ export const BodyMesh = memo(
     a.highlightFace === b.highlightFace &&
     a.preview === b.preview &&
     a.ghost === b.ghost &&
+    a.peek === b.peek &&
     a.offset?.join() === b.offset?.join() &&
     a.faded === b.faded &&
     a.look === b.look,

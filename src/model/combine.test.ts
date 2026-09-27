@@ -97,6 +97,14 @@ describe('lägg till och skär ut', () => {
     expect(docs().doc.instances.map((i) => i.id)).toEqual(['ben1', 'ben2', 'hål'])
   })
 
+  it('ett verktyg som tas bort lämnar värden vald', () => {
+    docs().combine('hål', 'subtract', 'ben1')
+    docs().select({ kind: 'body', id: 'hål' })
+    docs().deleteSelection()
+    expect(docs().doc.instances.map((i) => i.id)).toEqual(['ben1', 'ben2'])
+    expect(docs().selection).toEqual({ kind: 'body', id: 'ben1' })
+  })
+
   it('verktyg på verktyg och delar som skär i sig själva avvisas', () => {
     expect(docs().combine('ben1', 'subtract', 'ben1')).not.toBeNull()
     expect(docs().combine('ben2', 'subtract', 'ben1')).not.toBeNull()

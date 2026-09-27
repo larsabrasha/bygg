@@ -12,7 +12,17 @@ import {
   uniqueCopyName,
 } from '../model/geometry'
 import { rotateFrame } from '../model/frame'
-import { carryTools, combineError, detachOrphans, jointError, sketchCombine, type SketchMode } from '../model/combine'
+import {
+  carryTools,
+  combineError,
+  detachOrphans,
+  jointError,
+  jointTwins,
+  relativeFrame,
+  sketchCombine,
+  syncJointTwins,
+  type SketchMode,
+} from '../model/combine'
 import { refitJoints, tenonFor } from '../model/joint'
 import { newId } from '../model/id'
 import { embedMaterials } from '../model/catalog'
@@ -22,6 +32,7 @@ import { minCorner, placeAlong, WORLD_AXES, withoutPos } from '../model/placemen
 import { resolveBodies } from '../model/resolve'
 import type {
   Axis,
+  Body,
   Combine,
   DimExpr,
   DimExprs,
@@ -98,7 +109,10 @@ interface DocumentState extends Snapshot {
   updateParam: (id: string, patch: { name?: string; expr?: string }) => string | null
   /** False om parametern används någonstans. */
   deleteParam: (id: string) => boolean
-  /** Tar bort det valda. En del som har verktyg tar dem med sig. */
+  /**
+   * Tar bort det valda. En del som har verktyg tar dem med sig. Ett verktyg: delen det satt på blir vald.
+   * En tapp tar sina tvillingar med sig (se jointTwins).
+   */
   /** Lagermåtten för ett material och en tjocklek (stockKey); null (eller tom) går tillbaka till standardmåtten. */
   setStockSizes: (key: string, sizes: StockSize[] | null) => void
   /** Om delar i en grupp (stockKey) får kapas ur spill på ett annat mått. */
@@ -111,7 +125,7 @@ interface DocumentState extends Snapshot {
    * Värden blir vald. Returnerar felmeddelande eller null.
    */
   combine: (toolId: string, op: Combine['op'], hostId: string) => string | null
-  /** Lossar ett verktyg: det blir en vanlig del igen, där det står, och blir valt. */
+  /** Lossar ett verktyg (en tapp med sina tvillingar): det blir en vanlig del igen, där det står, och blir valt. */
   detach: (toolId: string) => void
   /**
    * En tapp på hostId (t.ex. en sarg) in i intoId (ett ben), med tapphål i
@@ -190,14 +204,24 @@ const initial: Snapshot =
       }
     : emptySnapshot()
 
+/** En tapps form och läge på sin värd, avrundat: lika för kopior som ligger an på samma sätt. */
+function roundedTenon(t: Exclude<ReturnType<typeof tenonFor>, string>, host: Body) {
+  const r = (x: number) => Math.round(x * 1000) / 1000
+  const rel = relativeFrame(host.frame, t.frame)
+  return [t.profile, t.shape ?? null, t.depth, rel.origin, rel.u, rel.v, rel.n].map((x) =>
+    typeof x === 'object' && x !== null ? Object.values(x).map((v) => (typeof v === 'number' ? r(v) : v)) : x,
+  )
+}
+
 export const useDocumentStore = create<DocumentState>()((set, get) => {
   /** Sparar nuvarande dokument i historiken och byter till next (med parametrar omräknade). */
   const commit = (next: ModelDocument, selection: Selection | null = get().selection) => {
     const { doc, past, selection: before } = get()
-    // Verktyg följer sin värd när den flyttas, och tappar räknas om när sargen eller benet ändras;
-    // verktyg utan värd blir vanliga delar.
+    // Verktyg följer sin värd när den flyttas, en ändrad tapp ändrar sina tvillingar (samma tapp från
+    // länkade ben), och tappar räknas om när sargen eller benet ändras; verktyg utan värd blir vanliga delar.
     // Modellen har kopior av de egna material den använder, som följer med när den sparas.
-    const applied = embedMaterials(pruneDefs(detachOrphans(refitJoints(doc, carryTools(doc, applyParams(next))))))
+    const carried = syncJointTwins(doc, carryTools(doc, applyParams(next)))
+    const applied = embedMaterials(pruneDefs(detachOrphans(refitJoints(doc, carried))))
     set({
       doc: applied,
       selection: selectionExists(applied, selection),
@@ -510,14 +534,20 @@ export const useDocumentStore = create<DocumentState>()((set, get) => {
     deleteSelection: () => {
       const { doc, selection } = get()
       if (!selection) return
+      // Ett verktyg: delen det satt på blir vald, så att man är kvar där man arbetade.
+      const host = selection.kind === 'body' && doc.instances.find((i) => i.id === selection.id)?.combine?.host
+      // En tapp tar sina tvillingar med sig: på de länkade benen är de samma tapp.
+      const gone = new Set(
+        selection.kind === 'body' ? [selection.id, ...jointTwins(doc, selection.id).map((t) => t.id)] : [],
+      )
       commit(
         selection.kind === 'body'
           ? {
               ...doc,
-              instances: doc.instances.filter((i) => i.id !== selection.id && i.combine?.host !== selection.id),
+              instances: doc.instances.filter((i) => !gone.has(i.id) && i.combine?.host !== selection.id),
             }
           : { ...doc, sketches: doc.sketches.filter((s) => s.id !== selection.id) },
-        null,
+        host ? { kind: 'body', id: host } : null,
       )
     },
 
@@ -544,22 +574,40 @@ export const useDocumentStore = create<DocumentState>()((set, get) => {
       const into = bodies.find((b) => b.id === intoId)!
       const tenon = tenonFor(host, into)
       if (typeof tenon === 'string') return tenon
-      const box = { profile: tenon.profile, ...(tenon.shape && { shape: tenon.shape }), z0: 0, z1: tenon.depth }
-      const def: PartDef = {
-        id: newId(),
-        name: nextPartName(doc.defs, 'Tapp'),
-        material: host.material,
-        ...defaultAxes(box),
-        ...box,
-      }
-      const instance: Instance = {
-        id: newId(),
-        defId: def.id,
-        frame: tenon.frame,
-        combine: { op: 'joint', host: hostId, into: intoId },
+      // Länkade kopior av värden som ligger an mot samma del på samma sätt (fyra ben under en skiva)
+      // får samma tapp, i en grupp: de är en tapp på den delade formen, med ett hål för varje kopia.
+      const fits = (t: Exclude<ReturnType<typeof tenonFor>, string>, b: Body) =>
+        JSON.stringify(roundedTenon(t, b)) === JSON.stringify(roundedTenon(tenon, host))
+      const pairs = [
+        { host, tenon },
+        ...bodies.flatMap((b) => {
+          if (b.id === hostId || b.defId !== host.defId || jointError(doc, b.id, intoId)) return []
+          const t = tenonFor(b, into)
+          return typeof t !== 'string' && fits(t, b) ? [{ host: b, tenon: t }] : []
+        }),
+      ]
+      const group = pairs.length > 1 ? newId() : undefined
+      const name = nextPartName(doc.defs, 'Tapp')
+      const defs: PartDef[] = []
+      const instances: Instance[] = []
+      for (const p of pairs) {
+        const box = {
+          profile: p.tenon.profile,
+          ...(p.tenon.shape && { shape: p.tenon.shape }),
+          z0: 0,
+          z1: p.tenon.depth,
+        }
+        const def: PartDef = { id: newId(), name, material: host.material, ...defaultAxes(box), ...box }
+        defs.push(def)
+        instances.push({
+          id: newId(),
+          defId: def.id,
+          frame: p.tenon.frame,
+          combine: { op: 'joint', host: p.host.id, into: intoId, ...(group && { group }) },
+        })
       }
       commit(
-        { ...doc, defs: [...doc.defs, def], instances: [...doc.instances, instance] },
+        { ...doc, defs: [...doc.defs, ...defs], instances: [...doc.instances, ...instances] },
         { kind: 'body', id: hostId },
       )
       return null
@@ -568,11 +616,13 @@ export const useDocumentStore = create<DocumentState>()((set, get) => {
     detach: (toolId) => {
       const { doc } = get()
       if (!doc.instances.some((i) => i.id === toolId && i.combine)) return
+      // En tapp lossas med sina tvillingar, som när den tas bort.
+      const loose = new Set([toolId, ...jointTwins(doc, toolId).map((t) => t.id)])
       commit(
         {
           ...doc,
           instances: doc.instances.map((i) => {
-            if (i.id !== toolId) return i
+            if (!loose.has(i.id)) return i
             const { combine: _gone, ...rest } = i
             void _gone
             return rest

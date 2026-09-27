@@ -63,6 +63,9 @@ export interface ViewState {
    */
   hidden: string[]
   isolated: string[] | null
+  /** Verktygen på raden man pekar på i Egenskaper: de lyser upp i 3D-vyn. Bara mus; sparas inte. */
+  peekTools: readonly string[] | null
+  setPeekTools: (ids: readonly string[] | null) => void
   hide: (ids: string[]) => void
   isolate: (ids: string[]) => void
   showAll: () => void
@@ -134,6 +137,8 @@ export const useViewStore = create<ViewState>()((set) => ({
         : { hidden: [...new Set([...s.hidden, ...ids])] },
     ),
   isolate: (ids) => set({ isolated: ids }),
+  peekTools: null,
+  setPeekTools: (peekTools) => set({ peekTools }),
   showAll: () => set({ hidden: [], isolated: null }),
   look: readLook(),
   setLook: (look) => {
