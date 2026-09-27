@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { LIMITS } from '../model/limits'
 import { emptyDoc, testSketch } from '../model/testFixtures'
 import { FORMAT_VERSION } from './format'
 import { modelFileJson, nameFromFileName, readModelFile } from './modelFile'
@@ -9,6 +10,19 @@ describe('modelfilen', () => {
   it('läses tillbaka med namn och dokument', () => {
     const r = readModelFile(modelFileJson('Bokhylla', doc), 'fil')
     expect(r).toEqual({ ok: true, name: 'Bokhylla', doc })
+  })
+
+  it('en fil som är större än gränserna läses inte in', () => {
+    const params = Array.from({ length: LIMITS.params + 1 }, (_, i) => ({
+      id: `p${i}`,
+      name: `p${i}`,
+      expr: '1',
+      value: 1,
+    }))
+    expect(readModelFile(modelFileJson('Stor', { ...emptyDoc(), params }), 'fil')).toEqual({
+      ok: false,
+      reason: `Modellen får ha högst ${LIMITS.params} parametrar`,
+    })
   })
 
   it('har appens namn och formatets version', () => {

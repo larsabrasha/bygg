@@ -185,7 +185,8 @@ async function importFile(file: File) {
     useLibraryStore.getState().notify(`${file.name} gick inte att öppna: ${r.reason}.`)
     return
   }
-  await openFromGallery(await importModel(r.name, r.doc))
+  const id = await importModel(r.name, r.doc)
+  if (id) await openFromGallery(id)
 }
 
 /** I gästens databas när rutan om provläget stängts. */

@@ -26,6 +26,7 @@ import {
 import { refitJoints, tenonFor } from '../model/joint'
 import { newId } from '../model/id'
 import { embedMaterials } from '../model/catalog'
+import { limitError } from '../model/limits'
 import { applyParams, evaluateParams, isNameUsed, paramScope, setBoxExtent } from '../model/params'
 import { defaultAxes, withAxes } from '../model/partAxes'
 import { minCorner, placeAlong, WORLD_AXES, withoutPos } from '../model/placement'
@@ -51,6 +52,7 @@ import type {
 import { DEFAULT_MATERIAL } from '../model/types'
 import { anglesOf, restOf, withAngles } from '../model/orientation'
 import { add, scale } from '../model/vec'
+import { useLibraryStore } from './libraryStore'
 
 /** Det valda. För en del också ytan man tryckte på; den får pilen för push/pull. */
 export type Selection = { kind: 'sketch'; id: string } | { kind: 'body'; id: string; face?: Face }
@@ -104,7 +106,8 @@ interface DocumentState extends Snapshot {
   setExtent: (instanceId: string, axis: Axis, text: string) => string | null
   /** Sätter läget för delens hörn närmast origo längs en världsaxel, från ett tal eller ett uttryck. */
   setPosition: (instanceId: string, axis: WorldAxis, text: string) => string | null
-  addParam: () => string
+  /** Null om modellen redan har så många parametrar den får ha. */
+  addParam: () => string | null
   /** Returnerar felmeddelande eller null. */
   updateParam: (id: string, patch: { name?: string; expr?: string }) => string | null
   /** False om parametern används någonstans. */
@@ -153,6 +156,15 @@ interface DocumentState extends Snapshot {
  * lite plats, också när historiken sparas (sync/history).
  */
 export const HISTORY_LIMIT = 500
+/** Felet från en action som stoppades av gränserna; själva skälet har redan visats (se refused). */
+export const LIMIT_REFUSED = 'Modellen blir för stor'
+
+/** Visar varför en ändring stoppades. Samma meddelande visas en gång åt gången. */
+function refused(text: string) {
+  const lib = useLibraryStore.getState()
+  if (!lib.notices.some((n) => n.text === text)) lib.notify(text)
+}
+
 /** Avstånd mellan original och ny kopia, i mm. */
 const DUPLICATE_GAP = 50
 
@@ -214,20 +226,29 @@ function roundedTenon(t: Exclude<ReturnType<typeof tenonFor>, string>, host: Bod
 }
 
 export const useDocumentStore = create<DocumentState>()((set, get) => {
-  /** Sparar nuvarande dokument i historiken och byter till next (med parametrar omräknade). */
-  const commit = (next: ModelDocument, selection: Selection | null = get().selection) => {
+  /**
+   * Sparar nuvarande dokument i historiken och byter till next (med parametrar omräknade).
+   * Blir modellen större än gränserna (se model/limits) ändras inget: false, och ett meddelande.
+   */
+  const commit = (next: ModelDocument, selection: Selection | null = get().selection): boolean => {
     const { doc, past, selection: before } = get()
     // Verktyg följer sin värd när den flyttas, en ändrad tapp ändrar sina tvillingar (samma tapp från
     // länkade ben), och tappar räknas om när sargen eller benet ändras; verktyg utan värd blir vanliga delar.
     // Modellen har kopior av de egna material den använder, som följer med när den sparas.
     const carried = syncJointTwins(doc, carryTools(doc, applyParams(next)))
     const applied = embedMaterials(pruneDefs(detachOrphans(refitJoints(doc, carried))))
+    const error = limitError(applied, doc)
+    if (error) {
+      refused(error)
+      return false
+    }
     set({
       doc: applied,
       selection: selectionExists(applied, selection),
       past: [...past, { doc, selection: before }].slice(-HISTORY_LIMIT),
       future: [],
     })
+    return true
   }
 
   /**
@@ -241,7 +262,7 @@ export const useDocumentStore = create<DocumentState>()((set, get) => {
     const after = minCorner(next, def)
     const moved = WORLD_AXES.filter((_, k) => Math.abs(after[k]! - before[k]!) > 1e-6)
     const { doc } = get()
-    commit({ ...doc, instances: doc.instances.map((i) => (i.id === inst.id ? withoutPos(next, moved) : i)) })
+    return commit({ ...doc, instances: doc.instances.map((i) => (i.id === inst.id ? withoutPos(next, moved) : i)) })
   }
 
   const findInstance = (id: string) => {
@@ -270,8 +291,9 @@ export const useDocumentStore = create<DocumentState>()((set, get) => {
         ...(on && { on }),
         ...(dims && Object.keys(dims).length ? { dims } : {}),
       }
-      commit({ ...doc, sketches: [...doc.sketches, sketch] }, { kind: 'sketch', id: sketch.id })
-      return sketch.id
+      return commit({ ...doc, sketches: [...doc.sketches, sketch] }, { kind: 'sketch', id: sketch.id })
+        ? sketch.id
+        : null
     },
 
     pushPullSketch: (sketchId, distance, depthExpr, mode) => {
@@ -290,7 +312,7 @@ export const useDocumentStore = create<DocumentState>()((set, get) => {
       )
       if (!part) return null
       const instance = combine ? { ...part.instance, combine } : part.instance
-      commit(
+      const ok = commit(
         {
           ...doc,
           sketches: doc.sketches.filter((s) => s.id !== sketchId),
@@ -301,7 +323,7 @@ export const useDocumentStore = create<DocumentState>()((set, get) => {
         // tillägg: delen det sitter på, så att man ser resultatet (och verktyget som spöke).
         host ? { kind: 'body', id: host } : { kind: 'body', id: part.instance.id, face: distance >= 0 ? 'n+' : 'n-' },
       )
-      return instance.id
+      return ok ? instance.id : null
     },
 
     pushPullBody: (instanceId, face, distance, dim) => {
@@ -324,8 +346,7 @@ export const useDocumentStore = create<DocumentState>()((set, get) => {
           WORLD_AXES.filter((_, k) => Math.abs(after[k]! - before[k]!) > 1e-6),
         )
       })
-      commit({ ...doc, instances }, { kind: 'body', id: instanceId, face })
-      return true
+      return commit({ ...doc, instances }, { kind: 'body', id: instanceId, face })
     },
 
     moveInstance: (instanceId, delta) => {
@@ -362,8 +383,7 @@ export const useDocumentStore = create<DocumentState>()((set, get) => {
       if (angles[i] === r.value) return null
       angles[i] = r.value
       const body = resolveBodies(get().doc).find((b) => b.id === instanceId)!
-      reorient(inst, def, withAngles(inst.frame, rest, bodyCenter(body), angles))
-      return null
+      return reorient(inst, def, withAngles(inst.frame, rest, bodyCenter(body), angles)) ? null : LIMIT_REFUSED
     },
 
     addCopies: (sourceId, frames) => {
@@ -373,8 +393,8 @@ export const useDocumentStore = create<DocumentState>()((set, get) => {
       const rest = restOf(found.inst)
       const copies = frames.map((frame) => ({ id: newId(), defId: found.def.id, frame, rest }))
       const { doc } = get()
-      commit({ ...doc, instances: [...doc.instances, ...copies] }, { kind: 'body', id: copies.at(-1)!.id })
-      return copies.map((c) => c.id)
+      const ok = commit({ ...doc, instances: [...doc.instances, ...copies] }, { kind: 'body', id: copies.at(-1)!.id })
+      return ok ? copies.map((c) => c.id) : []
     },
 
     duplicateLinked: (instanceId) => {
@@ -390,8 +410,7 @@ export const useDocumentStore = create<DocumentState>()((set, get) => {
         ...(inst.rest && { rest: inst.rest }),
       }
       const { doc } = get()
-      commit({ ...doc, instances: [...doc.instances, copy] }, { kind: 'body', id: copy.id })
-      return copy.id
+      return commit({ ...doc, instances: [...doc.instances, copy] }, { kind: 'body', id: copy.id }) ? copy.id : null
     },
 
     makeUnique: (instanceId) => {
@@ -430,8 +449,7 @@ export const useDocumentStore = create<DocumentState>()((set, get) => {
       // Bara uttryck med parametrar sparas; ett rent tal är bara ett tal.
       const rest = withoutAxis(found.def.dims, axis, found.def)
       const dims = isConstant(text) ? rest : { ...rest, [axis]: { expr: text.trim(), anchor } }
-      commit(replaceDef(doc, withDims(resized, dims)))
-      return null
+      return commit(replaceDef(doc, withDims(resized, dims))) ? null : LIMIT_REFUSED
     },
 
     setPosition: (instanceId, axis, text) => {
@@ -444,8 +462,9 @@ export const useDocumentStore = create<DocumentState>()((set, get) => {
       const placed = placeAlong(withoutPos(found.inst, [axis]), found.def, axis, r.value)
       // Bara uttryck med parametrar sparas; ett rent tal är bara ett läge.
       const inst = isConstant(text) ? placed : { ...placed, pos: { ...placed.pos, [axis]: text.trim() } }
-      commit({ ...doc, instances: doc.instances.map((i) => (i.id === instanceId ? inst : i)) })
-      return null
+      return commit({ ...doc, instances: doc.instances.map((i) => (i.id === instanceId ? inst : i)) })
+        ? null
+        : LIMIT_REFUSED
     },
 
     setStockSizes: (key, list) => {
@@ -476,8 +495,7 @@ export const useDocumentStore = create<DocumentState>()((set, get) => {
       let n = 1
       while (used.has(`mått${n}`)) n++
       const param = { id: newId(), name: `mått${n}`, expr: '100', value: 100 }
-      commit({ ...doc, params: [...doc.params, param] })
-      return param.id
+      return commit({ ...doc, params: [...doc.params, param] }) ? param.id : null
     },
 
     updateParam: (id, patch) => {
@@ -517,7 +535,7 @@ export const useDocumentStore = create<DocumentState>()((set, get) => {
         next = { ...next, params }
       }
 
-      if (next !== doc) commit(next)
+      if (next !== doc && !commit(next)) return LIMIT_REFUSED
       return null
     },
 
@@ -555,14 +573,14 @@ export const useDocumentStore = create<DocumentState>()((set, get) => {
       const { doc } = get()
       const error = combineError(doc, toolId, hostId)
       if (error) return error
-      commit(
+      const ok = commit(
         {
           ...doc,
           instances: doc.instances.map((i) => (i.id === toolId ? { ...i, combine: { op, host: hostId } } : i)),
         },
         { kind: 'body', id: hostId },
       )
-      return null
+      return ok ? null : LIMIT_REFUSED
     },
 
     joint: (hostId, intoId) => {
@@ -606,11 +624,11 @@ export const useDocumentStore = create<DocumentState>()((set, get) => {
           combine: { op: 'joint', host: p.host.id, into: intoId, ...(group && { group }) },
         })
       }
-      commit(
+      const ok = commit(
         { ...doc, defs: [...doc.defs, ...defs], instances: [...doc.instances, ...instances] },
         { kind: 'body', id: hostId },
       )
-      return null
+      return ok ? null : LIMIT_REFUSED
     },
 
     detach: (toolId) => {

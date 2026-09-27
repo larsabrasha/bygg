@@ -36,7 +36,8 @@ const LOGIN_COOKIE = 'bygg-login'
 /** Dit man skickas efter inloggningen: bara sökvägar i appen, aldrig en annan sajt. */
 export function safeReturn(value: string | undefined): string {
   if (!value || !value.startsWith('/') || value.startsWith('//') || value.startsWith('/\\')) return '/'
-  if (value.startsWith('/auth/')) return '/'
+  // Inga inloggningssidor (loop), utom sidan för CLI:ts nycklar, som kräver inloggning.
+  if (value.startsWith('/auth/') && value !== '/auth/cli') return '/'
   return value
 }
 

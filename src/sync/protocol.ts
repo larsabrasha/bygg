@@ -1,4 +1,5 @@
 import type { Catalog } from '../model/catalog'
+import type { LIMITS } from '../model/limits'
 import type { SavedFile } from '../persist/format'
 
 /**
@@ -64,6 +65,18 @@ export interface MeResponse {
   sub: string
   name: string
   dev: boolean
+}
+
+/** Svar från /api/me: vem nyckeln eller sessionen gäller, och vad som gäller för kontot. */
+export interface MeApiResponse {
+  sub: string
+  name: string
+  via: 'token' | 'session'
+  /** Antal modeller på servern. */
+  models: number
+  limits: typeof LIMITS
+  /** Hur många anrop en nyckel får göra (per minut, och ändringar per dygn). */
+  rate: { perMinute: number; writesPerDay: number }
 }
 
 /** Modell-id är UUID:er. Kontrolleras på servern så att id aldrig kan bli en sökväg. */

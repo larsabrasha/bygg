@@ -3,7 +3,9 @@ import { GROUND_FRAME, toWorld } from '../model/frame'
 import { anglesOf } from '../model/orientation'
 import { minCorner } from '../model/placement'
 import { resolveBodies } from '../model/resolve'
-import { resetDocumentStore, useDocumentStore } from './documentStore'
+import { LIMITS } from '../model/limits'
+import { LIMIT_REFUSED, resetDocumentStore, useDocumentStore } from './documentStore'
+import { useLibraryStore } from './libraryStore'
 
 const s = () => useDocumentStore.getState()
 const bodies = () => resolveBodies(s().doc)
@@ -11,11 +13,38 @@ const rect = { x0: 0, y0: 0, x1: 800, y1: 120 }
 const newPart = (depth = 22) => s().pushPullSketch(s().addSketch(GROUND_FRAME, rect)!, depth)!
 
 describe('documentStore', () => {
-  beforeEach(() => resetDocumentStore())
+  beforeEach(() => {
+    resetDocumentStore()
+    useLibraryStore.setState({ notices: [] })
+  })
 
   it('skapar skiss och väljer den', () => {
     const id = s().addSketch(GROUND_FRAME, rect)
     expect(s().selection).toEqual({ kind: 'sketch', id })
+  })
+
+  it('stoppar en ändring som gör modellen större än gränserna, och säger varför', () => {
+    const id = newPart()
+    const frames = Array.from({ length: LIMITS.instances - 1 }, () => GROUND_FRAME)
+    expect(s().addCopies(id, frames)).toHaveLength(LIMITS.instances - 1)
+    const before = s().doc
+    expect(s().addCopies(id, [GROUND_FRAME])).toEqual([])
+    expect(s().duplicateLinked(id)).toBeNull()
+    expect(s().doc).toBe(before)
+    expect(useLibraryStore.getState().notices.map((n) => n.text)).toEqual([
+      `Modellen får ha högst ${LIMITS.instances} delar.`,
+    ])
+    // Att ta bort går alltid.
+    s().select({ kind: 'body', id })
+    s().deleteSelection()
+    expect(s().doc.instances).toHaveLength(LIMITS.instances - 1)
+  })
+
+  it('stoppar en flytt längre än gränsen från origo', () => {
+    const id = newPart()
+    s().moveInstance(id, [LIMITS.extent, 0, 0])
+    expect(bodies()[0]!.frame.origin).toEqual([0, 0, 0])
+    expect(s().setPosition(id, 'x', String(LIMITS.extent))).toBe(LIMIT_REFUSED)
   })
 
   it('avvisar för liten skiss', () => {
@@ -215,7 +244,7 @@ describe('parametrar', () => {
   })
 
   it('mått kan sättas som uttryck och följer parametern', () => {
-    const p = s().addParam()
+    const p = s().addParam()!
     s().updateParam(p, { name: 'tjocklek', expr: '22' })
     const a = newPart(30)
     expect(s().setExtent(a, 'n', 'tjocklek')).toBeNull()
@@ -225,7 +254,7 @@ describe('parametrar', () => {
   })
 
   it('ett rent tal tar bort uttrycket', () => {
-    const p = s().addParam()
+    const p = s().addParam()!
     s().updateParam(p, { name: 't', expr: '22' })
     const a = newPart()
     s().setExtent(a, 'n', 't')
@@ -235,7 +264,7 @@ describe('parametrar', () => {
   })
 
   it('push/pull på en axel tar bort dess uttryck', () => {
-    const p = s().addParam()
+    const p = s().addParam()!
     s().updateParam(p, { name: 't', expr: '22' })
     const a = newPart()
     s().setExtent(a, 'n', 't')
@@ -244,9 +273,9 @@ describe('parametrar', () => {
   })
 
   it('byter namn i alla uttryck', () => {
-    const p = s().addParam()
+    const p = s().addParam()!
     s().updateParam(p, { name: 't', expr: '22' })
-    const q = s().addParam()
+    const q = s().addParam()!
     s().updateParam(q, { name: 'dubbel', expr: 't * 2' })
     const a = newPart()
     s().setExtent(a, 'n', 't')
@@ -256,8 +285,8 @@ describe('parametrar', () => {
   })
 
   it('avvisar ogiltiga namn, dubbletter, fel och cirkelreferenser', () => {
-    const p = s().addParam()
-    const q = s().addParam()
+    const p = s().addParam()!
+    const q = s().addParam()!
     expect(s().updateParam(p, { name: '2x' })).toMatch(/bokstäver/)
     expect(s().updateParam(p, { name: 'mått2' })).toMatch(/finns redan/)
     expect(s().updateParam(p, { expr: 'mått2 +' })).toBeTruthy()
@@ -266,7 +295,7 @@ describe('parametrar', () => {
   })
 
   it('ångra på parameterändring återställer också måtten', () => {
-    const p = s().addParam()
+    const p = s().addParam()!
     s().updateParam(p, { name: 't', expr: '22' })
     const a = newPart()
     s().setExtent(a, 'n', 't')
@@ -276,7 +305,7 @@ describe('parametrar', () => {
   })
 
   it('tar inte bort en parameter som används', () => {
-    const p = s().addParam()
+    const p = s().addParam()!
     s().updateParam(p, { name: 't', expr: '22' })
     const a = newPart()
     s().setExtent(a, 'n', 't')
@@ -304,7 +333,7 @@ describe('läge', () => {
 
   it('ett uttryck följer parametern', () => {
     const id = newPart()
-    const p = s().addParam()
+    const p = s().addParam()!
     s().updateParam(p, { name: 'hojd', expr: '722' })
     expect(s().setPosition(id, 'y', 'hojd - 22')).toBeNull()
     expect(corner()[1]).toBe(700)
@@ -314,7 +343,7 @@ describe('läge', () => {
 
   it('byter namn på parametern i läget också', () => {
     const id = newPart()
-    const p = s().addParam()
+    const p = s().addParam()!
     s().updateParam(p, { name: 'hojd', expr: '700' })
     s().setPosition(id, 'y', 'hojd')
     s().updateParam(p, { name: 'h' })
@@ -329,7 +358,7 @@ describe('läge', () => {
 
   it('flytt för hand tar bort uttrycket för den axeln', () => {
     const id = newPart()
-    const p = s().addParam()
+    const p = s().addParam()!
     s().updateParam(p, { name: 'a', expr: '100' })
     s().setPosition(id, 'x', 'a')
     s().setPosition(id, 'y', 'a')
@@ -340,7 +369,7 @@ describe('läge', () => {
 
   it('kopior får inga lägesuttryck, annars drogs de tillbaka till originalet', () => {
     const id = newPart()
-    const p = s().addParam()
+    const p = s().addParam()!
     s().updateParam(p, { name: 'a', expr: '100' })
     s().setPosition(id, 'x', 'a')
     const frame = s().doc.instances[0]!.frame
@@ -352,7 +381,7 @@ describe('läge', () => {
 
   it('vridning tar bort uttrycket bara för axlar där hörnet flyttas', () => {
     const id = newPart()
-    const p = s().addParam()
+    const p = s().addParam()!
     s().updateParam(p, { name: 'a', expr: '100' })
     for (const axis of ['x', 'y', 'z'] as const) s().setPosition(id, axis, 'a')
     // 90° runt Y genom delens mitt (800 × 22 × 120): x och z byter utsträckning, höjden står still.
@@ -362,7 +391,7 @@ describe('läge', () => {
 
   it('push/pull på sidan närmast origo tar bort uttrycket, annars flyttar delen tillbaka', () => {
     const id = newPart()
-    const p = s().addParam()
+    const p = s().addParam()!
     s().updateParam(p, { name: 'a', expr: '100' })
     s().setPosition(id, 'x', 'a')
     s().pushPullBody(id, 'u-', 30)

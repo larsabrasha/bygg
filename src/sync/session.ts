@@ -1,5 +1,6 @@
 import { del as idbDel, get as idbGet, isGuest, set as idbSet } from './localStore'
 import { newId } from '../model/id'
+import { LIMITS, modelLimitText } from '../model/limits'
 import type { ModelDocument } from '../model/types'
 import { migrate, serialize } from '../persist/format'
 import { useCatalogStore } from '../store/catalogStore'
@@ -7,7 +8,7 @@ import { emptyDocument, useDocumentStore } from '../store/documentStore'
 import { useLibraryStore, type SyncStatus } from '../store/libraryStore'
 import { useToolStore } from '../store/toolStore'
 import { useViewStore } from '../store/viewStore'
-import { ApiError, httpApi } from './api'
+import { ApiError, CLIENT_ID, httpApi } from './api'
 import { forgetUser } from './auth'
 import { loadCatalog, saveCatalog, syncCatalog } from './catalogSync'
 import { syncOnce, type SyncEvent } from './engine'
@@ -32,6 +33,8 @@ import {
 const SAVE_DELAY_MS = 400
 const SYNC_DELAY_MS = 2000
 const SYNC_INTERVAL_MS = 60_000
+/** Från att servern sagt att något ändrats (se connectEvents) tills synken börjar. Samlar ihop täta ändringar. */
+const PUSH_DELAY_MS = 150
 /** Kortaste tid mellan två bilder av samma modell vid autospar. */
 const THUMB_INTERVAL_MS = 3000
 /** Så länge en borttagning går att ångra. */
@@ -150,6 +153,38 @@ function showModel(m: LocalModel): boolean {
 }
 
 /**
+ * Den öppna modellen har ändrats någon annanstans (en annan enhet, CLI:t) och har inga egna
+ * osparade ändringar: visa den nya versionen. Verktyget, dolda delar och det valda ligger kvar,
+ * så att man kan titta på medan CLI:t arbetar. Pågår en operation (man drar eller ritar)
+ * väntar den tills operationen är klar, och bara om man inte ändrat något under tiden.
+ */
+function refreshCurrent(m: LocalModel) {
+  if (useToolStore.getState().op) {
+    const waiting = docs().doc
+    const stop = useToolStore.subscribe((t) => {
+      if (t.op) return
+      stop()
+      if (lib().currentId !== m.id || docs().doc !== waiting || waiting !== lastPersistedDoc) return
+      void repo.get(m.id).then((latest) => latest && !latest.dirty && refreshCurrent(latest))
+    })
+    return
+  }
+  const r = migrate(m.file)
+  if (!r.ok) {
+    lib().notify(`"${m.name}" går inte att öppna: ${r.reason}.`)
+    return
+  }
+  const selection = docs().selection
+  docs().load(r.doc)
+  lastPersistedDoc = docs().doc
+  const list = selection?.kind === 'body' ? docs().doc.instances : docs().doc.sketches
+  if (selection && list.some((x) => x.id === selection.id)) docs().select(selection)
+  lib().set({ currentName: m.name, currentBase: m.baseRevision })
+  const text = `"${m.name}" ändrades på en annan enhet eller i CLI:t.`
+  if (!lib().notices.some((n) => n.text === text)) lib().notify(text)
+}
+
+/**
  * Sätter tillbaka ångra-historiken som sparades med modellen här (se history.ts).
  * Bara om man inte hunnit ändra något eller öppna en annan modell under tiden.
  */
@@ -218,6 +253,7 @@ const STATUS_FOR: Record<ApiError['kind'], SyncStatus> = {
   offline: 'offline',
   'no-server': 'local-only',
   server: 'error',
+  rejected: 'error',
   auth: 'logged-out',
 }
 
@@ -266,7 +302,7 @@ async function handle(events: SyncEvent[], docAtStart: ModelDocument) {
         noServerThumb.delete(e.id)
         if (isCurrent && untouched()) {
           const m = await repo.get(e.id)
-          if (m && showModel(m)) lib().notify(`"${m.name}" uppdaterades från en annan enhet.`)
+          if (m) refreshCurrent(m)
         }
         break
       case 'remote-delete':
@@ -283,6 +319,9 @@ async function handle(events: SyncEvent[], docAtStart: ModelDocument) {
         break
       case 'delete-conflict':
         lib().notify('En modell du tog bort hade ändrats på en annan enhet, så den finns kvar.')
+        break
+      case 'rejected':
+        lib().notify(`"${e.name}" kunde inte sparas på servern: ${e.reason}`)
         break
       case 'incompatible':
         lib().notify(`"${e.name}" är sparad med en nyare version av appen. Ladda om sidan för att uppdatera.`)
@@ -320,6 +359,8 @@ export function syncNow(): Promise<void> {
         if (again) rerun = true
       } while (rerun)
       lib().set({ status: 'synced', error: null })
+      // Med kontakt och inloggning: lyssna på ändringar (igen, om strömmen stängts).
+      connectEvents()
       await refreshList()
       await syncThumbs()
     } catch (e) {
@@ -435,7 +476,17 @@ export async function openModel(id: string) {
   if (m) showModel(m)
 }
 
-export async function createModel() {
+/** Sant, och ett meddelande, om kontot redan har så många modeller som det får ha (se model/limits). */
+function atModelLimit(): boolean {
+  if (lib().models.length < LIMITS.models) return false
+  const text = modelLimitText()
+  if (!lib().notices.some((n) => n.text === text)) lib().notify(text)
+  return true
+}
+
+/** Ny tom modell, som öppnas. False om kontot redan har så många modeller som det får ha. */
+export async function createModel(): Promise<boolean> {
+  if (atModelLimit()) return false
   await flushSave()
   const names = new Set(lib().models.map((m) => m.name))
   let n = 1
@@ -452,6 +503,7 @@ export async function createModel() {
   showModel(m)
   await refreshList()
   scheduleSync(SYNC_DELAY_MS)
+  return true
 }
 
 export async function renameModel(id: string, name: string) {
@@ -511,6 +563,7 @@ export function undoDelete(id: string) {
 
 /** Kopia av en modell, med ny id och namnet "… kopia". Öppnas inte. */
 export async function duplicateModel(id: string) {
+  if (atModelLimit()) return
   if (id === lib().currentId) await flushSave()
   const m = await repo.get(id)
   if (!m) return
@@ -535,8 +588,12 @@ export async function duplicateModel(id: string) {
   scheduleSync(SYNC_DELAY_MS)
 }
 
-/** Lägger till en modell från en fil. Finns namnet redan får den en siffra efter. Returnerar dess id. */
-export async function importModel(name: string, doc: ModelDocument): Promise<string> {
+/**
+ * Lägger till en modell från en fil. Finns namnet redan får den en siffra efter. Returnerar dess id,
+ * eller null om kontot redan har så många modeller som det får ha.
+ */
+export async function importModel(name: string, doc: ModelDocument): Promise<string | null> {
+  if (atModelLimit()) return null
   const names = new Set(lib().models.map((x) => x.name))
   let unique = name
   for (let n = 2; names.has(unique); n++) unique = `${name} ${n}`
@@ -591,8 +648,9 @@ export async function openFromGallery(id: string | 'new') {
     lib().set({ opening: { id, name: lib().models.find((m) => m.id === id)?.name ?? '' } })
     await nextPaint()
   }
-  if (id === 'new') await createModel()
-  else await openModel(id)
+  if (id === 'new') {
+    if (!(await createModel())) return
+  } else await openModel(id)
   lib().set({ screen: 'model' })
   // Kameran från förra modellen passar sällan; visa hela den här, direkt och utan att glida dit.
   useViewStore.getState().requestFit('all', { animate: false })
@@ -686,11 +744,49 @@ export async function logout() {
   try {
     const r = await fetch('/auth/logout', { method: 'POST' })
     const { redirect } = (await r.json()) as { redirect: string }
+    disconnectEvents()
     await forgetUser()
     location.assign(redirect)
   } catch {
     lib().notify('Det går inte att logga ut utan kontakt med servern.')
   }
+}
+
+let events: EventSource | null = null
+let eventsConnected = false
+
+/**
+ * Lyssnar på serverns ändringar (/api/events): när en annan flik, enhet eller CLI:t sparat
+ * synkar appen direkt, i stället för vid nästa runda (SYNC_INTERVAL_MS). Strömmen återansluter
+ * själv efter ett avbrott; nekas den (utloggad) öppnas den igen efter nästa lyckade synk.
+ */
+function connectEvents() {
+  if (isGuest() || typeof EventSource === 'undefined') return
+  if (events && events.readyState !== EventSource.CLOSED) return
+  const source = new EventSource('/api/events')
+  events = source
+  source.addEventListener('ready', () => {
+    // Efter ett avbrott kan ändringar ha missats.
+    if (eventsConnected) scheduleSync(PUSH_DELAY_MS)
+    eventsConnected = true
+  })
+  source.addEventListener('change', (m: MessageEvent<string>) => {
+    try {
+      if ((JSON.parse(m.data) as { by?: string }).by === CLIENT_ID) return
+    } catch {
+      // Okänd händelse: synka ändå.
+    }
+    scheduleSync(PUSH_DELAY_MS)
+  })
+  source.addEventListener('error', () => {
+    if (source.readyState === EventSource.CLOSED && events === source) events = null
+  })
+}
+
+function disconnectEvents() {
+  events?.close()
+  events = null
+  eventsConnected = false
 }
 
 /** Startar autospar och bakgrundssynk. Returnerar en funktion som stänger av dem. */
@@ -729,6 +825,7 @@ export function start(): () => void {
     window.removeEventListener('online', onOnline)
     document.removeEventListener('visibilitychange', onVisibility)
     window.removeEventListener('pagehide', onPageHide)
+    disconnectEvents()
     void persistNow()
   }
 }

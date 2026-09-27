@@ -11,6 +11,25 @@ npm test           # enhets- och integrationstester
 npm run typecheck && npm run lint
 ```
 
+## CLI
+
+`bygg` läser och ändrar modellerna från terminalen, t.ex. åt Claude (se `.claude/skills/bygg-cli`).
+
+```sh
+npm run -s bygg -- help                 # alla kommandon; `ops` visar operationerna för edit
+npm run -s bygg -- login --server https://bygg.larsabrasha.com
+npm run -s bygg -- new "Bord"
+npm run -s bygg -- edit "Bord" --ops '[{"op":"box","name":"Skiva","size":[900,22,500],"at":[0,698,0],"grain":"x"}]'
+npm run -s bygg -- cutlist "Bord"
+```
+
+`login` öppnar `/auth/cli`, där man inloggad skapar en nyckel och klistrar in den. Nyckeln gäller i 90 dagar
+och sparas i `~/.config/bygg/config.json`. Mot dev-servern behövs ingen nyckel. `npm link` ger kommandot `bygg`.
+
+Gränserna (`src/model/limits.ts`) gäller i appen, vid import, på servern och i CLI:t: 500 modeller per konto,
+2 000 delar per modell och allt inom 100 m från origo, med flera. En nyckel får göra 120 anrop per minut och
+1 000 ändringar per dygn. En öppen app ser CLI:ts ändringar direkt: servern skickar ut dem på `/api/events`.
+
 ## Driftsättning (Docker)
 
 ```sh

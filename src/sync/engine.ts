@@ -1,5 +1,5 @@
 import { migrate } from '../persist/format'
-import type { SyncApi } from './api'
+import { ApiError, type PutResult, type SyncApi } from './api'
 import { fromServer, type LocalRepo } from './localRepo'
 
 export type SyncEvent =
@@ -13,6 +13,8 @@ export type SyncEvent =
   | { kind: 'remote-delete'; id: string }
   /** Vi tog bort den, men den hade ändrats på en annan enhet; den finns kvar. */
   | { kind: 'delete-conflict'; id: string }
+  /** Servern tog inte emot modellen (för stor, för många modeller). Den ligger kvar osynkad här. */
+  | { kind: 'rejected'; id: string; name: string; reason: string }
   /** Servern har en modell i ett nyare format än den här versionen av appen kan läsa. */
   | { kind: 'incompatible'; id: string; name: string }
 
@@ -66,7 +68,15 @@ export async function syncOnce({ api, repo, newId, now = () => new Date() }: Syn
     }
     if (!m.dirty) continue
 
-    const r = await api.put(m.id, { name: m.name, baseRevision: m.baseRevision, file: m.file })
+    let r: PutResult
+    try {
+      r = await api.put(m.id, { name: m.name, baseRevision: m.baseRevision, file: m.file })
+    } catch (e) {
+      // En modell som servern nekar ska inte stoppa synken av de andra.
+      if (!(e instanceof ApiError && e.kind === 'rejected')) throw e
+      events.push({ kind: 'rejected', id: m.id, name: m.name, reason: e.message })
+      continue
+    }
     const latest = (await repo.get(m.id)) ?? m
     if (r.ok) {
       // Ändrades modellen lokalt medan vi laddade upp är den fortfarande osynkad.

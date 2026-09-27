@@ -1,3 +1,4 @@
+import { newId } from '../model/id'
 import { userHeader } from './localStore'
 import type {
   CatalogConflictResponse,
@@ -10,7 +11,14 @@ import type {
   ServerModel,
 } from './protocol'
 
-export type ApiErrorKind = 'offline' | 'no-server' | 'server' | 'auth'
+/** rejected: servern tog inte emot det som skickades (för stort, för många modeller). */
+/**
+ * Den här flikens id. Servern skickar med det i ändringarna den sänder ut (se server/events.ts),
+ * så att fliken inte synkar i onödan efter sina egna sparningar.
+ */
+export const CLIENT_ID = newId()
+
+export type ApiErrorKind = 'offline' | 'no-server' | 'server' | 'auth' | 'rejected'
 
 export class ApiError extends Error {
   constructor(
@@ -51,7 +59,11 @@ export function httpApi(
     try {
       res = await fetchFn(`${base}${path}`, {
         method,
-        headers: { ...userHeader(), ...(body !== undefined && { 'content-type': 'application/json' }) },
+        headers: {
+          ...userHeader(),
+          'x-bygg-client': CLIENT_ID,
+          ...(body !== undefined && { 'content-type': 'application/json' }),
+        },
         body: body !== undefined ? JSON.stringify(body) : undefined,
       })
     } catch {
@@ -80,6 +92,8 @@ export function httpApi(
     async put(id, req) {
       const r = await request('PUT', `/api/models/${id}`, req)
       if (r.status === 409) return { ok: false, ...(r.data as ConflictResponse) }
+      if (r.status === 400 || r.status === 403 || r.status === 413)
+        throw new ApiError('rejected', (r.data as { error?: string }).error ?? `Fel ${r.status}`)
       if (r.status !== 200) throw new ApiError('server', (r.data as { error?: string }).error ?? `Fel ${r.status}`)
       return { ok: true, ...(r.data as PutModelResponse) }
     },

@@ -3,6 +3,7 @@ import type { Connect, Plugin } from 'vite'
 import { createApp } from './app'
 import { devAuth } from './auth'
 import { UserStorages } from './storage'
+import { TokenStore } from './tokens'
 
 /**
  * Kör API:t inuti Vites dev-server, så att `npm run dev` räcker och appen och
@@ -13,8 +14,11 @@ import { UserStorages } from './storage'
  */
 export function byggApi(): Plugin {
   const mount = async (middlewares: Connect.Server) => {
-    const storages = new UserStorages(process.env.DATA_DIR ?? './data')
-    const listener = getRequestListener(createApp({ storages, auth: devAuth() }).fetch)
+    const dataDir = process.env.DATA_DIR ?? './data'
+    const storages = new UserStorages(dataDir)
+    // CLI:t behöver ingen nyckel mot dev-servern, men nycklar går att prova (/auth/cli).
+    const app = createApp({ storages, auth: devAuth(), tokens: new TokenStore(dataDir) })
+    const listener = getRequestListener(app.fetch)
     middlewares.use((req, res, next) => {
       if (req.url?.startsWith('/api/') || req.url?.startsWith('/auth/')) void listener(req, res)
       else next()
