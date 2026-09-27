@@ -59,11 +59,7 @@ export const MATERIAL_SPECS: readonly MaterialSpec[] = [
     kind: 'sheet',
     grain: true,
     thicknesses: [4, 6.5, 9, 12, 15, 18, 21, 24],
-    sheets: [
-      { length: 2440, width: 1220 },
-      { length: 2500, width: 1250 },
-      { length: 1525, width: 1525 },
-    ],
+    sheets: [{ length: 2440, width: 1220 }],
     color: '#d8b98a',
     plies: true,
   },
@@ -100,11 +96,8 @@ export const MATERIAL_SPECS: readonly MaterialSpec[] = [
     kind: 'sheet',
     grain: false,
     thicknesses: [2, 3, 4, 5, 6, 8, 10],
-    // Den mindre först: en monter behöver sällan en hel stor skiva.
-    sheets: [
-      { length: 2050, width: 1520 },
-      { length: 3050, width: 2050 },
-    ],
+    // Den mindre av de vanliga storlekarna: en monter behöver sällan en hel stor skiva.
+    sheets: [{ length: 2050, width: 1520 }],
     color: '#eef4f5',
     opacity: 0.3,
   },

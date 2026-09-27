@@ -218,6 +218,8 @@ function Materials() {
                   key={m.id}
                   color={m.color}
                   name={firstUpper(m.name)}
+                  // Slaget står i gruppens rubrik; här bara det kapschemat räknar med.
+                  detail={stockSummary(m)}
                   shown={!catalog.hidden.includes(m.id)}
                   onChange={(on) => setHidden(m.id, !on)}
                 />
@@ -260,6 +262,7 @@ function ShownRow({
   color,
   name,
   note,
+  detail,
   shown,
   round,
   onChange,
@@ -267,6 +270,8 @@ function ShownRow({
   color: string
   name: string
   note?: string
+  /** En rad under namnet, t.ex. materialets mått. */
+  detail?: string
   shown: boolean
   round?: boolean
   onChange: (shown: boolean) => void
@@ -277,6 +282,7 @@ function ShownRow({
       <span className="min-w-0 flex-1 text-[13px]">
         {name}
         {note && <span className="ml-2 text-xs text-muted">{note}</span>}
+        {detail && <span className="block text-xs text-muted tabular-nums">{detail}</span>}
       </span>
       <Switch checked={shown} onChange={onChange}>
         Visas
@@ -285,14 +291,20 @@ function ShownRow({
   )
 }
 
-/** "Skiva · 12, 16, 19 mm · 2 440 × 1 220": det viktigaste om ett material på en rad. */
-function summary(m: MaterialFields): string {
-  const kind = KIND_LABEL[m.kind]
-  const thick =
-    m.kind !== 'wood' && m.thicknesses?.length ? `${m.thicknesses.map((t) => num.format(t)).join(', ')} mm` : ''
+/** "12, 16, 19 mm · 2 440 × 1 220": det kapschemat räknar med. Tomt för massivt trä (standardvirke). */
+function stockSummary(m: MaterialFields): string {
+  const list = m.kind !== 'wood' ? (m.thicknesses ?? []) : []
+  // Semikolon mellan talen när något har decimalkomma: "2,4; 3; 6", inte "2,4, 3, 6".
+  const sep = list.some((t) => !Number.isInteger(t)) ? '; ' : ', '
+  const thick = list.length ? `${list.map((t) => num.format(t)).join(sep)} mm` : ''
   const sheet =
     m.kind === 'sheet' && m.sheets?.[0] ? `${num.format(m.sheets[0].length)} × ${num.format(m.sheets[0].width)}` : ''
-  return [kind, thick, sheet].filter(Boolean).join(' · ')
+  return [thick, sheet].filter(Boolean).join(' · ')
+}
+
+/** "Skiva · 12, 16, 19 mm · 2 440 × 1 220": det viktigaste om ett material på en rad. */
+function summary(m: MaterialFields): string {
+  return [KIND_LABEL[m.kind], stockSummary(m)].filter(Boolean).join(' · ')
 }
 
 /** Ett eget material i listan. Ett tryck öppnar det i en egen ruta, så att listan ligger still. */
