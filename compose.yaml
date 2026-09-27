@@ -1,8 +1,8 @@
-# Starta eller uppdatera: docker compose pull && docker compose up -d
-# Imagen byggs av GitHub Actions när en versionstagg pushas (.github/workflows/image.yml).
-# En viss version: BYGG_VERSION=1.2.3 i .env; annars latest.
-# Utan inloggning än: appen körs bara utan konto, och allt sparas i webbläsaren. Volymen används
-# först när inloggningen slås på; då hamnar modellerna där, en mapp per användare (users/<id>/models, thumbs, trash).
+# Start or update: docker compose pull && docker compose up -d
+# The image is built by GitHub Actions when a version tag is pushed (.github/workflows/image.yml).
+# A specific version: BYGG_VERSION=1.2.3 in .env; otherwise latest.
+# No sign-in yet: the app runs without accounts only, and everything is saved in the browser. The volume is used
+# once sign-in is turned on; then the models end up there, one folder per user (users/<id>/models, thumbs, trash).
 services:
   bygg:
     image: ghcr.io/larsabrasha/bygg:${BYGG_VERSION:-latest}
@@ -10,11 +10,11 @@ services:
       - '8787:8787'
     environment:
       APP_URL: https://bygg.larsabrasha.com
-      # Inloggning via Pocket ID: ta bort # på raderna nedan och lägg hemligheterna i .env (se README).
+      # Sign-in via Pocket ID: remove the # on the lines below and put the secrets in .env (see README).
       # OIDC_ISSUER: https://id.larsabrasha.com
-      # OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:?saknas i .env}
-      # OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:?saknas i .env}
-      # SESSION_SECRET: ${SESSION_SECRET:?saknas i .env}
+      # OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:?missing in .env}
+      # OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:?missing in .env}
+      # SESSION_SECRET: ${SESSION_SECRET:?missing in .env}
     volumes:
       - bygg-data:/data
     restart: unless-stopped

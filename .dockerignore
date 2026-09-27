@@ -2,7 +2,7 @@ node_modules
 dist
 data
 .git
-# Bara det som pekar ut commiten, till Om Bygg (scripts/buildInfo.ts): inte historiken.
+# Only what identifies the commit, for "Om Bygg" (About, scripts/buildInfo.ts): not the history.
 !.git/HEAD
 !.git/refs
 !.git/packed-refs

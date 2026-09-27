@@ -1,4 +1,4 @@
-# Bygg appen (frontend) i ett steg, kör servern i ett mindre.
+# Build the app (frontend) in one stage, run the server in a smaller one.
 FROM node:24-alpine AS build
 WORKDIR /app
 COPY package.json package-lock.json ./
@@ -13,15 +13,15 @@ ENV NODE_ENV=production \
     DATA_DIR=/data \
     STATIC_DIR=./dist
 COPY package.json package-lock.json ./
-# Bara serverns beroenden (hono, openid-client, tsx); frontend-biblioteken är redan inbyggda i dist/.
+# Only the server's dependencies (hono, openid-client, tsx); the frontend libraries are already bundled in dist/.
 RUN npm ci --omit=dev && npm cache clean --force
 COPY --from=build /app/dist ./dist
 COPY server ./server
-# Koden som servern delar med appen: format, konvertering och protokoll.
+# The code the server shares with the app: format, conversion and protocol.
 COPY src/model ./src/model
 COPY src/persist ./src/persist
 COPY src/sync/protocol.ts ./src/sync/protocol.ts
-# Ägs av node, så att en namngiven volym blir skrivbar för den användaren.
+# Owned by node, so that a named volume is writable for that user.
 RUN mkdir -p /data && chown node:node /data
 VOLUME /data
 USER node

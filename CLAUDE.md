@@ -1,55 +1,57 @@
-# Projekt: 3D-modellering för möbelsnickeri
+# Project: 3D modelling for furniture making
 
-Webbapp för att modellera möbler och mindre träföremål i 3D
-och generera kaplistor. Self-hostad, körs i webbläsaren (PWA).
+Web app for modelling furniture and small wooden objects in 3D
+and generating cut lists. Self-hosted, runs in the browser (PWA).
 
 ## Stack
 - Vite + TypeScript + React
 - React Three Fiber + @react-three/drei
-- Tailwind CSS (v4, via @tailwindcss/vite) för all styling
-- Zustand för state (dokumentet ligger i en store, inte i komponenter)
-- IndexedDB för autospar (lokalt först, fungerar offline)
-- Synkserver: Hono på Node (server/), en JSON-fil per modell och användare i DATA_DIR.
-  Krockar upptäcks med revisionsnummer; ingen version skrivs över tyst.
-  I dev körs API:t inuti Vite (server/devPlugin.ts). Driftsätts med Docker.
-- PWA via vite-plugin-pwa: service worker bara i produktionsbygget (inte i dev,
-  där den skulle störa HMR). Kräver https utom på localhost; Caddy framför servern.
-  Ikoner genereras från public/icon.svg med `npm run icons`.
-- Inloggning via OIDC mot Pocket ID (https://id.larsabrasha.com), skött av servern
-  (server/auth.ts) med signerad session-cookie. Modeller per användare, både på
-  servern (DATA_DIR/users/<sub>/) och lokalt (IndexedDB, src/sync/localStore.ts).
-  I dev finns ingen inloggning; allt gäller användaren "dev".
-- Material och färger (egna material, dolda inbyggda, standardfärger) hör till användaren:
-  DATA_DIR/users/<sub>/catalog.json, lokalt i IndexedDB (src/sync/catalogSync.ts). Krockar slås
-  ihop post för post. En modell sparar kopior av de egna material den använder (doc.materials).
-- Utan konto (gästläget, "Prova utan konto" på startsidan): egen IndexedDB-databas,
-  ingen synk, servern tillfrågas inte. Inloggning tar bort valet.
-- Utloggad ser startsidan (src/landing) med riktiga modeller, kaplista och kapschema
-  räknade med appens egen kod. På /intro visas den för alla, också inloggad (länk i Om Bygg);
-  då leder knapparna in i appen.
-  Medan 3D-vyn laddas visas stillbilder av möblerna (src/landing/stills, tas om med `npm run stills` när
-  en möbel eller studioljuset ändras; ett test säger till om möblerna ändrats). Samma skript tar
-  delningsbilden (public/delningsbild.jpg). Bilderna av appen (src/landing/app) tas med `npm run appshots`.
-- Ingen CSG-kärna i början; manifold-3d läggs till vid behov
-- CLI (cli/, `npm run -s bygg -- help`): ändrar modeller med operationer som körs i appens egen documentStore.
-  Nycklar för CLI:t skapas på /auth/cli (server/tokens.ts). Gränser för modeller och konto i src/model/limits.ts
-  gäller överallt: när man ritar, vid import, på servern och i CLI:t.
-- Servern skickar ut ändringar direkt (/api/events, SSE, server/events.ts); appen synkar då i stället för att
-  vänta på nästa runda (60 s). Händelsen säger bara vad som ändrats; hämtningen är en vanlig synkrunda.
+- Tailwind CSS (v4, via @tailwindcss/vite) for all styling
+- Zustand for state (the document lives in a store, not in components)
+- IndexedDB for autosave (local first, works offline)
+- Sync server: Hono on Node (server/), one JSON file per model and user in DATA_DIR.
+  Conflicts are detected with revision numbers; no version is silently overwritten.
+  In dev the API runs inside Vite (server/devPlugin.ts). Deployed with Docker.
+- PWA via vite-plugin-pwa: service worker only in the production build (not in dev,
+  where it would interfere with HMR). Requires https except on localhost; Caddy in front of the server.
+  Icons are generated from public/icon.svg with `npm run icons`.
+- Sign-in via OIDC against Pocket ID (https://id.larsabrasha.com), handled by the server
+  (server/auth.ts) with a signed session cookie. Models per user, both on
+  the server (DATA_DIR/users/<sub>/) and locally (IndexedDB, src/sync/localStore.ts).
+  In dev there is no sign-in; everything belongs to the user "dev".
+- Materials and colours (custom materials, hidden built-ins, default colours) belong to the user:
+  DATA_DIR/users/<sub>/catalog.json, locally in IndexedDB (src/sync/catalogSync.ts). Conflicts are merged
+  entry by entry. A model stores copies of the custom materials it uses (doc.materials).
+- Without an account (guest mode, "Prova utan konto" on the landing page): its own IndexedDB database,
+  no sync, the server is never asked. Signing in removes the choice.
+- Signed out, the user sees the landing page (src/landing) with real models, cut list and cutting plan
+  computed with the app's own code. On /intro it is shown to everyone, also when signed in (link in "Om Bygg");
+  then the buttons lead into the app.
+  While the 3D view loads, still images of the furniture are shown (src/landing/stills, retaken with `npm run stills`
+  when a piece of furniture or the studio lighting changes; a test says when the furniture has changed). The same script takes
+  the share image (public/delningsbild.jpg). The screenshots of the app (src/landing/app) are taken with `npm run appshots`.
+- No CSG kernel at first; manifold-3d is added when needed
+- CLI (cli/, `npm run -s bygg -- help`): edits models with operations that run in the app's own documentStore.
+  Keys for the CLI are created on /auth/cli (server/tokens.ts). Limits for models and accounts in src/model/limits.ts
+  apply everywhere: when drawing, on import, on the server and in the CLI.
+- The server pushes changes immediately (/api/events, SSE, server/events.ts); the app then syncs instead of
+  waiting for the next round (60 s). The event only says what changed; the fetch is an ordinary sync round.
 
-## Datamodell
-Modellering som i SketchUp/Shapr3D: rita en skiss (rektangel) på golvet
-eller på en yta, dra ut den med push/pull till en kropp.
-Varje kropp sparar sin profil och sitt djup som siffror i en egen frame
-(origo + axlar u, v, n), plus namn, material och fiberriktning.
-Form (PartDef) och placering (Instance) är separata, så att länkade
-kopior delar form. Mått kan styras av namngivna parametrar (uttryck).
-Sparformatet har ett versionsnummer (src/persist/format.ts).
-3D-vyn och kaplistan härleds båda från denna data. Kaplistan mäter
-L×B×T i varje dels egen riktning (som Fusion 360).
+## Data model
+Modelling as in SketchUp/Shapr3D: draw a sketch (rectangle) on the floor
+or on a face, extrude it with push/pull into a body.
+Each body stores its profile and its depth as numbers in its own frame
+(origin + axes u, v, n), plus name, material and grain direction.
+Shape (PartDef) and placement (Instance) are separate, so that linked
+copies share shape. Dimensions can be driven by named parameters (expressions).
+The save format has a version number (src/persist/format.ts).
+The 3D view and the cut list are both derived from this data. The cut list measures
+L×W×T in each part's own direction (like Fusion 360).
 
-## Arbetssätt
-- Små steg; varje feature ska gå att testköra direkt med HMR
-- Bevara state över hot reload
-- Mått i millimeter överallt
-- Ska fungera lika bra på mobil (touch, smal skärm) som på desktop
+## Way of working
+- Small steps; every feature should be testable right away with HMR
+- Preserve state across hot reload
+- Millimetres everywhere
+- Must work as well on mobile (touch, narrow screen) as on desktop
+- README.md, CLAUDE.md, files in .claude/ and other repo docs and config files are written in English.
+  The app's UI texts are in Swedish.

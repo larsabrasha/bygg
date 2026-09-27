@@ -1,28 +1,28 @@
 ---
 name: bygg-cli
-description: Modellera möbler i Bygg-appen från terminalen med CLI:t `bygg` – skapa och ändra modeller (lådor, cylindrar, länkade kopior, tappar, urtag, parametrar) och ta fram kaplista och kapschema. Använd när användaren vill att du bygger, ändrar eller räknar på en modell i Bygg, t.ex. "rita en bokhylla i bygg", "gör ett bord 120 × 80", "vad blir kaplistan", "hur mycket virke behövs".
+description: Model furniture in the Bygg app from the terminal with the `bygg` CLI – create and edit models (boxes, cylinders, linked copies, tenons, cutouts, parameters) and produce the cut list and cutting plan. Use when the user wants you to build, change or calculate a model in Bygg, e.g. "rita en bokhylla i bygg", "gör ett bord 120 × 80", "vad blir kaplistan", "hur mycket virke behövs".
 ---
 
-# Bygg-CLI
+# Bygg CLI
 
-Kör `npm run -s bygg -- <kommando>` i repot (eller `bygg` om det är länkat med `npm link`).
-Läs först `npm run -s bygg -- help` och `npm run -s bygg -- ops`; de beskriver alla kommandon och operationer.
+Run `npm run -s bygg -- <command>` in the repo (or `bygg` if it is linked with `npm link`).
+First read `npm run -s bygg -- help` and `npm run -s bygg -- ops`; they describe all commands and operations.
 
-Arbetsgång:
+Workflow:
 
-1. `bygg whoami` visar om du når en server. Säger den "Inte inloggad" ska användaren själv köra
-   `bygg login --server https://…` (nyckeln klistras in för hand). Be aldrig om nyckeln i chatten.
-   Utan server går det att arbeta i en lokal fil: `bygg new "Bord" --file bord.bygg.json`.
-2. Planera måtten i mm. x åt höger, y uppåt, z framåt; golvet är y = 0; `at` är hörnet närmast origo.
-   Sätt `grain` (fiberns axel) på varje del, annars gissas den.
-3. Skriv alla operationer för ett steg i en lista och kör `bygg edit <modell> --dry-run --show --ops '[…]'`.
-   Kontrollera läge och mått i utskriften, kör sedan samma rad utan `--dry-run`.
-4. Visa resultatet med `bygg cutlist <modell>` och `bygg cutplan <modell>`.
+1. `bygg whoami` shows whether you can reach a server. If it says "Inte inloggad" (not signed in), the user must run
+   `bygg login --server https://…` themselves (the key is pasted in by hand). Never ask for the key in the chat.
+   Without a server you can work in a local file: `bygg new "Bord" --file bord.bygg.json`.
+2. Plan the dimensions in mm. x to the right, y up, z forward; the floor is y = 0; `at` is the corner closest to the origin.
+   Set `grain` (the grain axis) on every part, otherwise it is guessed.
+3. Write all operations for one step in a list and run `bygg edit <model> --dry-run --show --ops '[…]'`.
+   Check position and dimensions in the output, then run the same line without `--dry-run`.
+4. Show the result with `bygg cutlist <model>` and `bygg cutplan <model>`.
 
-Regler:
+Rules:
 
-- Ett edit är allt eller inget. Säger det "Inget sparades" har modellen inte ändrats; rätta och kör om.
-- Gränser: se `bygg limits`. Försök inte gå runt dem genom att dela upp i fler modeller.
-- Nyckeln har en takt-gräns (120 anrop per minut). Samla ändringar i få edit-anrop i stället för många små.
-- `delete` flyttar till serverns papperskorg och kräver `--yes`; fråga användaren först.
-- Användaren ser modellen i appen efter nästa synk. Bilden i startvyn uppdateras först när modellen öppnas där.
+- An edit is all or nothing. If it says "Inget sparades" (nothing was saved), the model is unchanged; fix it and run again.
+- Limits: see `bygg limits`. Do not try to get around them by splitting into more models.
+- The key is rate limited (120 requests per minute). Collect changes into a few edit calls instead of many small ones.
+- `delete` moves the model to the server's trash and requires `--yes`; ask the user first.
+- The user sees the model in the app after the next sync. The thumbnail on the start view updates only when the model is opened there.

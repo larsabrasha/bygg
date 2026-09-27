@@ -1,7 +1,7 @@
-# Bygger Docker-imagen när en versionstagg pushas (git tag v1.2.3 && git push origin v1.2.3)
-# och lägger den på ghcr.io/larsabrasha/bygg med taggarna 1.2.3, 1.2 och latest.
-# Testerna körs först; går de inte igenom byggs ingen image. Körs den för hand
-# (gh workflow run Image) byggs imagen men laddas inte upp.
+# Builds the Docker image when a version tag is pushed (git tag v1.2.3 && git push origin v1.2.3)
+# and pushes it to ghcr.io/larsabrasha/bygg with the tags 1.2.3, 1.2 and latest.
+# The tests run first; if they fail, no image is built. When run by hand
+# (gh workflow run Image) the image is built but not pushed.
 name: Image
 
 on:
@@ -30,7 +30,7 @@ jobs:
       contents: read
       packages: write
     steps:
-      # .git följer med in i bygget (se .dockerignore): Om Bygg visar commiten.
+      # .git is included in the build (see .dockerignore): "Om Bygg" (About) shows the commit.
       - uses: actions/checkout@v7
       - uses: docker/setup-buildx-action@v4
       - uses: docker/login-action@v4
