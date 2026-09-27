@@ -173,7 +173,9 @@ function Materials() {
           Slå av dem du aldrig använder, så syns de inte i väljaren. Delar som redan har dem behåller dem.
         </p>
         {MATERIAL_GROUPS.map((g) => (
-          <div key={g.kind} className="flex flex-col">
+          <div key={g.kind} className="mt-2 flex flex-col">
+            {/* Samma grupper och namn som i materialväljaren i Egenskaper. */}
+            <h4 className="border-b border-line pb-1 text-xs font-semibold text-muted">{g.title}</h4>
             {MATERIAL_SPECS.filter((m) => m.kind === g.kind).map((m) => (
               <ShownRow
                 key={m.id}
