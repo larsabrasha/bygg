@@ -485,11 +485,12 @@ function BoardDrawing({
           })}
         </svg>
       )}
-      {chosen && (
-        <p className="px-1.5 text-xs text-accent tabular-nums">
-          {chosen.name} · {num.format(chosen.length)} × {num.format(chosen.width)} mm{chosen.rotated ? ' · vriden' : ''}
-        </p>
-      )}
+      {/* Raden tar alltid plats, så att listan inte hoppar när en del väljs eller släpps. */}
+      <p className="truncate px-1.5 text-xs text-accent tabular-nums" aria-live="polite">
+        {chosen
+          ? `${chosen.name} · ${num.format(chosen.length)} × ${num.format(chosen.width)} mm${chosen.rotated ? ' · vriden' : ''}`
+          : '\u00a0'}
+      </p>
     </div>
   )
 }
