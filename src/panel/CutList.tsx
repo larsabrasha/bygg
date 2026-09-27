@@ -13,8 +13,10 @@ import { firstUpper, isOrdered, materialTitle } from '../model/materials'
 const num = numberFormat(1, true)
 const volume = numberFormat(4, true)
 
-// Kolumnerna för L, B och T har fast bredd, så att måtten står i linje mellan materialen.
-const dimCol = 'w-12 text-right tabular-nums'
+// Kolumnerna har fast bredd utom namnet, så att måtten står i linje mellan materialen och raderna.
+// Listan är ett grid i stället för en tabell: en tabellrad går inte att runda.
+const cols = 'grid grid-cols-[2rem_minmax(0,1fr)_3rem_3rem_3rem] items-baseline [&>*]:px-1.5'
+const dim = 'text-right tabular-nums'
 
 export function CutList() {
   const bodies = useBodies()
@@ -62,22 +64,26 @@ export function CutList() {
                     {g.count} st · {isOrdered(g.material) ? 'beställs tillskuret' : `${volume.format(g.volumeM3)} m³`}
                   </span>
                 </div>
-                <table className="w-full border-collapse text-[13px]">
-                  <thead className={groupTitle}>
-                    <tr className="border-b border-line [&_th]:px-1.5 [&_th]:py-1.5 [&_th]:font-semibold">
-                      <th className="w-8 text-right">St</th>
-                      <th className="text-left">Namn</th>
-                      <th className={dimCol}>L</th>
-                      <th className={dimCol}>B</th>
-                      <th className={`${dimCol} w-10`}>T</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {g.rows.map((row) => (
-                      <Row key={row.key} row={row} />
-                    ))}
-                  </tbody>
-                </table>
+                <div role="table" aria-label={materialTitle(g.material)} className="text-[13px]">
+                  <div role="row" className={`${cols} ${groupTitle} border-b border-line py-1.5 [&>*]:font-semibold`}>
+                    <span role="columnheader" className="text-right">
+                      St
+                    </span>
+                    <span role="columnheader">Namn</span>
+                    <span role="columnheader" className="text-right">
+                      L
+                    </span>
+                    <span role="columnheader" className="text-right">
+                      B
+                    </span>
+                    <span role="columnheader" className="text-right">
+                      T
+                    </span>
+                  </div>
+                  {g.rows.map((row) => (
+                    <Row key={row.key} row={row} />
+                  ))}
+                </div>
               </div>
             ))}
 
@@ -99,40 +105,51 @@ function Row({ row }: { row: CutListRow }) {
   const select = useDocumentStore((s) => s.select)
   const isSelected = selection?.kind === 'body' && row.bodyIds.includes(selection.id)
 
+  // Markeringen är en rundad ruta med luft mot linjerna runt om, inte en fylld remsa mellan dem.
   return (
-    <tr
-      className={`cursor-pointer border-b border-line align-baseline [&_td]:px-1.5 [&_td]:py-2 narrow:[&_td]:py-3 ${
-        isSelected ? 'bg-accent-soft' : 'hover:bg-hover'
-      }`}
-      onClick={() => {
-        const id = row.bodyIds[0]
-        if (id) select({ kind: 'body', id })
-      }}
-    >
-      <td className="text-right font-semibold tabular-nums">{row.count}</td>
-      <td>
-        {compactNames(row.names)}
-        {/* L×B×T är ämnet; en rund del får sin diameter under namnet. */}
-        {row.round && (
-          <span className="block text-xs text-muted tabular-nums">Rund, Ø {num.format(row.round.diameter)}</span>
-        )}
-        {/* Kulören får gå ut under måtten, där raden är tom, i stället för att brytas i den smala kolumnen. */}
-        {row.paint && (
-          <span className="relative block h-4">
-            <span className="absolute inset-y-0 left-0 flex items-center gap-1.5 text-xs whitespace-nowrap text-muted">
-              <span
-                className="size-2.5 shrink-0 rounded-full ring-1 ring-black/15 ring-inset"
-                style={{ background: row.paint.color }}
-                aria-hidden
-              />
-              {firstUpper(paintText(row.paint))}
+    <div className="border-b border-line py-0.5">
+      <div
+        role="row"
+        aria-selected={isSelected}
+        className={`${cols} cursor-pointer rounded-md py-1.5 hover:bg-hover aria-selected:bg-accent-soft narrow:py-2.5`}
+        onClick={() => {
+          const id = row.bodyIds[0]
+          if (id) select({ kind: 'body', id })
+        }}
+      >
+        <span role="cell" className="text-right font-semibold tabular-nums">
+          {row.count}
+        </span>
+        <span role="cell">
+          {compactNames(row.names)}
+          {/* L×B×T är ämnet; en rund del får sin diameter under namnet. */}
+          {row.round && (
+            <span className="block text-xs text-muted tabular-nums">Rund, Ø {num.format(row.round.diameter)}</span>
+          )}
+          {/* Kulören får gå ut under måtten, där raden är tom, i stället för att brytas i den smala kolumnen. */}
+          {row.paint && (
+            <span className="relative block h-4">
+              <span className="absolute inset-y-0 left-0 flex items-center gap-1.5 text-xs whitespace-nowrap text-muted">
+                <span
+                  className="size-2.5 shrink-0 rounded-full ring-1 ring-black/15 ring-inset"
+                  style={{ background: row.paint.color }}
+                  aria-hidden
+                />
+                {firstUpper(paintText(row.paint))}
+              </span>
             </span>
-          </span>
-        )}
-      </td>
-      <td className={dimCol}>{num.format(row.length)}</td>
-      <td className={dimCol}>{num.format(row.width)}</td>
-      <td className={dimCol}>{num.format(row.thickness)}</td>
-    </tr>
+          )}
+        </span>
+        <span role="cell" className={dim}>
+          {num.format(row.length)}
+        </span>
+        <span role="cell" className={dim}>
+          {num.format(row.width)}
+        </span>
+        <span role="cell" className={dim}>
+          {num.format(row.thickness)}
+        </span>
+      </div>
+    </div>
   )
 }
