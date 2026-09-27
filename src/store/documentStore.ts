@@ -15,6 +15,7 @@ import { rotateFrame } from '../model/frame'
 import { carryTools, combineError, detachOrphans, jointError, sketchCombine, type SketchMode } from '../model/combine'
 import { refitJoints, tenonFor } from '../model/joint'
 import { newId } from '../model/id'
+import { embedMaterials } from '../model/catalog'
 import { applyParams, evaluateParams, isNameUsed, paramScope, setBoxExtent } from '../model/params'
 import { defaultAxes, withAxes } from '../model/partAxes'
 import { minCorner, placeAlong, WORLD_AXES, withoutPos } from '../model/placement'
@@ -122,6 +123,11 @@ interface DocumentState extends Snapshot {
   clearDocument: () => void
   /** Ersätter dokumentet, t.ex. vid inläsning. Rensar historiken. */
   load: (doc: ModelDocument) => void
+  /**
+   * Uppdaterar modellens kopior av egna material när användarens lista ändrats.
+   * Inget ångra-steg: det är inte en ändring av modellen.
+   */
+  refreshMaterials: () => void
   /** Sätter tillbaka historiken som sparades med dokumentet (se sync/history). Dokumentet rörs inte. */
   setHistory: (past: HistoryEntry[], future: HistoryEntry[]) => void
   undo: () => void
@@ -190,7 +196,8 @@ export const useDocumentStore = create<DocumentState>()((set, get) => {
     const { doc, past, selection: before } = get()
     // Verktyg följer sin värd när den flyttas, och tappar räknas om när sargen eller benet ändras;
     // verktyg utan värd blir vanliga delar.
-    const applied = pruneDefs(detachOrphans(refitJoints(doc, carryTools(doc, applyParams(next)))))
+    // Modellen har kopior av de egna material den använder, som följer med när den sparas.
+    const applied = embedMaterials(pruneDefs(detachOrphans(refitJoints(doc, carryTools(doc, applyParams(next))))))
     set({
       doc: applied,
       selection: selectionExists(applied, selection),
@@ -580,6 +587,12 @@ export const useDocumentStore = create<DocumentState>()((set, get) => {
     clearDocument: () => commit(emptyDocument(), null),
 
     load: (doc) => set({ doc: applyParams(doc), selection: null, past: [], future: [] }),
+
+    refreshMaterials: () => {
+      const { doc } = get()
+      const next = embedMaterials(doc)
+      if (next !== doc) set({ doc: next })
+    },
 
     setHistory: (past, future) => set({ past: past.slice(-HISTORY_LIMIT), future }),
 

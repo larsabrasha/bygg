@@ -13,6 +13,7 @@ import {
 } from 'three'
 import { bodyExtents, type Box } from '../model/geometry'
 import { materialSpec } from '../model/materials'
+import { useCatalogStore } from '../store/catalogStore'
 import { FACES, type Body, type Face, type Vec3 } from '../model/types'
 import { add } from '../model/vec'
 import { ACCENT, ACCENT_LIGHT, EDGE, materialColor } from './colors'
@@ -94,6 +95,8 @@ function BodyMeshImpl({
     [manifold, body.profile, body.shape, body.z0, body.z1, body.tools, segments],
   )
 
+  // Ett eget material som ändras (färg, genomskinlighet) ritas om, fast delen är densamma.
+  useCatalogStore((s) => s.version)
   // En målad del ritas i sin färg, utan trämönster och ändträ.
   const painted = body.paint !== undefined
   const color = body.paint?.color ?? materialColor(body.material)

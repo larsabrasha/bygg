@@ -1,4 +1,17 @@
-import { Box, Copy, Ellipsis, FolderOpen, LoaderCircle, LogIn, LogOut, Pencil, Plus, Trash2, X } from 'lucide-react'
+import {
+  Box,
+  Copy,
+  Ellipsis,
+  FolderOpen,
+  LoaderCircle,
+  LogIn,
+  LogOut,
+  Palette,
+  Pencil,
+  Plus,
+  Trash2,
+  X,
+} from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useLibraryStore, type ModelListItem } from '../store/libraryStore'
 import { nameFromFileName, readModelFile } from '../persist/modelFile'
@@ -286,6 +299,16 @@ export function Gallery() {
           <SyncBadge />
         </div>
         <LogoutButton />
+        <Tip label="Egna material och standardfärger">
+          <button
+            className={secondaryButton}
+            aria-label="Material och färger"
+            onClick={() => useLibraryStore.getState().set({ catalogOpen: 'materials' })}
+          >
+            <Palette size={18} aria-hidden />
+            <span className="narrow:hidden">Material och färger</span>
+          </button>
+        </Tip>
         <ImportButton />
         <button className={primaryButton} onClick={() => void openFromGallery('new')}>
           <Plus size={18} aria-hidden />

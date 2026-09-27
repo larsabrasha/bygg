@@ -1,13 +1,17 @@
+import { useMemo } from 'react'
 import { ArrowUpFromLine, Copy, RotateCw, Trash2, Unlink } from 'lucide-react'
 import { rectSize } from '../model/geometry'
 import { AXES, extent, widthAxis } from '../model/partAxes'
 import { anglesOf, restOf } from '../model/orientation'
 import { minCorner, WORLD_AXES } from '../model/placement'
 import { instanceCounts, resolveBodies } from '../model/resolve'
-import { MATERIAL_GROUPS, MATERIAL_SPECS, materialSpec, materialTitle } from '../model/materials'
+import { pickerMaterials } from '../model/catalog'
+import { firstUpper, MATERIAL_GROUPS, materialSpec, materialTitle } from '../model/materials'
 import type { Axis, Body, Instance, PartDef } from '../model/types'
 import { AXIS_COLORS } from '../scene/colors'
+import { useCatalogStore } from '../store/catalogStore'
 import { useDocumentStore } from '../store/documentStore'
+import { useLibraryStore } from '../store/libraryStore'
 import { beginPushPull } from '../tools/actions'
 import { CommitField } from './CommitField'
 import { Group } from './Group'
@@ -18,6 +22,9 @@ import { Tip } from './Tip'
 import { numberFormat } from '../model/numberFormat'
 
 const fmt = numberFormat(1)
+
+/** Sista raden i materialväljaren: öppnar Material och färger i stället för att välja. */
+const EDIT_MATERIALS = '\u0000ändra'
 
 /** Axelns bokstav i samma färg som axelkorset och flyttpilarna. */
 function AxisTag({ index }: { index: 0 | 1 | 2 }) {
@@ -240,6 +247,8 @@ export function Properties() {
   const deleteSelection = useDocumentStore((s) => s.deleteSelection)
   const duplicateLinked = useDocumentStore((s) => s.duplicateLinked)
   const makeUnique = useDocumentStore((s) => s.makeUnique)
+  const catalog = useCatalogStore((s) => s.catalog)
+  const choices = useMemo(() => pickerMaterials(catalog), [catalog])
 
   const body = selection?.kind === 'body' ? resolveBodies(doc).find((b) => b.id === selection.id) : undefined
   const def = body && doc.defs.find((d) => d.id === body.defId)
@@ -270,21 +279,30 @@ export function Properties() {
               <select
                 className={field}
                 value={def.material}
-                onChange={(e) => updatePart(body.id, { material: e.target.value })}
+                onChange={(e) => {
+                  if (e.target.value === EDIT_MATERIALS) useLibraryStore.getState().set({ catalogOpen: 'materials' })
+                  else updatePart(body.id, { material: e.target.value })
+                }}
               >
-                {MATERIAL_GROUPS.map((g) => (
-                  <optgroup key={g.kind} label={g.title}>
-                    {MATERIAL_SPECS.filter((m) => m.kind === g.kind).map((m) => (
-                      <option key={m.id} value={m.id}>
-                        {materialTitle(m.id)}
-                      </option>
-                    ))}
-                  </optgroup>
-                ))}
-                {/* Ett material som inte finns i listan (från en nyare app) står kvar som det är. */}
-                {!MATERIAL_SPECS.some((m) => m.id === def.material) && (
-                  <option value={def.material}>{def.material}</option>
+                {MATERIAL_GROUPS.map((g) => {
+                  const list = choices.filter((m) => m.kind === g.kind)
+                  return (
+                    list.length > 0 && (
+                      <optgroup key={g.kind} label={g.title}>
+                        {list.map((m) => (
+                          <option key={m.id} value={m.id}>
+                            {firstUpper(m.name)}
+                          </option>
+                        ))}
+                      </optgroup>
+                    )
+                  )
+                })}
+                {/* Ett dolt, borttaget eller okänt material står kvar för den del som har det. */}
+                {!choices.some((m) => m.id === def.material) && (
+                  <option value={def.material}>{materialTitle(def.material)}</option>
                 )}
+                <option value={EDIT_MATERIALS}>Ändra material…</option>
               </select>
             </label>
             <PaintField instanceId={body.id} def={def} />

@@ -1,3 +1,4 @@
+import type { Catalog } from '../model/catalog'
 import type { SavedFile } from '../persist/format'
 
 /**
@@ -35,6 +36,27 @@ export interface PutModelResponse {
 /** Svar vid 409: vad servern har nu (null om modellen har tagits bort). */
 export interface ConflictResponse {
   current: ServerModel | null
+}
+
+/**
+ * Användarens material och färger (data/users/<sub>/catalog.json). Samma
+ * revisioner som modellerna; vid 409 slår klienten ihop och försöker igen.
+ */
+export interface ServerCatalog {
+  revision: number
+  updatedAt: string
+  catalog: Catalog
+}
+
+export interface PutCatalogRequest {
+  /** Revisionen klienten utgick från, eller null om servern inte har någon lista än. */
+  baseRevision: number | null
+  catalog: Catalog
+}
+
+/** Svar vid 409 för listan: vad servern har nu. */
+export interface CatalogConflictResponse {
+  current: ServerCatalog | null
 }
 
 /** Svar från /auth/me: den inloggade användaren. dev = ingen inloggning (dev-servern). */

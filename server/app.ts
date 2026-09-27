@@ -1,7 +1,14 @@
 import { Hono } from 'hono'
 import { bodyLimit } from 'hono/body-limit'
 import { FORMAT_VERSION, migrate, serialize } from '../src/persist/format'
-import type { ConflictResponse, PutModelRequest, PutModelResponse } from '../src/sync/protocol'
+import { cleanCatalog } from '../src/model/catalog'
+import type {
+  CatalogConflictResponse,
+  ConflictResponse,
+  PutCatalogRequest,
+  PutModelRequest,
+  PutModelResponse,
+} from '../src/sync/protocol'
 import { MODEL_ID_PATTERN } from '../src/sync/protocol'
 import type { Auth, User } from './auth'
 import type { FileStorage, UserStorages } from './storage'
@@ -61,6 +68,28 @@ export function createApp({ storages, auth }: AppOptions) {
   app.use('/api/models/:id/*', checkId)
 
   app.get('/api/models', async (c) => c.json(await c.var.storage.list()))
+
+  // Användarens material och färger. Saknas de svarar servern 404, och klienten laddar upp sina.
+  app.get('/api/catalog', async (c) => {
+    const current = await c.var.storage.getCatalog()
+    return current ? c.json(current) : c.json({ error: 'Finns inte' }, 404)
+  })
+
+  app.put('/api/catalog', bodyLimit({ maxSize: MAX_BODY_BYTES }), async (c) => {
+    let body: PutCatalogRequest
+    try {
+      body = await c.req.json<PutCatalogRequest>()
+    } catch {
+      return c.json({ error: 'Ogiltig JSON' }, 400)
+    }
+    const { baseRevision, catalog } = body ?? {}
+    if (baseRevision !== null && !(Number.isInteger(baseRevision) && baseRevision > 0))
+      return c.json({ error: 'Ogiltig baseRevision' }, 400)
+    // Samma kontroll som när klienten läser listan: det som inte ser rimligt ut släpps.
+    const r = await c.var.storage.putCatalog(baseRevision, cleanCatalog(catalog))
+    if (!r.ok) return c.json<CatalogConflictResponse>({ current: r.current }, 409)
+    return c.json<PutModelResponse>({ revision: r.revision, updatedAt: r.updatedAt })
+  })
 
   app.get('/api/models/:id', async (c) => {
     const m = await c.var.storage.get(c.req.param('id'))

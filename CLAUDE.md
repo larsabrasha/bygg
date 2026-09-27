@@ -19,6 +19,9 @@ och generera kaplistor. Self-hostad, körs i webbläsaren (PWA).
   (server/auth.ts) med signerad session-cookie. Modeller per användare, både på
   servern (DATA_DIR/users/<sub>/) och lokalt (IndexedDB, src/sync/localStore.ts).
   I dev finns ingen inloggning; allt gäller användaren "dev".
+- Material och färger (egna material, dolda inbyggda, standardfärger) hör till användaren:
+  DATA_DIR/users/<sub>/catalog.json, lokalt i IndexedDB (src/sync/catalogSync.ts). Krockar slås
+  ihop post för post. En modell sparar kopior av de egna material den använder (doc.materials).
 - Utan konto (gästläget, "Prova utan konto" på startsidan): egen IndexedDB-databas,
   ingen synk, servern tillfrågas inte. Inloggning tar bort valet.
 - Utloggad ser startsidan (src/landing) med riktiga modeller, kaplista och kapschema

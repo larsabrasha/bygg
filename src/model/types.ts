@@ -1,3 +1,4 @@
+import type { MaterialSpec } from './materials'
 /** Alla mått i millimeter. */
 export type Vec3 = [number, number, number]
 export type Vec2 = [number, number]
@@ -156,6 +157,8 @@ export interface ModelDocument {
   instances: Instance[]
   params: Param[]
   stock?: StockSettings
+  /** Kopior av de egna material delarna använder (se catalog.embedMaterials). */
+  materials?: MaterialSpec[]
 }
 
 /**

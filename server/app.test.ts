@@ -144,3 +144,56 @@ describe('bilden av en modell', () => {
     expect((await readdir(path.join(userDir, 'trash'))).some((f) => f.endsWith('.png'))).toBe(true)
   })
 })
+
+describe('material och färger', () => {
+  const putCatalog = (body: unknown) =>
+    app.request('/api/catalog', {
+      method: 'PUT',
+      body: JSON.stringify(body),
+      headers: { 'content-type': 'application/json' },
+    })
+  const catalog = {
+    materials: [
+      {
+        id: 'm1',
+        name: 'Valchromat',
+        kind: 'sheet',
+        grain: false,
+        color: '#334455',
+        updatedAt: '2026-09-27T10:00:00Z',
+      },
+    ],
+    colors: [
+      { id: 'c1', name: 'Monterblå', color: '#2f4a5c', code: 'NCS S 7020-B', updatedAt: '2026-09-27T10:00:00Z' },
+    ],
+    hidden: ['ek'],
+    removed: {},
+  }
+
+  it('saknas tills den sparats, och räknar sedan upp revisionen', async () => {
+    expect((await app.request('/api/catalog')).status).toBe(404)
+    expect(await (await putCatalog({ baseRevision: null, catalog })).json()).toMatchObject({ revision: 1 })
+    const got = await (await app.request('/api/catalog')).json()
+    expect(got).toMatchObject({ revision: 1, catalog: { hidden: ['ek'], colors: [{ code: 'NCS S 7020-B' }] } })
+    expect(JSON.parse(await readFile(path.join(userDir, 'catalog.json'), 'utf8')).revision).toBe(1)
+  })
+
+  it('svarar 409 med serverns lista när baseRevision inte stämmer', async () => {
+    await putCatalog({ baseRevision: null, catalog })
+    const r = await putCatalog({ baseRevision: null, catalog })
+    expect(r.status).toBe(409)
+    expect((await r.json()).current.revision).toBe(1)
+  })
+
+  it('släpper poster som inte ser rimliga ut, och ett eget material med ett inbyggts id', async () => {
+    const bad = {
+      ...catalog,
+      materials: [...catalog.materials, { ...catalog.materials[0], id: 'mdf' }, { id: 'x', name: 'Trasig' }],
+      colors: [...catalog.colors, { id: 'c2', name: 'Röd', color: 'röd', updatedAt: 'x' }],
+    }
+    await putCatalog({ baseRevision: null, catalog: bad })
+    const got = await (await app.request('/api/catalog')).json()
+    expect(got.catalog.materials.map((m: { id: string }) => m.id)).toEqual(['m1'])
+    expect(got.catalog.colors.map((c: { id: string }) => c.id)).toEqual(['c1'])
+  })
+})

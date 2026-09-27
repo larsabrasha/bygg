@@ -35,6 +35,8 @@ interface LibrarySnapshot {
   notices: Notice[]
   /** Modellen som öppnas, tills 3D-vyn har ritat den (se OpenWatcher). */
   opening: { id: string; name: string } | null
+  /** Sidan Material och färger är öppen, och vad som ska synas först. */
+  catalogOpen: 'materials' | 'colors' | null
 }
 
 interface LibraryState extends LibrarySnapshot {
@@ -48,6 +50,7 @@ const previous = import.meta.hot?.data.libraryStore as StoreApi<LibraryState> | 
 const initial: LibrarySnapshot = previous
   ? (({ models, thumbs, screen, pendingDelete, currentId, currentName, currentBase, status, error, notices }) => ({
       opening: null,
+      catalogOpen: null,
       models,
       thumbs: thumbs ?? {},
       screen: screen ?? 'model',
@@ -71,6 +74,7 @@ const initial: LibrarySnapshot = previous
       error: null,
       notices: [],
       opening: null,
+      catalogOpen: null,
     }
 
 let noticeSeq = 0

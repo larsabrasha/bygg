@@ -1,3 +1,4 @@
+import { CatalogSheet } from './panel/CatalogSheet'
 import { CombineBar } from './panel/CombineBar'
 import { Gallery } from './panel/Gallery'
 import { DimensionLabels } from './panel/DimensionLabels'
@@ -81,6 +82,8 @@ export function App() {
       <OpeningOverlay />
       {/* Ritningen ligger ovanpå allt, som startvyn. */}
       <Drawing />
+      {/* Material och färger öppnas från startvyn och från Egenskaper, och ligger över båda. */}
+      <CatalogSheet />
     </TipProvider>
   )
 }

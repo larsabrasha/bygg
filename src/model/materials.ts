@@ -130,10 +130,31 @@ export const MATERIAL_SPECS: readonly MaterialSpec[] = [
 
 const BY_ID = new Map(MATERIAL_SPECS.map((m) => [m.id, m]))
 
-/** Ett material som inte finns i katalogen (från en nyare app, eller borttaget) räknas som massivt trä. */
+/** Ett inbyggt material, inte ett eget (se catalog). */
+export const isBuiltInMaterial = (id: string) => BY_ID.has(id)
+
+/**
+ * Egna material: användarens lista (se catalog) och kopiorna i den öppna
+ * modellen. Sätts av catalogStore, så att allt som slår upp ett material
+ * (kaplistan, kapschemat, 3D-vyn) hittar dem utan att få listan som argument.
+ * Efter HMR sätter catalogStore dem igen.
+ */
+let custom: ReadonlyMap<string, MaterialSpec> = new Map()
+
+/** Byter de egna materialen. Det första med ett id vinner: användarens lista före modellens kopior. */
+export function setCustomMaterials(specs: readonly MaterialSpec[]) {
+  const map = new Map<string, MaterialSpec>()
+  for (const m of specs) if (!BY_ID.has(m.id) && !map.has(m.id)) map.set(m.id, m)
+  custom = map
+}
+
+/** Ett material som inte finns (från en nyare app, eller borttaget) räknas som massivt trä. */
 const unknown = (id: string): MaterialSpec => ({ id, name: id, kind: 'wood', grain: true, color: '#c8a878' })
 
-export const materialSpec = (id: string): MaterialSpec => BY_ID.get(id) ?? unknown(id)
+export const materialSpec = (id: string): MaterialSpec => BY_ID.get(id) ?? custom.get(id) ?? unknown(id)
+
+/** Materialet finns, inbyggt eller eget. */
+export const isKnownMaterial = (id: string) => BY_ID.has(id) || custom.has(id)
 
 /** Som det skrivs först i en rad eller rubrik: "Björkplywood", "MDF". */
 export const materialTitle = (id: string) => firstUpper(materialSpec(id).name)
@@ -161,5 +182,5 @@ export const compareMaterials = (a: string, b: string) =>
 export const MATERIAL_GROUPS: readonly { title: string; kind: MaterialKind }[] = [
   { title: 'Massivt trä', kind: 'wood' },
   { title: 'Skivor', kind: 'sheet' },
-  { title: 'Beställs tillskuret', kind: 'ordered' },
+  { title: 'Glas', kind: 'ordered' },
 ]

@@ -1,3 +1,5 @@
+import { cleanMaterialSpec } from '../model/catalog'
+import { isBuiltInMaterial, type MaterialSpec } from '../model/materials'
 import { axesFromLegacyGrain } from '../model/partAxes'
 import type { ModelDocument, Paint, PartDef, StockSettings } from '../model/types'
 
@@ -117,6 +119,16 @@ function cleanDefPaint(d: PartDef): PartDef {
   return clean ? { ...rest, paint: clean } : rest
 }
 
+/** Modellens kopior av egna material, de som ser rimliga ut. Inga kvar: fältet tas bort. */
+function cleanDocMaterials(doc: ModelDocument): ModelDocument {
+  if (doc.materials === undefined) return doc
+  const { materials, ...rest } = doc
+  const clean = Array.isArray(materials)
+    ? materials.map(cleanMaterialSpec).filter((m): m is MaterialSpec => m !== null && !isBuiltInMaterial(m.id))
+    : []
+  return clean.length ? { ...rest, materials: clean } : rest
+}
+
 export type LoadResult = { ok: true; doc: ModelDocument } | { ok: false; reason: string }
 
 /**
@@ -153,9 +165,12 @@ export function migrate(raw: unknown): LoadResult {
   // versionen höjs inte: en server med äldre kod skulle annars neka att spara.
   // (7) former kan ha paint (färgen delen målas i). Frivilligt och ofarligt att tappa, som stock.
   if (!isModelDocument(doc)) return { ok: false, reason: 'Trasigt dokument' }
+  // (7) dokumentet kan ha materials (kopior av egna material). Frivilligt: utan det ritas delarna
+  // som okänt trä, men måtten stämmer. En äldre app behåller fältet när den sparar.
   const painted = doc.defs.some((d) => d.paint !== undefined) ? { ...doc, defs: doc.defs.map(cleanDefPaint) } : doc
-  if (painted.stock === undefined) return { ok: true, doc: painted }
-  const { stock, ...rest } = painted
+  const withMaterials = cleanDocMaterials(painted)
+  if (withMaterials.stock === undefined) return { ok: true, doc: withMaterials }
+  const { stock, ...rest } = withMaterials
   const clean = cleanStock(stock)
   return { ok: true, doc: clean ? { ...rest, stock: clean } : rest }
 }

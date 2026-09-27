@@ -2,12 +2,14 @@ import { del as idbDel, get as idbGet, isGuest, set as idbSet } from './localSto
 import { newId } from '../model/id'
 import type { ModelDocument } from '../model/types'
 import { migrate, serialize } from '../persist/format'
+import { useCatalogStore } from '../store/catalogStore'
 import { emptyDocument, useDocumentStore } from '../store/documentStore'
 import { useLibraryStore, type SyncStatus } from '../store/libraryStore'
 import { useToolStore } from '../store/toolStore'
 import { useViewStore } from '../store/viewStore'
 import { ApiError, httpApi } from './api'
 import { forgetUser } from './auth'
+import { loadCatalog, saveCatalog, syncCatalog } from './catalogSync'
 import { syncOnce, type SyncEvent } from './engine'
 import { idbRepo, importLegacy, LEGACY_KEY, type LocalModel } from './localRepo'
 import { deleteHistory, getHistory, packHistory, putHistory, unpackHistory } from './history'
@@ -299,6 +301,7 @@ export function syncNow(): Promise<void> {
     // Utan konto finns ingen server att synka mot; allt ligger kvar i webbläsaren.
     if (isGuest()) {
       await persistNow()
+      await saveCatalog()
       lib().set({ status: 'guest', error: null })
       await refreshList()
       syncing = null
@@ -312,6 +315,8 @@ export function syncNow(): Promise<void> {
         const docAtStart = docs().doc
         const { events, again } = await syncOnce({ api, repo, newId })
         await handle(events, docAtStart)
+        // Användarens material och färger, i samma runda som modellerna.
+        await syncCatalog(api)
         if (again) rerun = true
       } while (rerun)
       lib().set({ status: 'synced', error: null })
@@ -377,6 +382,7 @@ async function addExamples() {
 
 /** Öppnar senast använda modell vid start (och flyttar över den gamla enkelmodellen första gången). */
 export async function openInitial() {
+  await loadCatalog().catch((e) => console.warn('[bygg] Kunde inte läsa material och färger', e))
   if (isGuest()) await addExamples().catch((e) => console.warn('[bygg] Kunde inte lägga till exemplen', e))
   await importLegacy(
     repo,
@@ -694,6 +700,12 @@ export function start(): () => void {
   const unsubscribe = useDocumentStore.subscribe((s, prev) => {
     if (s.doc !== prev.doc && s.doc !== lastPersistedDoc) scheduleSave()
   })
+  // En ändrad lista med material och färger sparas direkt och synkas strax efter, som en modell.
+  const unsubscribeCatalog = useCatalogStore.subscribe((s, prev) => {
+    if (!s.dirty || s.catalog === prev.catalog) return
+    void saveCatalog().catch((e) => console.warn('[bygg] Kunde inte spara material och färger', e))
+    scheduleSync(SYNC_DELAY_MS)
+  })
   const stopRouting = startRouting()
   const onOnline = () => void syncNow()
   const onVisibility = () => {
@@ -710,6 +722,7 @@ export function start(): () => void {
 
   return () => {
     unsubscribe()
+    unsubscribeCatalog()
     stopRouting()
     clearInterval(interval)
     if (syncTimer) clearTimeout(syncTimer)

@@ -1,11 +1,15 @@
 import { mkdir, readdir, readFile, rename, stat, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import type { SavedFile } from '../src/persist/format'
-import type { ModelMeta, ServerModel } from '../src/sync/protocol'
+import type { Catalog } from '../src/model/catalog'
+import type { ModelMeta, ServerCatalog, ServerModel } from '../src/sync/protocol'
 import { MODEL_ID_PATTERN } from '../src/sync/protocol'
 import { SUB_PATTERN } from './auth'
 
 export type PutResult = { ok: true; revision: number; updatedAt: string } | { ok: false; current: ServerModel | null }
+
+export type PutCatalogResult =
+  { ok: true; revision: number; updatedAt: string } | { ok: false; current: ServerCatalog | null }
 
 export type DeleteResult = { ok: true } | { ok: false; current: ServerModel | null }
 
@@ -19,6 +23,7 @@ export class FileStorage {
   private readonly modelsDir: string
   private readonly trashDir: string
   private readonly thumbsDir: string
+  private readonly catalogFile: string
   private readonly locks = new Map<string, Promise<unknown>>()
 
   constructor(
@@ -28,6 +33,34 @@ export class FileStorage {
     this.modelsDir = path.join(dataDir, 'models')
     this.trashDir = path.join(dataDir, 'trash')
     this.thumbsDir = path.join(dataDir, 'thumbs')
+    this.catalogFile = path.join(dataDir, 'catalog.json')
+  }
+
+  /** Användarens material och färger, eller null om de aldrig sparats. */
+  async getCatalog(): Promise<ServerCatalog | null> {
+    try {
+      return JSON.parse(await readFile(this.catalogFile, 'utf8')) as ServerCatalog
+    } catch (e) {
+      if ((e as NodeJS.ErrnoException).code === 'ENOENT') return null
+      throw e
+    }
+  }
+
+  /** Sparar listan om baseRevision stämmer med serverns (null = ingen lista än). Samma kö som en modell. */
+  putCatalog(baseRevision: number | null, catalog: Catalog): Promise<PutCatalogResult> {
+    return this.withLock('catalog', async () => {
+      const current = await this.getCatalog()
+      if ((current?.revision ?? null) !== baseRevision) return { ok: false, current }
+      const next: ServerCatalog = {
+        revision: (current?.revision ?? 0) + 1,
+        updatedAt: this.now().toISOString(),
+        catalog,
+      }
+      const tmp = `${this.catalogFile}.${process.pid}.tmp`
+      await writeFile(tmp, JSON.stringify(next, null, 2) + '\n', 'utf8')
+      await rename(tmp, this.catalogFile)
+      return { ok: true, revision: next.revision, updatedAt: next.updatedAt }
+    })
   }
 
   async init() {
