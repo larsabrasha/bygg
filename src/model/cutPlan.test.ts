@@ -6,8 +6,11 @@ import {
   isPanel,
   nextStock,
   materialList,
+  sameBoards,
   stockKey,
+  stretchText,
   type CutPlanGroup,
+  type PlacedPiece,
   type StockLayout,
 } from './cutPlan'
 import { testBody } from './testFixtures'
@@ -421,5 +424,38 @@ describe('svenska standardmått', () => {
     expect(isPanel(false, { length: 2400, width: 220 })).toBe(false)
     expect(defaultStocks('furu', [{ length: 900, width: 210 }])).toEqual([{ length: 1800, width: 220 }])
     expect(defaultStocks('furu', [{ length: 900, width: 230 }])).toEqual([{ length: 1200, width: 300 }])
+  })
+})
+
+describe('sameBoards', () => {
+  const piece = (name: string, x: number, length = 500): PlacedPiece => ({
+    bodyId: `${name}-${x}-${Math.random()}`,
+    name,
+    x,
+    y: 0,
+    w: length,
+    h: 95,
+    length,
+    width: 95,
+    rotated: false,
+  })
+
+  it('samlar brädor med samma delar på samma ställen, i den första brädans ordning', () => {
+    const a = () => [piece('Ribba', 0), piece('Ribba', 503)]
+    const b = () => [piece('Ribba', 0), piece('Sarg', 503, 400)]
+    const groups = sameBoards([a(), b(), a(), a()])
+    expect(groups.map((g) => g.numbers)).toEqual([[1, 3, 4], [2]])
+    expect(groups[0]!.boards).toHaveLength(3)
+  })
+
+  it('en annan del eller ett annat läge är ett annat mönster', () => {
+    expect(sameBoards([[piece('Ribba', 0)], [piece('Ribba', 10)], [piece('List', 0)]])).toHaveLength(3)
+  })
+})
+
+describe('stretchText', () => {
+  it('heltal från 3 gånger, annars en decimal', () => {
+    expect(stretchText(10.3)).toBe('förstorad 10 gånger')
+    expect(stretchText(1.46)).toBe('förstorad 1,5 gånger')
   })
 })

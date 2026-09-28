@@ -29,6 +29,41 @@ export const defaultTrim = (sheet: boolean, stock: StockSize) => (sheet ? 10 : i
 /** Vid en skiva eller bräda som används som den är (PlacedPiece.whole). */
 export const wholeText = (panel: boolean) => (panel ? 'används hel' : 'hela längden')
 
+/** Det i en placerad del som avgör om två brädor är likadana. */
+type PatternPiece = Pick<PlacedPiece, 'name' | 'x' | 'y' | 'length' | 'width' | 'rotated'> & { whole?: boolean }
+
+/** Brädor eller skivor med samma mönster: samma delar på samma ställen. numbers räknas från 1. */
+export interface SameBoards<T extends PatternPiece = PlacedPiece> {
+  numbers: number[]
+  /** Brädorna, i samma ordning som numbers. Mönstret ritas från den första. */
+  boards: T[][]
+}
+
+/**
+ * Samlar likadana brädor, så att 40 likadana ritas en gång med "40 st" i stället för 40 gånger.
+ * Likadana: samma namn och mått på delarna, på samma ställen (avrundat till 0,1 mm). Ordningen är
+ * den första brädans i varje mönster.
+ */
+export function sameBoards<T extends PatternPiece>(boards: readonly T[][]): SameBoards<T>[] {
+  const r = (n: number) => Math.round(n * 10)
+  const key = (b: readonly T[]) =>
+    JSON.stringify(b.map((p) => [p.name, r(p.x), r(p.y), r(p.length), r(p.width), p.rotated, !!p.whole]))
+  const out = new Map<string, SameBoards<T>>()
+  boards.forEach((b, i) => {
+    const k = key(b)
+    const found = out.get(k)
+    if (found) {
+      found.numbers.push(i + 1)
+      found.boards.push(b)
+    } else out.set(k, { numbers: [i + 1], boards: [b] })
+  })
+  return [...out.values()]
+}
+
+/** Hur mycket bredden är förstorad på ritningen av en smal bräda: "förstorad 10 gånger". Heltal från 3. */
+export const stretchText = (stretch: number) =>
+  `förstorad ${new Intl.NumberFormat('sv-SE', { maximumFractionDigits: stretch < 3 ? 1 : 0 }).format(stretch)} gånger`
+
 /** "skiva", "skivor", "bräda" eller "brädor". */
 export const stockNoun = (panel: boolean, count: number) =>
   panel ? (count === 1 ? 'skiva' : 'skivor') : count === 1 ? 'bräda' : 'brädor'

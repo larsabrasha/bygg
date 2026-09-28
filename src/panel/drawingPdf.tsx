@@ -5,8 +5,10 @@ import {
   countSame,
   groupCount,
   materialList,
+  sameBoards,
   stockDims,
   stockNoun,
+  stretchText,
   wholeText,
   type CutPlan,
   type StockLayout,
@@ -28,8 +30,6 @@ import { isOrdered, materialTitle } from '../model/materials'
 
 const num = numberFormat(1, true)
 const volume = numberFormat(4, true)
-/** Förstoringen av en smal bräda i kapschemat: "3" eller "1,5". */
-const stretchFormat = new Intl.NumberFormat('sv-SE', { maximumFractionDigits: 1 })
 const capitalize = (s: string) => s.charAt(0).toLocaleUpperCase('sv') + s.slice(1)
 
 /**
@@ -575,13 +575,26 @@ function drawCutPlan(doc: jsPDF, input: DrawingPdfInput, plan: CutPlan) {
       )
       y += stockH
 
-      l.boards.forEach((pieces, i) => {
+      // Likadana brädor ritas en gång, med antalet (som i appen).
+      sameBoards(l.boards).forEach(({ numbers, boards }) => {
+        const pieces = boards[0]!
         if (y + boardH(l) > bottom) newPage()
-        text(doc, `${unit} ${i + 1}${pieces[0]?.whole ? ` · ${wholeText(l.panel)}` : ''}`, mx, y + 3.2, 3, { gray: 51 })
+        const unitN = capitalize(stockNoun(l.panel, numbers.length))
+        const same = numbers.length > 1 ? ` · ${numbers.length} st` : ''
+        text(
+          doc,
+          `${unitN} ${compactNumbers(numbers)}${same}${pieces[0]?.whole ? ` · ${wholeText(l.panel)}` : ''}`,
+          mx,
+          y + 3.2,
+          3,
+          {
+            gray: 51,
+          },
+        )
         // En smal bräda ritas bredare än skalan; det ska stå vid brädan, inte bara i inledningen.
         const stretch = ky / k
         if (stretch > 1.05)
-          text(doc, `Bredden ritad ${stretchFormat.format(stretch)} × större`, mx + bw, y + 3.2, 3, {
+          text(doc, `Bredden ${stretchText(stretch)}`, mx + bw, y + 3.2, 3, {
             align: 'right',
             gray: 90,
           })

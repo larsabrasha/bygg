@@ -1,6 +1,6 @@
 import { buildCutList } from '../src/model/cutlist'
-import { formatMm, rowNames } from '../src/model/cutlistExport'
-import { buildCutPlan, groupCount, materialList, stockDims, wholeText } from '../src/model/cutPlan'
+import { compactNumbers, formatMm, rowNames } from '../src/model/cutlistExport'
+import { buildCutPlan, groupCount, materialList, sameBoards, stockDims, wholeText } from '../src/model/cutPlan'
 import { isMirrored, toWorld } from '../src/model/frame'
 import { LIMITS } from '../src/model/limits'
 import { materialTitle } from '../src/model/materials'
@@ -257,11 +257,14 @@ export function cutPlanText(doc: ModelDocument): string {
     for (const t of g.tooBig)
       lines.push(`  För stor för lagermåtten: ${t.name} ${formatMm(t.length)} × ${formatMm(t.width)}`)
     for (const l of g.stocks)
-      l.boards.forEach((b, i) =>
+      // Likadana brädor på en rad, med antalet (som i appen).
+      for (const { numbers, boards } of sameBoards(l.boards)) {
+        const b = boards[0]!
+        const same = numbers.length > 1 ? ` (${numbers.length} st)` : ''
         lines.push(
-          `  ${l.dims} nr ${i + 1}${b[0]?.whole ? ` (${wholeText(l.panel)})` : ''}: ${b.map((p) => `${p.name} ${formatMm(p.length)} × ${formatMm(p.width)}`).join(', ')}`,
-        ),
-      )
+          `  ${l.dims} nr ${compactNumbers(numbers)}${same}${b[0]?.whole ? ` (${wholeText(l.panel)})` : ''}: ${b.map((p) => `${p.name} ${formatMm(p.length)} × ${formatMm(p.width)}`).join(', ')}`,
+        )
+      }
   }
   return lines.join('\n')
 }

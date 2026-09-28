@@ -5,13 +5,16 @@ import {
   groupCount,
   nextStock,
   materialList,
+  sameBoards,
   stockDims,
   stockNoun,
+  stretchText,
   wholeText,
   type CutPlanGroup,
   type PlacedPiece,
   type StockLayout,
 } from '../model/cutPlan'
+import { compactNumbers } from '../model/cutlistExport'
 import { numberFormat } from '../model/numberFormat'
 import type { Body, StockSize } from '../model/types'
 import { materialColor } from '../scene/colors'
@@ -26,8 +29,6 @@ import { materialTitle } from '../model/materials'
 const num = numberFormat(1, true)
 const plain = numberFormat(1)
 const percent = new Intl.NumberFormat('sv-SE', { style: 'percent', maximumFractionDigits: 0 })
-/** Förstoringen av en smal bräda: "3" eller "1,5". */
-const stretchFormat = new Intl.NumberFormat('sv-SE', { maximumFractionDigits: 1 })
 
 const capitalize = (s: string) => s.charAt(0).toLocaleUpperCase('sv') + s.slice(1)
 
@@ -271,13 +272,15 @@ function GroupView({ group: g, allowance }: { group: CutPlanGroup; allowance: nu
 
       <div className="flex flex-col gap-4">
         {g.stocks.flatMap((l, si) =>
-          l.boards.map((pieces, i) => {
-            const unit = capitalize(stockNoun(l.panel, 1))
+          // Likadana brädor ritas en gång, med antalet: 40 likadana är ett mönster, inte 40 ritningar.
+          sameBoards(l.boards).map(({ numbers, boards }) => {
+            const pieces = boards[0]!
+            const unit = capitalize(stockNoun(l.panel, numbers.length))
             // Med flera mått står bredden efter, så att man ser vilket mått brädan eller skivan är.
-            const label = `${unit} ${i + 1}${several ? ` · ${num.format(l.stock.width)} bred` : ''}${pieces[0]?.whole ? ` · ${wholeText(l.panel)}` : ''}`
+            const label = `${unit} ${compactNumbers(numbers)}${numbers.length > 1 ? ` · ${numbers.length} st` : ''}${several ? ` · ${num.format(l.stock.width)} bred` : ''}${pieces[0]?.whole ? ` · ${wholeText(l.panel)}` : ''}`
             return (
-              <div key={`${si}-${i}`} className="flex flex-col gap-1">
-                <BoardDrawing stock={l.stock} sheet={g.sheet} pieces={pieces} material={g.material} label={label} />
+              <div key={`${si}-${numbers[0]}`} className="flex flex-col gap-1">
+                <BoardDrawing stock={l.stock} sheet={g.sheet} boards={boards} material={g.material} label={label} />
               </div>
             )
           }),
@@ -387,16 +390,18 @@ function StockRow({
 function BoardDrawing({
   stock,
   sheet,
-  pieces,
+  boards,
   material,
   label,
 }: {
   stock: StockSize & { trim: number }
   sheet: boolean
-  pieces: readonly PlacedPiece[]
+  /** Likadana brädor (sameBoards): mönstret ritas från den första, och en del i någon av dem kan vara vald. */
+  boards: readonly (readonly PlacedPiece[])[]
   material: string
   label: string
 }) {
+  const pieces = boards[0]!
   const ref = useRef<HTMLDivElement>(null)
   const hatch = useId()
   const width = useWidth(ref)
@@ -407,7 +412,11 @@ function BoardDrawing({
   const height = Math.max(stock.width * kx, MIN_BOARD_PX)
   // Den valda delen står under brädan med namn och mått: små delar har ingen etikett, och på
   // pekskärm finns ingen tooltip.
-  const chosen = pieces.find((p) => selection?.kind === 'body' && selection.id === p.bodyId)
+  // Delen på samma plats i en likadan bräda räknas som samma: dess del i mönstret visas vald.
+  const chosenAt = pieces.findIndex((_, k) =>
+    boards.some((b) => selection?.kind === 'body' && b[k]?.bodyId === selection.id),
+  )
+  const chosen = chosenAt >= 0 ? pieces[chosenAt] : undefined
   const ky = height / stock.width
   // Hur mycket bredden är förstorad; 1 när brädan eller skivan står i rätt proportioner.
   const stretch = width > 0 ? ky / kx : 1
@@ -420,9 +429,7 @@ function BoardDrawing({
       <div className="flex items-baseline gap-2 px-1.5 text-xs tabular-nums">
         <span className="min-w-0 truncate text-muted">{label}</span>
         {stretch > 1.05 && (
-          <span className="ml-auto shrink-0 whitespace-nowrap text-faint">
-            bredden ritad ×{stretchFormat.format(stretch)}
-          </span>
+          <span className="ml-auto shrink-0 whitespace-nowrap text-faint">bredden {stretchText(stretch)}</span>
         )}
       </div>
       {width > 0 && (
@@ -452,12 +459,12 @@ function BoardDrawing({
               )}
             </g>
           )}
-          {pieces.map((p) => {
+          {pieces.map((p, k) => {
             const x = p.x * kx
             const y = p.y * ky
             const w = p.w * kx
             const h = p.h * ky
-            const selected = selection?.kind === 'body' && selection.id === p.bodyId
+            const selected = k === chosenAt
             const showName = h >= 14 && w >= p.name.length * CHAR_PX + 8
             return (
               <g key={p.bodyId} className="cursor-pointer" onClick={() => select({ kind: 'body', id: p.bodyId })}>
