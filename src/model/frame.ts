@@ -41,7 +41,7 @@ export function faceFrame(body: Body, face: Face): Frame {
 }
 
 /** Kroppens hörn i världskoordinater, för de hörn som ligger på given sida. */
-function faceCorners(body: Body, face: Face): Vec3[] {
+export function faceCorners(body: Body, face: Face): Vec3[] {
   const { profile: r, z0, z1 } = body
   const xs = face === 'u+' ? [r.x1] : face === 'u-' ? [r.x0] : [r.x0, r.x1]
   const ys = face === 'v+' ? [r.y1] : face === 'v-' ? [r.y0] : [r.y0, r.y1]

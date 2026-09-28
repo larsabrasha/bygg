@@ -410,6 +410,16 @@ describe('flytta', () => {
     expect(docs().selection).toMatchObject({ kind: 'body', id: b.id })
   })
 
+  it('en del på golvet glider längs golvet också när man tar i en sida', () => {
+    const b = extrude(drawGroundRect(), '22')
+    tools().setTool('move')
+    // Högra kortsidan. Förr flyttade det i sidans lodräta plan, så att delen lyftes från golvet.
+    tap({ point: [600, 11, -200], target: { kind: 'body', id: b.id, face: 'u+' } }, 0)
+    move(down(900, -200), 0)
+    commit()
+    expect(bodies()[0]!.frame.origin).toEqual([300, 0, 0])
+  })
+
   it('dubbeltryck på en del i Välj går till Flytta/vrid med delen vald', () => {
     const b = extrude(drawGroundRect(), '22')
     tools().setTool('select')

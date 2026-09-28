@@ -59,7 +59,7 @@ export function measureModel() {
                 rect: 'Tryck där första hörnet ska vara – på golvet eller på en yta.',
                 circle: 'Tryck där mitten ska vara – på golvet eller på en yta.',
                 pushpull: 'Dra i en skiss eller en sida av en del, eller tryck på den.',
-                move: 'Dra i en pil för att flytta längs X, Y eller Z, eller i en båge för att vrida. Du kan också dra i själva delen.',
+                move: 'Dra i en pil för att flytta längs X, Y eller Z, eller i en båge för att vrida. Dra i själva delen så glider den längs det den står eller hänger mot.',
                 measure: '',
               }[tool]
             : {

@@ -25,6 +25,7 @@ import {
   type PlaneTargets,
 } from '../model/snapping'
 import { snapStock, thicknessTargets, type StockTarget } from '../model/stockSnap'
+import { supportPlane } from '../model/support'
 import {
   DEFAULT_MATERIAL,
   FACES,
@@ -330,7 +331,19 @@ export function tap(hit: Hit | null, tol: number, add = false) {
     // Inne i ett hål: flytta i golvets riktning.
     const face = hit.target.face ?? 'n+'
     const f = faceFrame(b, face)
-    setOp(moveOp(b, { ...f, origin: hit.point }, null, hit.target.face && { frame: f, bounds: faceBounds(b, face) }))
+    // Delarna glider längs det de står eller hänger mot (golvet, en hylla, en vägg), vilken sida
+    // man än tog i och varifrån man än tittar. Vilar de mot inget: i sidans plan.
+    const moving = movingSet(b)
+    const chosen = new Set([b.id, ...moving.others])
+    const support = supportPlane(
+      moving.bodies,
+      bodies().filter((x) => !chosen.has(x.id)),
+    )
+    // Tog man i en sida som är parallell med stödet (ovansidan på en möbel) är det samma plan.
+    const plane = support && Math.abs(dot(support.n, f.n)) < 0.999 ? support : f
+    setOp(
+      moveOp(b, { ...plane, origin: hit.point }, null, hit.target.face && { frame: f, bounds: faceBounds(b, face) }),
+    )
     return
   }
 
