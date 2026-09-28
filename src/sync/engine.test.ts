@@ -1,7 +1,7 @@
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createApp } from '../../server/app'
 import { devAuth } from '../../server/auth'
 import { UserStorages } from '../../server/storage'
@@ -88,6 +88,22 @@ describe('synk mellan två enheter', () => {
     const rb = await b.sync()
     expect(rb.events).toContainEqual({ kind: 'remote-update', id: m.id, isNew: false })
     expect(await b.value(m.id)).toBe(18)
+  })
+
+  it('en modell som inte går att läsa på servern tas inte bort här, och hämtas inte', async () => {
+    const a = device()
+    const m = localModel()
+    await a.repo.put(m)
+    await a.sync()
+    await writeFile(path.join(dir, 'users', 'dev', 'models', `${m.id}.json`), '{"id": "')
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    expect((await a.sync()).events).toEqual([{ kind: 'unreadable', id: m.id, name: 'Bord' }])
+    expect(await a.value(m.id)).toBe(22)
+    // En ny enhet försöker inte hämta den (det skulle stoppa hela synken).
+    const c = device()
+    expect((await c.sync()).events).toEqual([{ kind: 'unreadable', id: m.id, name: null }])
+    expect(await c.repo.get(m.id)).toBeUndefined()
+    vi.restoreAllMocks()
   })
 
   it('krock: båda versionerna finns kvar, ingen skrivs över', async () => {

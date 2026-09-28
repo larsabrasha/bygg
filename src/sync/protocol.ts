@@ -15,6 +15,11 @@ export interface ModelMeta {
   name: string
   revision: number
   updatedAt: string
+  /**
+   * Filen finns men går inte att läsa (avbruten skrivning, handredigerad säkerhetskopia).
+   * Modellen finns alltså kvar: klienten får inte ta bort sin kopia, och inte hämta den.
+   */
+  broken?: true
 }
 
 /** Så länge en borttagen modell ligger i papperskorgen innan den raderas för gott. */

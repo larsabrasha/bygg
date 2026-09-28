@@ -21,12 +21,19 @@ export type SyncEvent =
   | { kind: 'rejected'; id: string; name: string; reason: string }
   /** Servern har en modell i ett nyare format än den här versionen av appen kan läsa. */
   | { kind: 'incompatible'; id: string; name: string }
+  /** Modellfilen på servern går inte att läsa. Kopian här (om den finns) ligger kvar orörd. */
+  | { kind: 'unreadable'; id: string; name: string | null }
 
 export interface SyncDeps {
   api: SyncApi
   repo: LocalRepo
   newId: () => string
   now?: () => Date
+  /**
+   * Kör fn ensam för modellen id, så att ingen annan flik sparar den mellan det att synken läser
+   * och skriver den (se locks.ts). Utan lock körs fn direkt.
+   */
+  lock?: <T>(id: string, fn: () => Promise<T>) => Promise<T>
 }
 
 export interface SyncResult {
@@ -52,7 +59,13 @@ export function conflictName(name: string, when: Date): string {
  *   annars laddas vår version upp igen som ny.
  * Kastar ApiError om servern inte går att nå; då ändras ingenting lokalt.
  */
-export async function syncOnce({ api, repo, newId, now = () => new Date() }: SyncDeps): Promise<SyncResult> {
+export async function syncOnce({
+  api,
+  repo,
+  newId,
+  now = () => new Date(),
+  lock = (_id, fn) => fn(),
+}: SyncDeps): Promise<SyncResult> {
   const events: SyncEvent[] = []
   let again = false
 
@@ -81,31 +94,35 @@ export async function syncOnce({ api, repo, newId, now = () => new Date() }: Syn
       events.push({ kind: 'rejected', id: m.id, name: m.name, reason: e.message })
       continue
     }
-    const latest = (await repo.get(m.id)) ?? m
-    if (r.ok) {
-      // Ändrades modellen lokalt medan vi laddade upp är den fortfarande osynkad.
-      await repo.put({ ...latest, baseRevision: r.revision, dirty: latest.updatedAt !== m.updatedAt })
-      events.push({ kind: 'pushed', id: m.id, revision: r.revision })
-    } else if (!r.current) {
-      // Borttagen på servern medan vi ändrade: ladda upp vår version som ny.
-      await repo.put({ ...latest, baseRevision: null, dirty: true })
-      again = true
-    } else {
-      const copyId = newId()
-      const copyName = conflictName(latest.name, now())
-      await repo.put({ ...latest, id: copyId, name: copyName, baseRevision: null, dirty: true })
-      await repo.put(fromServer(r.current))
-      events.push({ kind: 'conflict', id: m.id, copyId, copyName })
-      again = true
-    }
+    await lock(m.id, async () => {
+      const latest = (await repo.get(m.id)) ?? m
+      if (r.ok) {
+        // Ändrades modellen lokalt medan vi laddade upp är den fortfarande osynkad.
+        await repo.put({ ...latest, baseRevision: r.revision, dirty: latest.updatedAt !== m.updatedAt })
+        events.push({ kind: 'pushed', id: m.id, revision: r.revision })
+      } else if (!r.current) {
+        // Borttagen på servern medan vi ändrade: ladda upp vår version som ny.
+        await repo.put({ ...latest, baseRevision: null, dirty: true })
+        again = true
+      } else {
+        const copyId = newId()
+        const copyName = conflictName(latest.name, now())
+        await repo.put({ ...latest, id: copyId, name: copyName, baseRevision: null, dirty: true })
+        await repo.put(fromServer(r.current))
+        events.push({ kind: 'conflict', id: m.id, copyId, copyName })
+        again = true
+      }
+    })
   }
 
   // 2. Hämta.
   const remote = await api.list()
   const locals = new Map((await repo.list()).map((m) => [m.id, m]))
+  for (const meta of remote)
+    if (meta.broken) events.push({ kind: 'unreadable', id: meta.id, name: locals.get(meta.id)?.name ?? null })
   const wanted = remote.filter((meta) => {
     const local = locals.get(meta.id)
-    if (local?.deleted || local?.dirty) return false
+    if (meta.broken || local?.deleted || local?.dirty) return false
     return !local || (local.baseRevision ?? 0) < meta.revision
   })
   // Flera hämtningar på väg samtidigt: en ny enhet hämtar alla modeller, och en i taget
@@ -117,22 +134,30 @@ export async function syncOnce({ api, repo, newId, now = () => new Date() }: Syn
       events.push({ kind: 'incompatible', id: meta.id, name: meta.name })
       continue
     }
-    // Kan ha ändrats lokalt under hämtningen.
-    if ((await repo.get(meta.id))?.dirty) continue
-    await repo.put(fromServer(full))
-    events.push({ kind: 'remote-update', id: meta.id, isNew: !local })
+    const fetched = await lock(meta.id, async () => {
+      // Kan ha ändrats lokalt under hämtningen.
+      if ((await repo.get(meta.id))?.dirty) return false
+      await repo.put(fromServer(full))
+      return true
+    })
+    if (fetched) events.push({ kind: 'remote-update', id: meta.id, isNew: !local })
   }
 
   const remoteIds = new Set(remote.map((m) => m.id))
-  for (const local of locals.values()) {
-    if (local.deleted || local.baseRevision === null || remoteIds.has(local.id)) continue
-    if (local.dirty) {
-      await repo.put({ ...local, baseRevision: null })
-      again = true
-    } else {
-      await repo.remove(local.id)
-      events.push({ kind: 'remote-delete', id: local.id })
-    }
+  for (const id of locals.keys()) {
+    if (remoteIds.has(id)) continue
+    await lock(id, async () => {
+      // Läses om: en annan flik kan ha sparat den sedan listan lästes.
+      const local = await repo.get(id)
+      if (!local || local.deleted || local.baseRevision === null) return
+      if (local.dirty) {
+        await repo.put({ ...local, baseRevision: null })
+        again = true
+      } else {
+        await repo.remove(id)
+        events.push({ kind: 'remote-delete', id })
+      }
+    })
   }
 
   return { events, again }

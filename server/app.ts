@@ -1,5 +1,6 @@
 import { Hono, type Context } from 'hono'
 import { bodyLimit } from 'hono/body-limit'
+import { HTTPException } from 'hono/http-exception'
 import { streamSSE } from 'hono/streaming'
 import { FORMAT_VERSION, migrate, serialize } from '../src/persist/format'
 import { cleanCatalog } from '../src/model/catalog'
@@ -57,6 +58,13 @@ export function createApp({
   heartbeatMs = 25_000,
 }: AppOptions) {
   const app = new Hono<Env>()
+  // Ett oväntat fel (t.ex. en modellfil som inte går att läsa) svarar med JSON som de andra felen.
+  // Med Honos text tror appen att det inte finns någon synkserver alls.
+  app.onError((err, c) => {
+    if (err instanceof HTTPException) return err.getResponse()
+    console.error('[bygg]', c.req.method, c.req.path, err)
+    return c.json({ error: 'Serverfel' }, 500)
+  })
   /** Fliken som gjorde anropet, om den sa det. Bara ett id; det används aldrig som något annat. */
   const clientOf = (c: Context<Env>) => {
     const v = c.req.header('x-bygg-client')

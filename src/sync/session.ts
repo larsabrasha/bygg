@@ -2,7 +2,7 @@ import { del as idbDel, get as idbGet, isGuest, set as idbSet } from './localSto
 import { newId } from '../model/id'
 import { LIMITS, modelLimitText } from '../model/limits'
 import type { ModelDocument } from '../model/types'
-import { migrate, serialize } from '../persist/format'
+import { migrate, serialize, type SavedFile } from '../persist/format'
 import { useCatalogStore } from '../store/catalogStore'
 import { emptyDocument, useDocumentStore } from '../store/documentStore'
 import { useLibraryStore, type SyncStatus, type TrashListItem } from '../store/libraryStore'
@@ -11,7 +11,8 @@ import { useViewStore } from '../store/viewStore'
 import { ApiError, CLIENT_ID, httpApi } from './api'
 import { forgetUser } from './auth'
 import { loadCatalog, saveCatalog, syncCatalog } from './catalogSync'
-import { PREFETCH, syncOnce, type SyncEvent } from './engine'
+import { conflictName, PREFETCH, syncOnce, type SyncEvent } from './engine'
+import { modelLock, SYNC_LOCK, withLock } from './locks'
 import { prefetched } from './prefetch'
 import { idbRepo, importLegacy, LEGACY_KEY, type LocalModel } from './localRepo'
 import { deleteHistory, getHistory, packHistory, putHistory, unpackHistory } from './history'
@@ -55,6 +56,12 @@ let syncTimer: ReturnType<typeof setTimeout> | null = null
 let syncing: Promise<void> | null = null
 let rerun = false
 let askedPersist = false
+/** Varför den senaste sparningen här misslyckades (t.ex. full lagring), eller null. Visas tills en sparning lyckas. */
+let saveError: string | null = null
+/** Kanalen till andra flikar i samma webbläsare (se start). */
+let tabs: BroadcastChannel | null = null
+/** Modeller som inte går att läsa på servern och som redan fått ett meddelande i den här sessionen. */
+const toldUnreadable = new Set<string>()
 let lastThumb = { id: '', at: 0 }
 /** Bilder som tagits här men inte laddats upp än (modellen fanns kanske inte på servern). */
 const unsentThumbs = new Set<string>()
@@ -152,26 +159,34 @@ function showModel(m: LocalModel): boolean {
   useViewStore.getState().showAll()
   docs().load(r.doc)
   lastPersistedDoc = docs().doc
-  lib().set({ currentId: m.id, currentName: m.name, currentBase: m.baseRevision })
+  lib().set({ currentId: m.id, currentName: m.name, currentBase: m.baseRevision, currentStamp: m.stamp })
   void repo.setCurrentId(m.id)
   void restoreHistory(m, docs().doc)
   return true
 }
 
+const REMOTE_TEXT = (name: string) => `"${name}" ändrades på en annan enhet eller i CLI:t.`
+const TAB_TEXT = (name: string) => `"${name}" ändrades i en annan flik.`
+
 /**
- * Den öppna modellen har ändrats någon annanstans (en annan enhet, CLI:t) och har inga egna
- * osparade ändringar: visa den nya versionen. Verktyget, dolda delar och det valda ligger kvar,
- * så att man kan titta på medan CLI:t arbetar. Pågår en operation (man drar eller ritar)
- * väntar den tills operationen är klar, och bara om man inte ändrat något under tiden.
+ * Den öppna modellen har ändrats någon annanstans (en annan enhet, CLI:t, en annan flik) och har
+ * inga egna osparade ändringar: visa den nya versionen. Verktyget, dolda delar och det valda ligger
+ * kvar, så att man kan titta på medan CLI:t arbetar. Pågår en operation (man drar eller ritar)
+ * väntar den tills operationen är klar, och bara om man inte ändrat något under tiden; newer säger
+ * då om versionen som ligger lokalt fortfarande är en annans.
  */
-function refreshCurrent(m: LocalModel) {
+function refreshCurrent(
+  m: LocalModel,
+  text = REMOTE_TEXT,
+  newer: (latest: LocalModel) => boolean = (latest) => !latest.dirty,
+) {
   if (useToolStore.getState().op) {
     const waiting = docs().doc
     const stop = useToolStore.subscribe((t) => {
       if (t.op) return
       stop()
       if (lib().currentId !== m.id || docs().doc !== waiting || waiting !== lastPersistedDoc) return
-      void repo.get(m.id).then((latest) => latest && !latest.dirty && refreshCurrent(latest))
+      void repo.get(m.id).then((latest) => latest && !latest.deleted && newer(latest) && refreshCurrent(latest, text, newer))
     })
     return
   }
@@ -185,8 +200,11 @@ function refreshCurrent(m: LocalModel) {
   lastPersistedDoc = docs().doc
   const list = selection?.kind === 'body' ? docs().doc.instances : docs().doc.sketches
   if (selection && list.some((x) => x.id === selection.id)) docs().select(selection)
-  lib().set({ currentName: m.name, currentBase: m.baseRevision })
-  const text = `"${m.name}" ändrades på en annan enhet eller i CLI:t.`
+  lib().set({ currentName: m.name, currentBase: m.baseRevision, currentStamp: m.stamp })
+  notifyOnce(text(m.name))
+}
+
+function notifyOnce(text: string) {
   if (!lib().notices.some((n) => n.text === text)) lib().notify(text)
 }
 
@@ -200,14 +218,16 @@ async function restoreHistory(m: LocalModel, loaded: ModelDocument) {
   if (h && lib().currentId === m.id && docs().doc === loaded) docs().setHistory(h.past, h.future)
 }
 
+const STORAGE_FULL = 'Lagringen på enheten är full'
+const isStorageFull = (e: unknown) => e instanceof DOMException && e.name === 'QuotaExceededError'
+
 /** Skriver den öppna modellen till det lokala förrådet, om den ändrats. */
 async function persistNow(force = false) {
   if (saveTimer) clearTimeout(saveTimer)
   saveTimer = null
-  const { currentId, currentName, currentBase } = lib()
+  const { currentId, currentName } = lib()
   const { doc, past, future } = docs()
   if (!currentId || (!force && doc === lastPersistedDoc)) return
-  lastPersistedDoc = doc
   // Be om beständig lagring så att webbläsaren inte rensar modellerna vid platsbrist.
   // Först vid första sparningen: Firefox frågar användaren, och det ska inte ske vid sidladdning.
   if (!askedPersist) {
@@ -215,22 +235,70 @@ async function persistNow(force = false) {
     navigator.storage?.persist?.().catch(() => {})
   }
   const file = serialize(doc)
-  await repo.put({
-    id: currentId,
-    name: currentName,
-    file,
-    updatedAt: new Date().toISOString(),
-    baseRevision: currentBase,
-    dirty: true,
-  })
+  let saved: { id: string; forkedFrom?: string }
+  try {
+    saved = await withLock(modelLock(currentId), () => writeCurrent(currentId, currentName, doc, file))
+  } catch (e) {
+    // Sparningen här gick inte (t.ex. full lagring). Ändringen finns bara i minnet: säg det, och
+    // låt lastPersistedDoc vara, så att nästa sparning (efter nästa ändring eller synk) försöker igen.
+    console.error('[bygg] Kunde inte spara modellen på enheten', e)
+    saveError = isStorageFull(e) ? STORAGE_FULL : 'Kunde inte spara på enheten'
+    lib().set({ status: 'error', error: saveError })
+    notifyOnce(`${saveError}. Ändringarna finns bara i fönstret tills sparningen lyckas; stäng det inte.`)
+    return
+  }
+  if (saveError) {
+    saveError = null
+    lib().set({ status: isGuest() ? 'guest' : 'synced', error: null })
+  }
+  if (saved.forkedFrom !== undefined) {
+    void repo.setCurrentId(saved.id)
+    lib().notify(
+      `"${saved.forkedFrom}" hade ändrats i en annan flik eller på en annan enhet. Den versionen ligger kvar under sitt namn; din sparades som "${lib().currentName}".`,
+    )
+  }
+  tabs?.postMessage({ id: saved.id })
   // Historiken hör till just den här sparningen (file.savedAt). Går den inte att spara ska
   // modellen ändå sparas; då går det bara inte att ångra efter omladdning.
-  await putHistory(currentId, packHistory(past, future, file.savedAt)).catch((e: unknown) =>
+  await putHistory(saved.id, packHistory(past, future, file.savedAt)).catch((e: unknown) =>
     console.warn('[bygg] Kunde inte spara ångra-historiken', e),
   )
-  await updateThumbnail(currentId)
+  await updateThumbnail(saved.id).catch((e: unknown) => console.warn('[bygg] Kunde inte spara bilden', e))
   await refreshList()
   scheduleSync(SYNC_DELAY_MS)
+}
+
+/**
+ * Skriver den öppna modellen, med låset för den (se locks.ts). Har någon annan skrivit modellen sedan
+ * den här fliken läste den (stämpeln skiljer sig: en annan flik, eller synken som hämtat en nyare
+ * version) skrivs den inte över. Då sparas vår version som en ny modell, som vid en krock på servern,
+ * och fliken fortsätter i den. Allt som fliken minns om modellen sätts innan låset släpps, så att
+ * nästa sparning jämför med rätt stämpel.
+ */
+async function writeCurrent(id: string, name: string, doc: ModelDocument, file: SavedFile) {
+  const stored = await repo.get(id)
+  const stamp = newId()
+  const updatedAt = new Date().toISOString()
+  // Har fliken hunnit öppna en annan modell gäller det den fliken minns inte längre den här.
+  const stillOpen = () => lib().currentId === id
+  if (stored && stored.stamp !== lib().currentStamp) {
+    const copyId = newId()
+    const copyName = conflictName(name, new Date())
+    await repo.put({ id: copyId, name: copyName, file, updatedAt, baseRevision: null, dirty: true, stamp })
+    if (stillOpen()) {
+      lib().set({ currentId: copyId, currentName: copyName, currentBase: null, currentStamp: stamp })
+      lastPersistedDoc = doc
+    }
+    return { id: copyId, forkedFrom: stored.name }
+  }
+  // Revisionen som det lokala bygger på: synken kan ha laddat upp det sedan fliken läste det.
+  const baseRevision = stored ? stored.baseRevision : lib().currentBase
+  await repo.put({ id, name, file, updatedAt, baseRevision, dirty: true, stamp })
+  if (stillOpen()) {
+    lib().set({ currentBase: baseRevision, currentStamp: stamp })
+    lastPersistedDoc = doc
+  }
+  return { id }
 }
 
 /** Sparar den öppna modellen lokalt direkt (t.ex. innan sidan laddas om). */
@@ -332,6 +400,15 @@ async function handle(events: SyncEvent[], docAtStart: ModelDocument) {
       case 'incompatible':
         lib().notify(`"${e.name}" är sparad med en nyare version av appen. Ladda om sidan för att uppdatera.`)
         break
+      case 'unreadable':
+        if (toldUnreadable.has(e.id)) break
+        toldUnreadable.add(e.id)
+        lib().notify(
+          e.name === null
+            ? 'En modell på servern går inte att läsa.'
+            : `"${e.name}" går inte att läsa på servern. Kopian på den här enheten finns kvar.`,
+        )
+        break
     }
   }
 }
@@ -350,7 +427,7 @@ export function syncNow({ thumbs = true }: { thumbs?: boolean } = {}): Promise<v
     if (isGuest()) {
       await persistNow()
       await saveCatalog()
-      lib().set({ status: 'guest', error: null })
+      lib().set(saveError ? { status: 'error', error: saveError } : { status: 'guest', error: null })
       await refreshList()
       syncing = null
       return
@@ -361,13 +438,16 @@ export function syncNow({ thumbs = true }: { thumbs?: boolean } = {}): Promise<v
         await persistNow()
         lib().set({ status: 'syncing', error: null })
         const docAtStart = docs().doc
-        const { events, again } = await syncOnce({ api, repo, newId })
+        // En flik i taget: två flikar som laddar upp samma ändring skulle krocka med varandra.
+        const { events, again } = await withLock(SYNC_LOCK, () =>
+          syncOnce({ api, repo, newId, lock: (id, fn) => withLock(modelLock(id), fn) }),
+        )
         await handle(events, docAtStart)
         // Användarens material och färger, i samma runda som modellerna.
         await syncCatalog(api)
         if (again) rerun = true
       } while (rerun)
-      lib().set({ status: 'synced', error: null })
+      lib().set(saveError ? { status: 'error', error: saveError } : { status: 'synced', error: null })
       // Med kontakt och inloggning: lyssna på ändringar (igen, om strömmen stängts).
       connectEvents()
       await refreshList()
@@ -378,7 +458,8 @@ export function syncNow({ thumbs = true }: { thumbs?: boolean } = {}): Promise<v
       if (e instanceof ApiError) lib().set({ status: STATUS_FOR[e.kind], error: e.message })
       else {
         console.error('[bygg] Synkfel', e)
-        lib().set({ status: 'error', error: String(e) })
+        // En misslyckad sparning här är det användaren behöver veta; synkfelet följer oftast av den.
+        lib().set({ status: 'error', error: saveError ?? (isStorageFull(e) ? STORAGE_FULL : String(e)) })
       }
     } finally {
       syncing = null
@@ -967,6 +1048,13 @@ export function start(): () => void {
     scheduleSync(SYNC_DELAY_MS)
   })
   const stopRouting = startRouting()
+  // En annan flik har sparat en modell: visa den nya versionen om den är öppen här utan egna ändringar.
+  // Har den här fliken egna ändringar märks krocken när de sparas (se writeCurrent).
+  tabs = typeof BroadcastChannel === 'undefined' ? null : new BroadcastChannel('bygg:models')
+  tabs?.addEventListener('message', (e: MessageEvent<{ id?: unknown }>) => {
+    const id = e.data?.id
+    if (typeof id === 'string') void fromOtherTab(id)
+  })
   const onOnline = () => void syncNow()
   const onVisibility = () => {
     if (document.visibilityState === 'visible') void syncNow()
@@ -990,6 +1078,16 @@ export function start(): () => void {
     document.removeEventListener('visibilitychange', onVisibility)
     window.removeEventListener('pagehide', onPageHide)
     disconnectEvents()
+    tabs?.close()
+    tabs = null
     void persistNow()
   }
+}
+
+async function fromOtherTab(id: string) {
+  await refreshList()
+  if (id !== lib().currentId || docs().doc !== lastPersistedDoc) return
+  const m = await repo.get(id)
+  const newer = (latest: LocalModel) => latest.stamp !== lib().currentStamp
+  if (m && !m.deleted && newer(m)) refreshCurrent(m, TAB_TEXT, newer)
 }

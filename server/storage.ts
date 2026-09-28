@@ -1,4 +1,4 @@
-import { mkdir, readdir, readFile, rename, stat, unlink, writeFile } from 'node:fs/promises'
+import { mkdir, open, readdir, readFile, rename, stat, unlink } from 'node:fs/promises'
 import path from 'node:path'
 import type { SavedFile } from '../src/persist/format'
 import type { Catalog } from '../src/model/catalog'
@@ -97,9 +97,7 @@ export class FileStorage {
         updatedAt: this.now().toISOString(),
         catalog,
       }
-      const tmp = `${this.catalogFile}.${process.pid}.tmp`
-      await writeFile(tmp, JSON.stringify(next, null, 2) + '\n', 'utf8')
-      await rename(tmp, this.catalogFile)
+      await writeDurably(this.catalogFile, JSON.stringify(next, null, 2) + '\n')
       return { ok: true, revision: next.revision, updatedAt: next.updatedAt }
     })
   }
@@ -129,10 +127,7 @@ export class FileStorage {
   putThumb(id: string, png: Uint8Array): Promise<boolean> {
     return this.withLock(id, async () => {
       if (!(await this.read(id))) return false
-      const target = this.thumbFile(id)
-      const tmp = `${target}.${process.pid}.tmp`
-      await writeFile(tmp, png)
-      await rename(tmp, target)
+      await writeDurably(this.thumbFile(id), png)
       return true
     })
   }
@@ -161,12 +156,8 @@ export class FileStorage {
       if (!info) continue
       let hit = this.metas.get(name)
       if (!hit || hit.mtimeMs !== info.mtimeMs || hit.size !== info.size) {
-        const m = await this.read(name.slice(0, -5)).catch(() => null)
-        hit = {
-          mtimeMs: info.mtimeMs,
-          size: info.size,
-          meta: m && { id: m.id, name: m.name, revision: m.revision, updatedAt: m.updatedAt },
-        }
+        const id = name.slice(0, -5)
+        hit = { mtimeMs: info.mtimeMs, size: info.size, meta: await this.readMeta(id, info.mtime) }
         this.metas.set(name, hit)
       }
       if (hit.meta) metas.push(hit.meta)
@@ -174,6 +165,24 @@ export class FileStorage {
     const present = new Set(names)
     for (const name of this.metas.keys()) if (!present.has(name)) this.metas.delete(name)
     return metas.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+  }
+
+  /**
+   * Namn och revision ur filen. Går den inte att läsa står den ändå i listan, som trasig:
+   * saknades den där skulle klienterna tro att den tagits bort och radera sina kopior.
+   * Null bara om filen försvunnit sedan mappen lästes, eller om namnet inte är ett modell-id.
+   */
+  private async readMeta(id: string, mtime: Date): Promise<ModelMeta | null> {
+    if (!MODEL_ID_PATTERN.test(id)) return null
+    try {
+      const m = await this.read(id)
+      if (!m) return null
+      if (typeof m.name === 'string' && Number.isInteger(m.revision) && typeof m.updatedAt === 'string')
+        return { id, name: m.name, revision: m.revision, updatedAt: m.updatedAt }
+    } catch (e) {
+      console.warn(`[bygg] ${this.file(id)} går inte att läsa`, e)
+    }
+    return { id, name: '(går inte att läsa)', revision: 0, updatedAt: mtime.toISOString(), broken: true }
   }
 
   async get(id: string): Promise<ServerModel | null> {
@@ -191,10 +200,8 @@ export class FileStorage {
 
   private async write(model: ServerModel) {
     const target = this.file(model.id)
-    const tmp = `${target}.${process.pid}.tmp`
     // Indenterad JSON: läsbar och diffbar vid felsökning och säkerhetskopiering.
-    await writeFile(tmp, JSON.stringify(model, null, 2) + '\n', 'utf8')
-    await rename(tmp, target)
+    await writeDurably(target, JSON.stringify(model, null, 2) + '\n')
     // Egna skrivningar läses om nästa gång, även om tiden inte hunnit ändras.
     this.metas.delete(path.basename(target))
   }
@@ -362,6 +369,26 @@ export class FileStorage {
 }
 
 const isMissing = (e: unknown) => (e as NodeJS.ErrnoException).code === 'ENOENT'
+
+/**
+ * Skriver filen via en temp-fil som flyttas på plats (atomärt), och ser till att både filen och
+ * flytten ligger på disken innan svaret går (fsync). Utan det kan ett strömavbrott lämna en tom
+ * eller halv fil, trots att klienten fått veta att sparningen gick bra.
+ */
+async function writeDurably(target: string, data: string | Uint8Array) {
+  const tmp = `${target}.${process.pid}.tmp`
+  const file = await open(tmp, 'w')
+  try {
+    await file.writeFile(data)
+    await file.sync()
+  } finally {
+    await file.close()
+  }
+  await rename(tmp, target)
+  // Mappen också, så att flytten finns kvar efter ett avbrott. Går inte på alla system (Windows).
+  const dir = await open(path.dirname(target), 'r').catch(() => null)
+  if (dir) await dir.sync().catch(() => {}).finally(() => dir.close())
+}
 
 /**
  * En FileStorage per användare, i <dataDir>/users/<sub>/. Samma instans varje gång,

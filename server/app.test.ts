@@ -1,7 +1,7 @@
-import { mkdtemp, readdir, readFile, rm } from 'node:fs/promises'
+import { mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { FORMAT_VERSION, serialize } from '../src/persist/format'
 import { createApp } from './app'
 import { devAuth } from './auth'
@@ -74,6 +74,22 @@ describe('API', () => {
       { id: ID, name: 'Bord', revision: 1, updatedAt: '2026-09-25T12:00:00.000Z' },
     ])
     expect(await (await app.request(`/api/models/${ID}`)).json()).toMatchObject({ name: 'Bord', file })
+  })
+
+  it('en fil som inte går att läsa står kvar i listan, som trasig', async () => {
+    await put({ name: 'Bord', baseRevision: null, file })
+    // Som efter en avbruten skrivning, eller en handredigerad säkerhetskopia.
+    await writeFile(path.join(userDir, 'models', `${ID}.json`), '{"id": "')
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    expect(await (await app.request('/api/models')).json()).toEqual([
+      { id: ID, name: '(går inte att läsa)', revision: 0, updatedAt: expect.any(String), broken: true },
+    ])
+    // Och ett fel svarar med JSON, så att appen inte tror att servern saknas.
+    const r = await app.request(`/api/models/${ID}`)
+    expect(r.status).toBe(500)
+    expect(await r.json()).toEqual({ error: 'Serverfel' })
+    vi.restoreAllMocks()
   })
 
   it('konverterar äldre format till nuvarande när det sparas', async () => {

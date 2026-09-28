@@ -48,6 +48,8 @@ interface LibrarySnapshot {
   currentName: string
   /** Serverns revision som den öppna modellen bygger på (null = aldrig uppladdad). */
   currentBase: number | null
+  /** Stämpeln på den öppna modellen som den här fliken senast läste eller sparade (se LocalModel.stamp). */
+  currentStamp?: string
   status: SyncStatus
   error: string | null
   notices: Notice[]
@@ -72,7 +74,7 @@ interface LibraryState extends LibrarySnapshot {
 
 const previous = import.meta.hot?.data.libraryStore as StoreApi<LibraryState> | undefined
 const initial: LibrarySnapshot = previous
-  ? (({ models, thumbs, screen, pendingDelete, currentId, currentName, currentBase, status, error, notices }) => ({
+  ? (({ models, thumbs, screen, pendingDelete, currentId, currentName, currentBase, currentStamp, status, error, notices }) => ({
       opening: null,
       settings: null,
       trashOpen: false,
@@ -85,6 +87,7 @@ const initial: LibrarySnapshot = previous
       currentId,
       currentName,
       currentBase,
+      currentStamp,
       status,
       error,
       notices,

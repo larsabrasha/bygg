@@ -17,6 +17,11 @@ export interface LocalModel {
   deleted?: boolean
   /** En av exempelmodellerna man får utan konto (src/examples); märks så i startvyn. */
   example?: boolean
+  /**
+   * Ny för varje sparning av den öppna modellen (se persistNow i session.ts). En flik som sparar
+   * jämför med stämpeln den själv läste, och märker så om en annan flik sparat emellan.
+   */
+  stamp?: string
 }
 
 export interface LocalRepo {

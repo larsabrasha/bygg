@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm, stat } from 'node:fs/promises'
+import { mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -155,10 +155,12 @@ describe('gränser på servern', () => {
   })
 
   it('nekar en ny modell när användaren redan har så många hen får ha', async () => {
-    const storage = await new UserStorages(dir).for('dev')
+    await new UserStorages(dir).for('dev')
+    // Filerna direkt: via servern tar 500 sparningar med fsync flera sekunder.
     for (let i = 0; i < LIMITS.models; i++) {
       const id = `11111111-2222-4333-8444-${String(i).padStart(12, '0')}`
-      await storage.put(id, `M${i}`, null, file)
+      const model = { id, name: `M${i}`, revision: 1, updatedAt: '2026-09-25T12:00:00.000Z', file }
+      await writeFile(path.join(dir, 'users', 'dev', 'models', `${id}.json`), JSON.stringify(model))
     }
     const r = await put(ID, { name: 'En till', baseRevision: null, file })
     expect(r.status).toBe(403)
