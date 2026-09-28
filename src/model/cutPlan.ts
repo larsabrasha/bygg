@@ -26,6 +26,9 @@ export const isPanel = (sheet: boolean, stock: StockSize) => sheet || stock.widt
  */
 export const defaultTrim = (sheet: boolean, stock: StockSize) => (sheet ? 10 : isPanel(false, stock) ? 0 : 20)
 
+/** Vid en skiva eller bräda som används som den är (PlacedPiece.whole). */
+export const wholeText = (panel: boolean) => (panel ? 'används hel' : 'hela längden')
+
 /** "skiva", "skivor", "bräda" eller "brädor". */
 export const stockNoun = (panel: boolean, count: number) =>
   panel ? (count === 1 ? 'skiva' : 'skivor') : count === 1 ? 'bräda' : 'brädor'
@@ -83,6 +86,11 @@ export interface PlacedPiece {
   width: number
   /** Liggande tvärs skivans fiber. */
   rotated: boolean
+  /**
+   * Delen är hela skivan (en rygg av en hel plywoodskiva), eller brädan i hela dess längd: den får
+   * inte plats när kanterna rensas, men kan användas som den är. Ändarna kapas inte, och kapmånen räknas inte.
+   */
+  whole?: true
 }
 
 /** Ett lagermått i en grupp och delarna som kapas ur det. */
@@ -139,6 +147,9 @@ interface Part {
 
 /** Delarna läggs inom det rensade: bara ändarna för massivt trä, alla kanter för skivor. */
 const insetOf = (sheet: boolean, trim: number) => ({ x: trim, y: sheet ? trim : 0 })
+
+/** Så nära ett lagermått en del ska vara för att räknas som hela skivan eller brädan, i mm. */
+const WHOLE_TOLERANCE = 1
 
 /** Högst så många försök att flytta delar till spill, så att en stor modell inte hänger sig. */
 const MAX_MOVES = 200
@@ -301,12 +312,31 @@ export function buildCutPlan(bodies: readonly Body[], settings: StockSettings = 
     const leftover = !settings.noLeftover?.includes(key)
     if (!leftover) ({ assign, packed } = first)
 
+    // Det som inte får plats med rensade kanter men är precis ett lagermått används som det är: en hel
+    // skiva, eller en bräda i hela sin längd (sidorna på hyvlat virke är färdiga). Inte en del som bara
+    // är nästan lika lång: då behövs de kapade ändarna.
+    const same = (a: number, b: number) => Math.abs(a - b) <= WHOLE_TOLERANCE
+    const isWhole = (length: number, width: number, s: StockSize) =>
+      same(length, s.length) && (sheet ? same(width, s.width) : width <= s.width + WHOLE_TOLERANCE)
+    const whole = new Map<number, { stock: number; rotated: boolean }>()
+    for (const p of parts) {
+      if (assign[p.index] !== -1) continue
+      for (const i of order) {
+        const s = stocks[i]!
+        const straight = isWhole(p.length, p.width, s)
+        const turned = sheet && s.rotate === true && isWhole(p.width, p.length, s)
+        if (!straight && !turned) continue
+        whole.set(p.index, { stock: i, rotated: !straight })
+        break
+      }
+    }
+
     let used = 0
     let total = 0
     const layouts: StockLayout[] = stocks.map((stock, i) => {
       const inset = insetOf(sheet, stock.trim)
       const boards = packed[i]!.map((placed) =>
-        placed.map((p) => ({
+        placed.map((p): PlacedPiece => ({
           bodyId: p.data.bodyId,
           name: p.data.name,
           x: p.x + inset.x,
@@ -318,6 +348,12 @@ export function buildCutPlan(bodies: readonly Body[], settings: StockSettings = 
           rotated: p.rotated,
         })),
       )
+      for (const [index, w] of whole) {
+        if (w.stock !== i) continue
+        const { bodyId, name, length, width } = parts[index]!
+        const [pw, ph] = w.rotated ? [width, length] : [length, width]
+        boards.push([{ bodyId, name, x: 0, y: 0, w: pw, h: ph, length, width, rotated: w.rotated, whole: true }])
+      }
       // Spillet räknas mot delarnas färdiga mått: kapmån och rensade kanter är också spill.
       used += boards.flat().reduce((sum, p) => sum + p.length * p.width, 0)
       total += boards.length * area[i]!
@@ -336,7 +372,7 @@ export function buildCutPlan(bodies: readonly Body[], settings: StockSettings = 
         saved || layouts.every((l) => l.boards.length === 0) ? layouts : layouts.filter((l) => l.boards.length > 0),
       isDefault: !saved,
       tooBig: parts
-        .filter((p) => assign[p.index] === -1)
+        .filter((p) => assign[p.index] === -1 && !whole.has(p.index))
         .map(({ bodyId, name, length, width }) => ({ bodyId, name, length, width })),
       waste: total > 0 ? 1 - used / total : 0,
       leftover,
@@ -380,6 +416,11 @@ export interface MaterialLine {
   length?: string
   /** När virket är tjockare än delarna är ritade (thicknessNote). */
   note?: string
+  /**
+   * Något att göra något åt: lagermåttet finns sällan att köpa (rareNote), eller delarna på raden
+   * ryms inte på något lagermått och finns alltså inte med i det övriga.
+   */
+  warning?: string
 }
 
 /**
@@ -397,13 +438,40 @@ function thicknessNote(g: CutPlanGroup, l: StockLayout): string {
   return `${drawn}; ${g.sheet ? materialSpec(g.material).name : 'limfog'} finns i ${near.join(' och ')}`
 }
 
+/**
+ * Varför lagermåttet sällan finns att köpa, eller undefined. Längd och bredd bara i ett förslag
+ * (ett mått man skrivit in själv är ens eget val); tjockleken alltid, den väljs efter delarna.
+ */
+function rareNote(g: CutPlanGroup, l: StockLayout): string | undefined {
+  const notes: string[] = []
+  const f = (n: number) => mm.format(n)
+  const thickest = (
+    g.sheet ? sheetThicknesses(g.material) : l.panel ? panelThicknesses(g.material) : BOARD.thicknesses
+  ).at(-1)
+  const kind = g.sheet ? materialSpec(g.material).name : l.panel ? 'limfog' : 'virke'
+  if (thickest !== undefined && l.thickness > thickest)
+    notes.push(`${capitalize(kind)} tjockare än ${f(thickest)} mm finns sällan: limma ihop tunnare`)
+  if (g.isDefault && !g.sheet) {
+    const longest = (l.panel ? PANEL.lengths : BOARD.lengths).at(-1)!
+    const widest = PANEL.widths.at(-1)!
+    if (l.panel && l.stock.width > widest)
+      notes.push(`Limfog bredare än ${f(widest)} finns sällan: limma ihop två, eller dela delen`)
+    if (l.stock.length > longest)
+      notes.push(`${capitalize(kind)} längre än ${f(longest)} finns sällan: skarva, eller dela delen`)
+  }
+  return notes.length ? notes.join('. ') : undefined
+}
+
+const capitalize = (s: string) => s.charAt(0).toLocaleUpperCase('sv') + s.slice(1)
+
 /** "22 × 95 × 2 400": tjocklek × bredd × längd, som virke märks i Sverige. */
 export const stockDims = (l: StockLayout) =>
   [l.thickness, l.stock.width, l.stock.length].map((n) => mm.format(n)).join(' × ')
 
 /**
  * Materialet som behövs: antal skivor och brädor per material, tjocklek och
- * lagermått. Sist det som görs till mått (rutor av glas), en rad per mått.
+ * lagermått. Delar som inte ryms på något lagermått står med som en varning, så att
+ * listan aldrig tyst saknar något. Sist det som görs till mått (rutor av glas), en rad per mått.
  */
 export function materialList(plan: CutPlan): MaterialLine[] {
   const ordered = plan.ordered.map((row) => ({
@@ -413,11 +481,12 @@ export function materialList(plan: CutPlan): MaterialLine[] {
     text: `${row.count} ${row.count === 1 ? 'ruta' : 'rutor'} ${materialSpec(row.material).name} ${[row.thickness, row.width, row.length].map((n) => mm.format(n)).join(' × ')}`,
     note: 'till mått',
   }))
-  const sawn = plan.groups.flatMap((g) =>
-    g.stocks
+  const sawn = plan.groups.flatMap((g): MaterialLine[] => {
+    const lines: MaterialLine[] = g.stocks
       .filter((l) => l.boards.length > 0)
       .map((l, i) => {
         const count = l.boards.length
+        const rare = rareNote(g, l)
         return {
           key: `${g.key}|${i}`,
           material: g.material,
@@ -425,9 +494,21 @@ export function materialList(plan: CutPlan): MaterialLine[] {
           text: `${count} ${stockNoun(l.panel, count)} ${materialSpec(g.material).name} ${stockDims(l)}`,
           ...(!l.panel && { length: `${meters.format((count * l.stock.length) / 1000)} m` }),
           ...(l.thickness !== g.thickness && { note: thicknessNote(g, l) }),
+          ...(rare && { warning: rare }),
         }
-      }),
-  )
+      })
+    if (g.tooBig.length > 0) {
+      const parts = countSame(g.tooBig.map((p) => `${p.name} ${mm.format(p.length)} × ${mm.format(p.width)}`))
+      lines.push({
+        key: `${g.key}|tooBig`,
+        material: g.material,
+        count: g.tooBig.length,
+        text: `${materialSpec(g.material).name} ${mm.format(g.thickness)}: ${parts.join(', ')}`,
+        warning: 'Ryms inte på lagermåtten och är inte med ovan. Lägg till ett mått som räcker.',
+      })
+    }
+    return lines
+  })
   return [...sawn, ...ordered]
 }
 

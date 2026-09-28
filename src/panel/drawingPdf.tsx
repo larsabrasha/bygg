@@ -7,6 +7,7 @@ import {
   materialList,
   stockDims,
   stockNoun,
+  wholeText,
   type CutPlan,
   type StockLayout,
 } from '../model/cutPlan'
@@ -412,10 +413,7 @@ function drawCutList(doc: jsPDF, input: DrawingPdfInput) {
     else if (y + 6 + captionH + headH + (rows[0]?.h ?? 0) > bottom) newPage()
     else y += 6
     const title = materialTitle(g.material)
-    caption(
-      title,
-      `${g.count} st · ${isOrdered(g.material) ? 'till mått' : `${volume.format(g.volumeM3)} m³`}`,
-    )
+    caption(title, `${g.count} st · ${isOrdered(g.material) ? 'till mått' : `${volume.format(g.volumeM3)} m³`}`)
     header()
     for (const r of rows) {
       if (y + r.h > bottom) {
@@ -512,8 +510,9 @@ function drawCutPlan(doc: jsPDF, input: DrawingPdfInput, plan: CutPlan) {
         doc.setFontSize(3.6 * PT)
         text(doc, p.length, mx + 6 + doc.getTextWidth(p.text) + 4, y + 4.2, 3.4, { gray: 34 })
       }
-      if (p.note) {
-        text(doc, p.note, mx + 6, y + 8.4, 3, { gray: 51 })
+      for (const extra of [p.note, p.warning]) {
+        if (!extra) continue
+        text(doc, extra, mx + 6, y + 8.4, 3, { gray: 51, bold: extra === p.warning })
         y += 3.8
       }
       y += 5.6
@@ -578,7 +577,7 @@ function drawCutPlan(doc: jsPDF, input: DrawingPdfInput, plan: CutPlan) {
 
       l.boards.forEach((pieces, i) => {
         if (y + boardH(l) > bottom) newPage()
-        text(doc, `${unit} ${i + 1}`, mx, y + 3.2, 3, { gray: 51 })
+        text(doc, `${unit} ${i + 1}${pieces[0]?.whole ? ` · ${wholeText(l.panel)}` : ''}`, mx, y + 3.2, 3, { gray: 51 })
         // En smal bräda ritas bredare än skalan; det ska stå vid brädan, inte bara i inledningen.
         const stretch = ky / k
         if (stretch > 1.05)
@@ -592,7 +591,7 @@ function drawCutPlan(doc: jsPDF, input: DrawingPdfInput, plan: CutPlan) {
         doc.setDrawColor(0)
         doc.rect(mx, by, bw, bh)
         // Det som rensas bort: streckat runt om på en skiva, vid ändarna på massivt trä.
-        if (t > 0) {
+        if (t > 0 && !pieces[0]?.whole) {
           doc.setLineWidth(0.15)
           doc.setDrawColor(110)
           doc.setLineDashPattern([0.8, 0.8], 0)

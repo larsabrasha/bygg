@@ -120,11 +120,33 @@ describe('buildCutPlan', () => {
     const group = buildCutPlan([part('a', 500, 300, 18, { material: 'plywood' })]).groups[0]!
     expect(group.stocks[0]!.stock.trim).toBe(10)
     expect(boardsOf(group)[0]![0]).toMatchObject({ x: 10, y: 10 })
-    // En hel skiva som del får inte plats när kanterna rensas, men väl utan rensning.
-    const whole = [part('hel', 2440, 1220, 18, { material: 'plywood' })]
-    expect(buildCutPlan(whole).groups[0]!.tooBig).toHaveLength(1)
-    const untrimmed = buildCutPlan(whole, { sizes: { [key]: [{ length: 2440, width: 1220, trim: 0 }] } })
+    const untrimmed = buildCutPlan([part('a', 2440, 1220, 18, { material: 'plywood' })], {
+      sizes: { [key]: [{ length: 2440, width: 1220, trim: 0 }] },
+    })
     expect(boardsOf(untrimmed.groups[0]!)).toHaveLength(1)
+  })
+
+  it('använder en hel skiva som den är, när delen är precis så stor', () => {
+    // En rygg av en hel skiva får inte plats när kanterna rensas, men ska ändå köpas.
+    const group = buildCutPlan([
+      part('rygg', 2440, 1220, 18, { material: 'plywood' }),
+      part('hylla', 800, 300, 18, { material: 'plywood' }),
+    ]).groups[0]!
+    expect(group.tooBig).toEqual([])
+    expect(boardsOf(group)).toHaveLength(2)
+    expect(boardsOf(group).find((b) => b[0]!.name === 'rygg')).toEqual([
+      expect.objectContaining({ x: 0, y: 0, w: 2440, h: 1220, whole: true }),
+    ])
+    // Nästan lika stor räcker inte: då behövs de rensade kanterna.
+    const almost = buildCutPlan([part('rygg', 2435, 1220, 18, { material: 'plywood' })]).groups[0]!
+    expect(almost.tooBig.map((p) => p.name)).toEqual(['rygg'])
+  })
+
+  it('använder en bräda i hela längden, men bara precis den längden', () => {
+    const sizes = { [stockKey('furu', 22)]: [{ length: 2400, width: 95 }] }
+    const exact = buildCutPlan([part('list', 2400, 70, 22)], { sizes }).groups[0]!
+    expect(boardsOf(exact)).toEqual([[expect.objectContaining({ x: 0, w: 2400, whole: true })]])
+    expect(buildCutPlan([part('list', 2390, 70, 22)], { sizes }).groups[0]!.tooBig).toHaveLength(1)
   })
 
   it('lägger kapmånen på delens längd men visar det färdiga måttet', () => {
@@ -297,11 +319,46 @@ describe('materialList', () => {
     ])
   })
 
-  it('tar inte med grupper där inget fick plats', () => {
-    const plan = buildCutPlan([part('lång', 3000, 95, 22)], {
+  it('tar med delar som inte ryms på lagermåtten, som en varning', () => {
+    const plan = buildCutPlan([part('lång', 3000, 95, 22), part('lång', 3000, 95, 22), part('kort', 500, 95, 22)], {
       sizes: { [stockKey('furu', 22)]: [{ length: 2400, width: 95 }] },
     })
-    expect(materialList(plan)).toEqual([])
+    const plain = (s?: string) => s?.replace(/\s/g, ' ')
+    expect(materialList(plan).map(({ text, count, warning }) => [plain(text), count, warning])).toEqual([
+      ['1 bräda furu 22 × 95 × 2 400', 1, undefined],
+      [
+        'furu 22: 2 × lång 3 000 × 95',
+        2,
+        'Ryms inte på lagermåtten och är inte med ovan. Lägg till ett mått som räcker.',
+      ],
+    ])
+  })
+
+  it('varnar för föreslagna mått som sällan finns att köpa', () => {
+    const plain = (s?: string) => s?.replace(/\s/g, ' ')
+    const warnings = (bodies: Body[], settings = {}) =>
+      materialList(buildCutPlan(bodies, settings)).map(({ text, warning }) => [plain(text), plain(warning)])
+    // Längre än 5 400 finns inte i sortimentet: förslaget blir 6 300, med en varning.
+    expect(warnings([part('list', 6000, 45, 22)])).toEqual([
+      ['1 bräda furu 22 × 45 × 6 300', 'Virke längre än 5 400 finns sällan: skarva, eller dela delen'],
+    ])
+    // Limfog av ek finns upp till 900 bred och 40 tjock.
+    expect(warnings([part('skiva', 1800, 1000, 50, { material: 'ek' })])).toEqual([
+      [
+        '1 skiva ek 50 × 1 000 × 1 800',
+        'Limfog tjockare än 40 mm finns sällan: limma ihop tunnare. Limfog bredare än 900 finns sällan: limma ihop två, eller dela delen',
+      ],
+    ])
+    // Tjockare än 95 finns inte som hyvlat virke.
+    expect(warnings([part('stolpe', 1000, 120, 120)])[0]![1]).toBe(
+      'Virke tjockare än 95 mm finns sällan: limma ihop tunnare',
+    )
+    // Ett mått man skrivit in själv är ens eget val.
+    expect(
+      warnings([part('list', 6000, 45, 22)], { sizes: { [stockKey('furu', 22)]: [{ length: 6300, width: 45 }] } }),
+    ).toEqual([['1 bräda furu 22 × 45 × 6 300', undefined]])
+    // Vanliga mått: ingen varning.
+    expect(warnings([part('sarg', 900, 95, 22)])).toEqual([['1 bräda furu 22 × 95 × 1 800', undefined]])
   })
 })
 

@@ -1,6 +1,6 @@
 import { buildCutList } from '../src/model/cutlist'
 import { formatMm, rowNames } from '../src/model/cutlistExport'
-import { buildCutPlan, groupCount, materialList, stockDims } from '../src/model/cutPlan'
+import { buildCutPlan, groupCount, materialList, stockDims, wholeText } from '../src/model/cutPlan'
 import { toWorld } from '../src/model/frame'
 import { LIMITS } from '../src/model/limits'
 import { materialTitle } from '../src/model/materials'
@@ -202,11 +202,12 @@ export function cutPlanJson(doc: ModelDocument) {
   return {
     kerf: plan.kerf,
     lengthAllowance: plan.lengthAllowance,
-    buy: materialList(plan).map(({ text, count, length, note }) => ({
+    buy: materialList(plan).map(({ text, count, length, note, warning }) => ({
       text,
       count,
       ...(length && { length }),
       ...(note && { note }),
+      ...(warning && { warning }),
     })),
     groups: plan.groups.map((g) => ({
       material: g.material,
@@ -219,8 +220,17 @@ export function cutPlanJson(doc: ModelDocument) {
         .filter((l) => l.boards.length)
         .map((l) => ({
           dims: stockDims(l),
+          panel: l.panel,
           boards: l.boards.map((b) =>
-            b.map(({ name, length, width, x, y, rotated }) => ({ name, length, width, x, y, rotated })),
+            b.map(({ name, length, width, x, y, rotated, whole }) => ({
+              name,
+              length,
+              width,
+              x,
+              y,
+              rotated,
+              ...(whole && { whole }),
+            })),
           ),
         })),
     })),
@@ -231,7 +241,10 @@ export function cutPlanText(doc: ModelDocument): string {
   const plan = cutPlanJson(doc)
   if (plan.buy.length === 0) return 'Inget att kapa.'
   const lines = [`Att köpa (sågblad ${formatMm(plan.kerf)} mm, kapmån ${formatMm(plan.lengthAllowance)} mm):`]
-  for (const b of plan.buy) lines.push(`  ${b.text}${b.length ? ` (${b.length})` : ''}${b.note ? ` – ${b.note}` : ''}`)
+  for (const b of plan.buy)
+    lines.push(
+      `  ${b.text}${b.length ? ` (${b.length})` : ''}${b.note ? ` – ${b.note}` : ''}${b.warning ? `\n    OBS: ${b.warning}` : ''}`,
+    )
   for (const g of plan.groups) {
     lines.push(
       '',
@@ -242,7 +255,7 @@ export function cutPlanText(doc: ModelDocument): string {
     for (const l of g.stocks)
       l.boards.forEach((b, i) =>
         lines.push(
-          `  ${l.dims} nr ${i + 1}: ${b.map((p) => `${p.name} ${formatMm(p.length)} × ${formatMm(p.width)}`).join(', ')}`,
+          `  ${l.dims} nr ${i + 1}${b[0]?.whole ? ` (${wholeText(l.panel)})` : ''}: ${b.map((p) => `${p.name} ${formatMm(p.length)} × ${formatMm(p.width)}`).join(', ')}`,
         ),
       )
   }

@@ -7,6 +7,7 @@ import {
   materialList,
   stockDims,
   stockNoun,
+  wholeText,
   type CutPlanGroup,
   type PlacedPiece,
   type StockLayout,
@@ -96,6 +97,8 @@ export function CutPlanView({ bodies }: { bodies: readonly Body[] }) {
                     {p.text}
                     {/* Tjockare än delarna är ritade. */}
                     {p.note && <span className="block text-xs text-muted">{p.note}</span>}
+                    {/* Finns sällan att köpa, eller ryms inte: något att göra något åt. */}
+                    {p.warning && <span className="block text-xs text-warn">{p.warning}</span>}
                   </span>
                   {p.length && (
                     <span className="shrink-0 text-xs whitespace-nowrap text-muted tabular-nums">{p.length}</span>
@@ -271,7 +274,7 @@ function GroupView({ group: g, allowance }: { group: CutPlanGroup; allowance: nu
           l.boards.map((pieces, i) => {
             const unit = capitalize(stockNoun(l.panel, 1))
             // Med flera mått står bredden efter, så att man ser vilket mått brädan eller skivan är.
-            const label = `${unit} ${i + 1}${several ? ` · ${num.format(l.stock.width)} bred` : ''}`
+            const label = `${unit} ${i + 1}${several ? ` · ${num.format(l.stock.width)} bred` : ''}${pieces[0]?.whole ? ` · ${wholeText(l.panel)}` : ''}`
             return (
               <div key={`${si}-${i}`} className="flex flex-col gap-1">
                 <BoardDrawing stock={l.stock} sheet={g.sheet} pieces={pieces} material={g.material} label={label} />
@@ -432,7 +435,7 @@ function BoardDrawing({
           </defs>
           <rect x={0.5} y={0.5} width={width - 1} height={height - 1} rx={2} className="fill-hover stroke-line" />
           <rect x={0.5} y={0.5} width={width - 1} height={height - 1} rx={2} fill={`url(#${hatch})`} />
-          {stock.trim > 0 && (
+          {stock.trim > 0 && !pieces[0]?.whole && (
             <g fill="none" strokeDasharray="3 3" className="stroke-faint">
               {sheet ? (
                 <rect
