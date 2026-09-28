@@ -186,7 +186,9 @@ function refreshCurrent(
       if (t.op) return
       stop()
       if (lib().currentId !== m.id || docs().doc !== waiting || waiting !== lastPersistedDoc) return
-      void repo.get(m.id).then((latest) => latest && !latest.deleted && newer(latest) && refreshCurrent(latest, text, newer))
+      void repo
+        .get(m.id)
+        .then((latest) => latest && !latest.deleted && newer(latest) && refreshCurrent(latest, text, newer))
     })
     return
   }
@@ -204,8 +206,8 @@ function refreshCurrent(
   notifyOnce(text(m.name))
 }
 
-function notifyOnce(text: string) {
-  if (!lib().notices.some((n) => n.text === text)) lib().notify(text)
+function notifyOnce(text: string, sticky = false) {
+  if (!lib().notices.some((n) => n.text === text)) lib().notify(text, undefined, { sticky })
 }
 
 /**
@@ -244,7 +246,7 @@ async function persistNow(force = false) {
     console.error('[bygg] Kunde inte spara modellen på enheten', e)
     saveError = isStorageFull(e) ? STORAGE_FULL : 'Kunde inte spara på enheten'
     lib().set({ status: 'error', error: saveError })
-    notifyOnce(`${saveError}. Ändringarna finns bara i fönstret tills sparningen lyckas; stäng det inte.`)
+    notifyOnce(`${saveError}. Ändringarna finns bara i fönstret tills sparningen lyckas; stäng det inte.`, true)
     return
   }
   if (saveError) {
@@ -255,6 +257,8 @@ async function persistNow(force = false) {
     void repo.setCurrentId(saved.id)
     lib().notify(
       `"${saved.forkedFrom}" hade ändrats i en annan flik eller på en annan enhet. Den versionen ligger kvar under sitt namn; din sparades som "${lib().currentName}".`,
+      undefined,
+      { sticky: true },
     )
   }
   tabs?.postMessage({ id: saved.id })
@@ -369,6 +373,8 @@ async function handle(events: SyncEvent[], docAtStart: ModelDocument) {
         }
         lib().notify(
           `Modellen hade ändrats på en annan enhet. Den versionen ligger kvar under sitt namn; din sparades som "${e.copyName}".`,
+          undefined,
+          { sticky: true },
         )
         break
       case 'remote-update':
@@ -395,10 +401,16 @@ async function handle(events: SyncEvent[], docAtStart: ModelDocument) {
         lib().notify('En modell du tog bort hade ändrats på en annan enhet, så den finns kvar.')
         break
       case 'rejected':
-        lib().notify(`"${e.name}" kunde inte sparas på servern: ${e.reason}`)
+        lib().notify(`"${e.name}" kunde inte sparas på servern: ${e.reason}`, undefined, { sticky: true })
         break
       case 'incompatible':
-        lib().notify(`"${e.name}" är sparad med en nyare version av appen. Ladda om sidan för att uppdatera.`)
+        lib().notify(
+          `"${e.name}" är sparad med en nyare version av appen. Ladda om sidan för att uppdatera.`,
+          undefined,
+          {
+            sticky: true,
+          },
+        )
         break
       case 'unreadable':
         if (toldUnreadable.has(e.id)) break
@@ -407,6 +419,8 @@ async function handle(events: SyncEvent[], docAtStart: ModelDocument) {
           e.name === null
             ? 'En modell på servern går inte att läsa.'
             : `"${e.name}" går inte att läsa på servern. Kopian på den här enheten finns kvar.`,
+          undefined,
+          { sticky: true },
         )
         break
     }

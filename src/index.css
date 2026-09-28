@@ -39,6 +39,9 @@
   /* Studiopappret bakom möblerna på startsidan (src/landing); samma som SCENE.studio i src/scene/colors.ts. */
   --color-studio: #e6e3de;
 
+  /* Meddelandena (panel/Notices.tsx) tonas in. */
+  --animate-appear: appear 150ms ease-out both;
+
   /* Rutan "Öppnar …" (panel/OpeningOverlay.tsx): syns först om det tar en stund. */
   --animate-appear-late: appear 150ms ease-out 400ms both;
   @keyframes appear {

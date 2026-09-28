@@ -34,6 +34,11 @@ export interface Notice {
   id: string
   text: string
   action?: { label: string; run: () => void | Promise<void> }
+  /**
+   * Ligger kvar tills man stänger det: för det man måste se (en krockkopia, en sparning som inte gick).
+   * Annars försvinner ett meddelande utan knapp av sig självt (se panel/Notices.tsx).
+   */
+  sticky?: boolean
 }
 
 interface LibrarySnapshot {
@@ -68,13 +73,25 @@ interface LibrarySnapshot {
 interface LibraryState extends LibrarySnapshot {
   set: (patch: Partial<LibrarySnapshot>) => void
   /** Visar ett meddelande och returnerar dess id. */
-  notify: (text: string, action?: Notice['action']) => string
+  notify: (text: string, action?: Notice['action'], options?: { sticky?: boolean }) => string
   dismiss: (id: string) => void
 }
 
 const previous = import.meta.hot?.data.libraryStore as StoreApi<LibraryState> | undefined
 const initial: LibrarySnapshot = previous
-  ? (({ models, thumbs, screen, pendingDelete, currentId, currentName, currentBase, currentStamp, status, error, notices }) => ({
+  ? (({
+      models,
+      thumbs,
+      screen,
+      pendingDelete,
+      currentId,
+      currentName,
+      currentBase,
+      currentStamp,
+      status,
+      error,
+      notices,
+    }) => ({
       opening: null,
       settings: null,
       trashOpen: false,
@@ -115,9 +132,9 @@ let noticeSeq = 0
 export const useLibraryStore = create<LibraryState>()((set) => ({
   ...initial,
   set: (patch) => set(patch),
-  notify: (text, action) => {
+  notify: (text, action, options) => {
     const id = `n${++noticeSeq}`
-    set((s) => ({ notices: [...s.notices, { id, text, action }] }))
+    set((s) => ({ notices: [...s.notices, { id, text, action, ...(options?.sticky && { sticky: true }) }] }))
     return id
   },
   dismiss: (id) => set((s) => ({ notices: s.notices.filter((n) => n.id !== id) })),

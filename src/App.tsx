@@ -59,8 +59,9 @@ export function App() {
               bilder behöver på en telefon. Kameran står kvar när den öppnas igen (CameraRig). */}
           {!drawing && <Viewport />}
           <DimensionLabels />
-          {/* Startvyn visar samma meddelanden själv. */}
-          {screen === 'model' && <Notices />}
+          {/* Startvyn visar samma meddelanden själv. Under knapparna i vyns hörn, och på smal
+              skärm mellan kolumnerna av knappar, så att de inte täcks. */}
+          {screen === 'model' && <Notices place="top-16 max-w-[calc(100%-16px)] narrow:max-w-[calc(100%-8rem)]" />}
           {/* I sprängskissen ändrar man inget: raden där ersätter måttrutan och verktygen. */}
           {exploded ? (
             <ExplodeBar />
