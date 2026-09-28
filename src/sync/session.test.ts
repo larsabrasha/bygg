@@ -58,7 +58,8 @@ const onServer = async (id: string) => {
   return { name: raw.name as string, params: (raw.file.doc.params as { name: string }[]).map((p) => p.name) }
 }
 
-const serverNames = async () => ((await (await app.request('/api/models')).json()) as { name: string }[]).map((m) => m.name)
+const serverNames = async () =>
+  ((await (await app.request('/api/models')).json()) as { name: string }[]).map((m) => m.name)
 
 /** En modell som finns på servern och är öppen i två flikar. */
 async function openInTwoTabs() {

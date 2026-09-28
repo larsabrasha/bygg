@@ -387,7 +387,11 @@ async function writeDurably(target: string, data: string | Uint8Array) {
   await rename(tmp, target)
   // Mappen också, så att flytten finns kvar efter ett avbrott. Går inte på alla system (Windows).
   const dir = await open(path.dirname(target), 'r').catch(() => null)
-  if (dir) await dir.sync().catch(() => {}).finally(() => dir.close())
+  if (dir)
+    await dir
+      .sync()
+      .catch(() => {})
+      .finally(() => dir.close())
 }
 
 /**
