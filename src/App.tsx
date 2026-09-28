@@ -1,6 +1,7 @@
 import { CombineBar } from './panel/CombineBar'
 import { Gallery } from './panel/Gallery'
 import { DimensionLabels } from './panel/DimensionLabels'
+import { EmptyModelHint } from './panel/EmptyModelHint'
 import { LassoOverlay } from './panel/LassoOverlay'
 import { MeasureBox } from './panel/MeasureBox'
 import { Notices } from './panel/Notices'
@@ -61,6 +62,7 @@ export function App() {
           {!drawing && <Viewport />}
           <DimensionLabels />
           <LassoOverlay />
+          <EmptyModelHint />
           {/* Startvyn visar samma meddelanden själv. Under knapparna i vyns hörn, och på smal
               skärm mellan kolumnerna av knappar, så att de inte täcks. */}
           {screen === 'model' && <Notices place="top-16 max-w-[calc(100%-16px)] narrow:max-w-[calc(100%-8rem)]" />}
