@@ -12,6 +12,7 @@ import { UserStorages } from '../server/storage'
 import { TokenStore } from '../server/tokens'
 import { httpClient } from './client'
 import { run, type Io } from './main'
+import { summarize, summaryText } from './describe'
 import { applyOps } from './ops'
 
 describe('applyOps', () => {
@@ -45,6 +46,20 @@ describe('applyOps', () => {
     const r = applyOps(doc, [box, { op: 'move', id: 'finns-inte', by: [1, 0, 0] }])
     expect(r).toMatchObject({ ok: false, index: 1 })
     expect(doc.instances).toHaveLength(0)
+  })
+
+  it('speglar en länkad kopia på stället; den förblir länkad', () => {
+    const r = applyOps(emptyDocument(), [
+      box,
+      { op: 'copy', id: 's', by: [1000, 0, 0], ref: 'k' },
+      { op: 'mirror', id: 'k', axis: 'x' },
+    ])
+    if (!r.ok) throw new Error(r.error)
+    const [a, b] = resolveBodies(r.doc)
+    expect(b!.defId).toBe(a!.defId)
+    expect(summarize('m', r.doc).parts.map((p) => p.mirrored)).toEqual([undefined, true])
+    expect(summaryText(summarize('m', r.doc))).toContain('spegelvänd')
+    expect(applyOps(emptyDocument(), [box, { op: 'mirror', id: 's', axis: 'w' }])).toMatchObject({ ok: false })
   })
 
   it('avvisar okända operationer och fält', () => {

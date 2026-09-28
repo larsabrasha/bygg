@@ -45,6 +45,7 @@ const FIELDS: Record<string, readonly string[]> = {
   position: ['id', 'x', 'y', 'z'],
   size: ['id', 'x', 'y', 'z'],
   rotate: ['id', 'axis', 'degrees'],
+  mirror: ['id', 'axis'],
   set: ['id', 'name', 'material', 'grain', 'thickness', 'paint'],
   unique: ['id'],
   delete: ['id'],
@@ -206,6 +207,14 @@ function run(op: unknown, refs: Record<string, string>) {
       const before = s().doc
       s().rotateInstance(target, bodyCenter(body), v, degrees)
       if (s().doc === before && degrees % 360 !== 0) fail(takeNotice() ?? 'Delen gick inte att vrida')
+      return
+    }
+    case 'mirror': {
+      const target = id()
+      const axis = worldAxis(o.axis, 'axis')
+      const before = s().doc
+      s().mirrorInstances([target], axis)
+      if (s().doc === before) fail(takeNotice() ?? 'Delen gick inte att spegla')
       return
     }
     case 'set': {

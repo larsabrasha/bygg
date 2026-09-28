@@ -1,7 +1,7 @@
 import { buildCutList } from '../src/model/cutlist'
 import { formatMm, rowNames } from '../src/model/cutlistExport'
 import { buildCutPlan, groupCount, materialList, stockDims, wholeText } from '../src/model/cutPlan'
-import { toWorld } from '../src/model/frame'
+import { isMirrored, toWorld } from '../src/model/frame'
 import { LIMITS } from '../src/model/limits'
 import { materialTitle } from '../src/model/materials'
 import { evaluateParams } from '../src/model/params'
@@ -45,6 +45,8 @@ export interface PartSummary {
   /** Formen; länkade kopior har samma. */
   defId: string
   linkedCopies: number
+  /** Kopian är spegelvänd mot formen (vänster och höger sida av samma form). */
+  mirrored?: true
   /** Verktyg: vad det gör och med vilken del. */
   tool?: { op: string; host: string; into?: string }
   /** Uttryck som styr måtten ("size.x") och läget ("at.x"), längs världens axlar. */
@@ -92,6 +94,7 @@ export function summarize(name: string, doc: ModelDocument): ModelSummary {
       ...worldBox(b),
       defId: b.defId,
       linkedCopies: counts.get(b.defId) ?? 1,
+      ...(isMirrored(b.frame) && { mirrored: true as const }),
       ...(b.tool && {
         tool: { op: b.tool.op, host: b.tool.host, ...(b.tool.into && { into: b.tool.into }) },
       }),
@@ -141,13 +144,14 @@ export function summaryText(m: ModelSummary): string {
       : `${formatMm(p.L)} × ${formatMm(p.B)} × ${formatMm(p.T)}`
     const where = `x ${range(p.min[0], p.max[0])}  y ${range(p.min[1], p.max[1])}  z ${range(p.min[2], p.max[2])}`
     const linked = p.linkedCopies > 1 ? `  [form ${short(p.defId)}, ${p.linkedCopies} länkade]` : ''
+    const mirrored = p.mirrored ? '  spegelvänd' : ''
     const paint = p.paint ? `  målad ${p.paint.code ?? p.paint.color}` : ''
     const exprs = p.exprs
       ? `  {${Object.entries(p.exprs)
           .map(([k, v]) => `${k}: ${v}`)
           .join(', ')}}`
       : ''
-    return `  ${short(p.id)}  ${p.name}  ${materialTitle(p.material)}  ${size}  ${where}${linked}${paint}${exprs}`
+    return `  ${short(p.id)}  ${p.name}  ${materialTitle(p.material)}  ${size}  ${where}${linked}${mirrored}${paint}${exprs}`
   }
   const parts = m.parts.filter((p) => !p.tool)
   const tools = m.parts.filter((p) => p.tool)

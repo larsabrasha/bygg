@@ -20,7 +20,7 @@ import { materialColor } from './colors'
 import { loadManifold, solidGeometry } from './csg'
 import { cylinderGeometry } from './cylinder'
 import { DARKER } from './endGrain'
-import { frameQuaternion } from './frameTransform'
+import { frameRotation } from './frameTransform'
 import { grainUvs, hash01 } from './grainUv'
 import { hasWoodTexture, loadWood, woodTone, type Wood } from './woodTexture'
 
@@ -157,10 +157,11 @@ export function buildArScene(bodies: readonly Body[], { manifold, woods }: ArAss
     mesh.userData.color = b.paint?.color ?? materialColor(b.material)
     if (b.paint?.code) mesh.userData.paintCode = b.paint.code
     // Lådan och cylindern har mitten i origo, resultatet från manifold-3d delens origo.
-    const q = frameQuaternion(b.frame)
+    const { quaternion: q, scale } = frameRotation(b.frame)
     const center = solid ? new Vector3() : new Vector3((x0 + x1) / 2, (y0 + y1) / 2, (b.z0 + b.z1) / 2)
-    mesh.position.copy(center.applyQuaternion(q)).add(new Vector3(...b.frame.origin))
+    mesh.position.copy(center.multiply(new Vector3(...scale)).applyQuaternion(q)).add(new Vector3(...b.frame.origin))
     mesh.quaternion.copy(q)
+    mesh.scale.set(...scale)
     model.add(mesh)
   }
 

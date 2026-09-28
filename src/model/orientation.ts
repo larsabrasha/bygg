@@ -1,6 +1,6 @@
 import { toLocal } from './frame'
 import type { Frame, Orientation, Vec3 } from './types'
-import { add, cross, scale, sub } from './vec'
+import { add, cross, dot, scale, sub } from './vec'
 
 /**
  * Vinklar för en kopia, som i detaljpanelen: vridning runt världens X, Y och Z
@@ -19,7 +19,10 @@ const clean = (x: number, step: number) => {
   return (Math.abs(x - r) < 1e-9 ? r : x) + 0 // + 0 gör −0 till 0
 }
 
-/** Närmaste läge längs världens axlar: varje axel avrundad till en världsaxel, högerhänt. */
+/**
+ * Närmaste läge längs världens axlar: varje axel avrundad till en världsaxel. Spegelvänt om
+ * f är det, så att vridningen från viloläget till f är en vridning och inte en spegling.
+ */
 export function snapAxes(f: Orientation): Orientation {
   const nearest = (a: Vec3, not?: number): [Vec3, number] => {
     let best = -1
@@ -30,7 +33,8 @@ export function snapAxes(f: Orientation): Orientation {
   }
   const [u, iu] = nearest(f.u)
   const [v] = nearest(f.v, iu)
-  return { u, v, n: cross(u, v).map((x) => x + 0) as Vec3 }
+  const n = cross(u, v).map((x) => x + 0) as Vec3
+  return { u, v, n: dot(n, f.n) < 0 ? (n.map((x) => -x + 0) as Vec3) : n }
 }
 
 /** Viloläget för en kopia; saknas det har den aldrig vridits snett och ligger längs världens axlar. */

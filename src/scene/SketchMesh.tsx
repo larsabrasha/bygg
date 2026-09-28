@@ -4,7 +4,7 @@ import { DoubleSide } from 'three'
 import type { Frame, Rect, Shape } from '../model/types'
 import { ACCENT } from './colors'
 import { CYLINDER_SEGMENTS as SEGMENTS } from './cylinder'
-import { frameQuaternion } from './frameTransform'
+import { frameRotation } from './frameTransform'
 
 interface Props {
   frame: Frame
@@ -20,7 +20,7 @@ interface Props {
 const LIFT = 0.3
 
 export function SketchMesh({ frame, rect, shape, pickId, emphasis = 'none' }: Props) {
-  const quaternion = useMemo(() => frameQuaternion(frame), [frame])
+  const { quaternion, scale } = useMemo(() => frameRotation(frame), [frame])
   const { x0, y0, x1, y1 } = rect
   const round = shape === 'circle'
   const outline = useMemo((): [number, number, number][] => {
@@ -41,7 +41,7 @@ export function SketchMesh({ frame, rect, shape, pickId, emphasis = 'none' }: Pr
   const opacity = emphasis === 'none' ? 0.18 : 0.35
 
   return (
-    <group position={frame.origin} quaternion={quaternion}>
+    <group position={frame.origin} quaternion={quaternion} scale={scale}>
       <mesh
         position={[(x0 + x1) / 2, (y0 + y1) / 2, LIFT]}
         userData={pickId ? { pick: { kind: 'sketch', id: pickId } } : {}}

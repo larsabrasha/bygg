@@ -46,6 +46,8 @@ export function partMeshes(bodies: readonly Body[], assets: ArAssets, up: 'y' | 
     if (src.index) g.setIndex(src.index.clone())
     const flat = g.index ? g.toNonIndexed() : g
     flat.applyMatrix4(o.matrixWorld)
+    // En spegelvänd del: trianglarna vänds, annars pekar de inåt (STL räknar framsidan ur ordningen).
+    if (o.matrixWorld.determinant() < 0) flipTriangles(flat)
     parts.push({
       name: o.name,
       material: String(o.userData.paintCode ?? o.userData.material),
@@ -54,6 +56,18 @@ export function partMeshes(bodies: readonly Body[], assets: ArAssets, up: 'y' | 
     })
   })
   return parts
+}
+
+/** Byter plats på andra och tredje hörnet i varje triangel (geometri utan index). */
+function flipTriangles(g: BufferGeometry) {
+  for (const name of ['position', 'normal']) {
+    const a = g.getAttribute(name)
+    for (let i = 0; i < a.count; i += 3) {
+      const [x, y, z] = [a.getX(i + 1), a.getY(i + 1), a.getZ(i + 1)]
+      a.setXYZ(i + 1, a.getX(i + 2), a.getY(i + 2), a.getZ(i + 2))
+      a.setXYZ(i + 2, x, y, z)
+    }
+  }
 }
 
 const num = (x: number) => String(Math.round(x * 1e4) / 1e4)

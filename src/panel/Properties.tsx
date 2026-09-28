@@ -1,5 +1,6 @@
 import { useMemo } from 'react'
 import { ArrowUpFromLine, Boxes, Copy, RotateCw, Trash2, Unlink } from 'lucide-react'
+import { isMirrored } from '../model/frame'
 import { rectSize } from '../model/geometry'
 import { AXES, extent, widthAxis } from '../model/partAxes'
 import { anglesOf, restOf } from '../model/orientation'
@@ -395,6 +396,7 @@ export function Properties() {
                     <>
                       {def.name} finns {copies} gånger, länkade: ändrar du måtten på en ändras alla. Gör unik om just
                       den här ska få egna mått.
+                      {isMirrored(body.frame) && ' Den här är spegelvänd: hål och tappar sitter åt andra hållet.'}
                     </>
                   ) : (
                     <>

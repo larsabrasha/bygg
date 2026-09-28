@@ -1,5 +1,5 @@
 import { buildCutList, type CutListRow } from './cutlist'
-import { toWorld } from './frame'
+import { isMirrored, toWorld } from './frame'
 import { numberFormat } from './numberFormat'
 import { cutAxes } from './partAxes'
 import type { Axis, Body } from './types'
@@ -68,7 +68,7 @@ export function partGeometry(b: Body): PartGeometry {
     return { op: t.op, lo: toLBT(lo), hi: toLBT(hi), ...(t.shape === 'circle' && { round: dirOf(axis) }) }
   })
 
-  return {
+  const g: PartGeometry = {
     size: toLBT([blank.profile.x1, blank.profile.y1, blank.z1]),
     form: {
       lo: toLBT([b.profile.x0, b.profile.y0, b.z0]),
@@ -77,6 +77,20 @@ export function partGeometry(b: Body): PartGeometry {
     },
     features,
   }
+  // En spegelvänd kopia är formen speglad längs u (se mirrorFrame): hål och tappar byter sida.
+  return isMirrored(b.frame) ? mirrored(g, dirOf(0)) : g
+}
+
+/** Speglar delen längs en riktning. */
+function mirrored(g: PartGeometry, axis: Dir): PartGeometry {
+  const flip = <S extends Span>(s: S): S => {
+    const lo = [...s.lo] as Triple
+    const hi = [...s.hi] as Triple
+    lo[axis] = round01(g.size[axis] - s.hi[axis])
+    hi[axis] = round01(g.size[axis] - s.lo[axis])
+    return { ...s, lo, hi }
+  }
+  return { size: g.size, form: flip(g.form), features: g.features.map(flip) }
 }
 
 /** Samma form ger samma nyckel, oavsett i vilken ordning verktygen ligger. */

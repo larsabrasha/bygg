@@ -68,6 +68,7 @@ eller en "ref" som en tidigare operation i samma lista satte.
   {"op":"position","id":"ben2","x":"bredd - 45"}           läge längs en axel, som uttryck
   {"op":"size","id":"skiva","x":"bredd","z":450}           mått längs världsaxlar (alla länkade kopior)
   {"op":"rotate","id":"ben","axis":"y","degrees":90}      runt delens mitt
+  {"op":"mirror","id":"sida","axis":"x"}                   spegla på stället; en länkad kopia förblir länkad
   {"op":"set","id":"skiva","name":"Bordsskiva","material":"björkplywood","grain":"z",
    "thickness":"y","paint":"#f2efe8"}                       paint: "#rrggbb", {"color","code"} eller null
   {"op":"unique","id":"ben2"}                               egen form, inte längre länkad

@@ -11,7 +11,7 @@ import {
   sketchToPart,
   uniqueCopyName,
 } from '../model/geometry'
-import { rotateFrame } from '../model/frame'
+import { mirrorFrame, rotateFrame } from '../model/frame'
 import { bodiesBox } from '../model/geometry'
 import {
   carryTools,
@@ -42,6 +42,7 @@ import type {
   Frame,
   Instance,
   ModelDocument,
+  Orientation,
   PartDef,
   Rect,
   Shape,
@@ -103,6 +104,11 @@ interface DocumentState extends Snapshot {
   rotateInstance: (instanceId: string, center: Vec3, axis: Vec3, degrees: number) => void
   /** Vrider flera kopior runt samma axel genom center, i ett steg. */
   rotateInstances: (ids: readonly string[], center: Vec3, axis: Vec3, degrees: number) => void
+  /**
+   * Speglar kopiorna i planet genom deras gemensamma mitt, tvärs mot världsaxeln axis, i ett steg.
+   * Formen ändras inte: en länkad kopia förblir länkad och blir spegelvänd (vänster och höger sida).
+   */
+  mirrorInstances: (ids: readonly string[], axis: WorldAxis) => void
   /**
    * En länkad kopia av var och en av delarna, med frame ändrad av transform, i ett steg.
    * Kopiorna blir valda. Returnerar deras id:n, i samma ordning.
@@ -190,6 +196,9 @@ function refused(text: string) {
   const lib = useLibraryStore.getState()
   if (!lib.notices.some((n) => n.text === text)) lib.notify(text)
 }
+
+/** Framens riktning utan läge. */
+const orientationOf = ({ u, v, n }: Frame): Orientation => ({ u, v, n })
 
 /** Avstånd mellan original och ny kopia, i mm. */
 const DUPLICATE_GAP = 50
@@ -452,6 +461,29 @@ export const useDocumentStore = create<DocumentState>()((set, get) => {
         return reoriented(i, def, rotateFrame(i.frame, center, axis, degrees))
       })
       if (changed) commit({ ...doc, instances })
+    },
+
+    mirrorInstances: (ids, axis) => {
+      const { doc } = get()
+      const chosen = new Set(ids)
+      const bodies = resolveBodies(doc).filter((b) => chosen.has(b.id))
+      if (bodies.length === 0) return
+      const at = bodiesBox(bodies).center[WORLD_AXES.indexOf(axis)]!
+      const defs = new Map(doc.defs.map((d) => [d.id, d]))
+      const instances = doc.instances.map((i) => {
+        const def = defs.get(i.defId)
+        if (!chosen.has(i.id) || !def) return i
+        // Viloläget speglas med, så att vinklarna i detaljpanelen räknas som förut.
+        const rest = i.rest && orientationOf(mirrorFrame({ origin: [0, 0, 0], ...i.rest }, axis, 0))
+        const next = { ...i, frame: mirrorFrame(i.frame, axis, at), ...(rest && { rest }) }
+        const before = minCorner(i, def)
+        const after = minCorner(next, def)
+        return withoutPos(
+          next,
+          WORLD_AXES.filter((_, k) => Math.abs(after[k]! - before[k]!) > 1e-6),
+        )
+      })
+      commit({ ...doc, instances })
     },
 
     copyInstances: (ids, transform) => {

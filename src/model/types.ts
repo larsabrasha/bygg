@@ -6,6 +6,7 @@ export type Vec2 = [number, number]
 /**
  * Lokalt koordinatsystem. u, v och n är ortonormala och u × v = n.
  * En skiss ligger i planet som u och v spänner upp; n pekar ut ur planet.
+ * Undantag: en spegelvänd kopia har u × v = −n (se isMirrored i frame.ts).
  */
 export interface Frame {
   origin: Vec3

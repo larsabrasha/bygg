@@ -5,6 +5,7 @@ import {
   BoxGeometry,
   BufferAttribute,
   BufferGeometry,
+  DoubleSide,
   GreaterDepth,
   MeshPhysicalMaterial,
   MeshStandardMaterial,
@@ -21,7 +22,7 @@ import { ACCENT, ACCENT_LIGHT, EDGE, materialColor } from './colors'
 import { DRAG_SEGMENTS, SEGMENTS } from '../model/solid'
 import { solidGeometry, useManifold } from './csg'
 import { cylinderGeometry } from './cylinder'
-import { frameQuaternion } from './frameTransform'
+import { frameRotation } from './frameTransform'
 import { grainUvs, hash01 } from './grainUv'
 import { tangentPoints } from './silhouette'
 import { useColorScheme } from '../theme'
@@ -83,7 +84,7 @@ function BodyMeshImpl({
   look = 'shaded',
 }: Props) {
   const scheme = useColorScheme()
-  const quaternion = useMemo(() => frameQuaternion(body.frame), [body.frame])
+  const { quaternion, scale } = useMemo(() => frameRotation(body.frame), [body.frame])
   const [w, h, d] = bodyExtents(body)
   const { x0, x1, y0, y1 } = body.profile
   const center: [number, number, number] = [(x0 + x1) / 2, (y0 + y1) / 2, (body.z0 + body.z1) / 2]
@@ -255,7 +256,7 @@ function BodyMeshImpl({
   const plainReal = real && !clear && !selected && !sibling && !preview && !faded
 
   return (
-    <group position={offset ? add(body.frame.origin, offset) : body.frame.origin} quaternion={quaternion}>
+    <group position={offset ? add(body.frame.origin, offset) : body.frame.origin} quaternion={quaternion} scale={scale}>
       {/* En cylinders mantel har inga kanter; i trådmodellen syns den genom konturlinjerna. */}
       {round && wire && !ghost && (
         <Silhouette center={[(x0 + x1) / 2, (y0 + y1) / 2]} r={(x1 - x0) / 2} z0={body.z0} z1={body.z1} color={edge} />
@@ -275,8 +276,13 @@ function BodyMeshImpl({
             : { pick: { kind: 'body', id: body.id, round, tool: ghost, ...(solid && { box: boxOf(body) }) } }
         }
       >
+        {/*
+          Kanterna är tjocka linjer, ritade som små rutor. På en spegelvänd del (skala −1) vänder
+          rutorna baksidan mot kameran, och utan DoubleSide syns inga kanter alls.
+        */}
         {ghost ? (
           <Edges
+            side={DoubleSide}
             color={ACCENT}
             lineWidth={peek ? 2.5 : selected ? 2 : 1.5}
             dashed={!peek}
@@ -286,9 +292,16 @@ function BodyMeshImpl({
             renderOrder={3}
           />
         ) : faded ? (
-          <Edges color={edge} lineWidth={1} transparent opacity={FADED_OPACITY * 2} depthWrite={false} />
+          <Edges
+            side={DoubleSide}
+            color={edge}
+            lineWidth={1}
+            transparent
+            opacity={FADED_OPACITY * 2}
+            depthWrite={false}
+          />
         ) : plainReal ? null : (
-          <Edges color={edge} lineWidth={selected ? 2.5 : sibling ? 1.8 : 1} />
+          <Edges side={DoubleSide} color={edge} lineWidth={selected ? 2.5 : sibling ? 1.8 : 1} />
         )}
         {/*
           Den valda delens kanter där något ligger framför (en annan del eller
@@ -298,6 +311,7 @@ function BodyMeshImpl({
         */}
         {selected && !preview && !ghost && !wire && (
           <Edges
+            side={DoubleSide}
             color={ACCENT}
             lineWidth={1.5}
             dashed

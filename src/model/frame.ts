@@ -19,10 +19,21 @@ export function toWorld(f: Frame, [x, y, z]: Vec3): Vec3 {
 }
 
 /**
+ * Framen är spegelvänd: u × v = −n. En spegelvänd kopia (se mirrorFrame) har en sådan;
+ * formen är densamma, bara placerad som i en spegel.
+ */
+export const isMirrored = (f: Frame): boolean => dot(cross(f.u, f.v), f.n) < 0
+
+/**
  * Frame för en skiss på en av kroppens sidor. Origo ligger i sidans plan,
- * n pekar ut från kroppen och u × v = n.
+ * n pekar ut från kroppen och u × v = n, också på en spegelvänd kropp.
  */
 export function faceFrame(body: Body, face: Face): Frame {
+  const f = sideFrame(body, face)
+  return isMirrored(body.frame) ? { ...f, u: f.v, v: f.u } : f
+}
+
+function sideFrame(body: Body, face: Face): Frame {
   const { frame: F, profile: r, z0, z1 } = body
   switch (face) {
     case 'u+':
@@ -80,4 +91,18 @@ export function rotateFrame(f: Frame, center: Vec3, axis: Vec3, degrees: number)
   const dir = (v: Vec3) => rotateVec(v, axis, degrees).map((x) => clean(x, 1)) as Vec3
   const origin = add(center, rotateVec(sub(f.origin, center), axis, degrees)).map((x) => clean(x, 1e-6)) as Vec3
   return { origin, u: dir(f.u), v: dir(f.v), n: dir(f.n) }
+}
+
+const WORLD_INDEX = { x: 0, y: 1, z: 2 } as const
+
+/**
+ * Framen speglad i planet där världsaxeln axis har värdet at. Resultatet är spegelvänt om
+ * framen inte var det, och tvärtom: två speglingar tar ut varandra.
+ */
+export function mirrorFrame(f: Frame, axis: keyof typeof WORLD_INDEX, at: number): Frame {
+  const i = WORLD_INDEX[axis]
+  const flip = (a: Vec3): Vec3 => a.map((x, k) => (k === i ? -x + 0 : x)) as Vec3
+  const origin = [...f.origin] as Vec3
+  origin[i] = clean(2 * at - origin[i], 1e-6)
+  return { origin, u: flip(f.u), v: flip(f.v), n: flip(f.n) }
 }

@@ -14,13 +14,16 @@ import {
   SquaresSubtract,
   SquaresUnite,
   Trash2,
+  TrianglesCenterlineDashedHorizontal,
+  TrianglesCenterlineDashedVertical,
   Unlink,
   X,
   type LucideIcon,
 } from 'lucide-react'
 import { useCallback, useRef, useState } from 'react'
 import { resolveBodies } from '../model/resolve'
-import { useDocumentStore } from '../store/documentStore'
+import type { WorldAxis } from '../model/types'
+import { selectedBodyIds, useDocumentStore } from '../store/documentStore'
 import { useToolStore } from '../store/toolStore'
 import { useViewStore } from '../store/viewStore'
 import { beginPushPull, hideSelection, isolateSelection, selectConnected } from '../tools/actions'
@@ -138,13 +141,13 @@ function ShapeMenu({ hostId, name }: { hostId: string; name: string }) {
  * Isolerat syns de andra genomskinliga och går inte att trycka på. I en meny, så att raden får plats på en telefon.
  * VisibilityBar visar att något är dolt och tar fram allt igen.
  */
-function VisibilityMenu({ id, always = false }: { id: string; always?: boolean }) {
+function VisibilityMenu({ id }: { id: string }) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
   const close = useCallback(() => setOpen(false), [])
   useDismiss(ref, open, close)
   return (
-    <div ref={ref} className={`relative shrink-0 ${always ? '' : wideOnly}`}>
+    <div ref={ref} className={`relative shrink-0 ${wideOnly}`}>
       <Tip label="Visa">
         <button aria-label="Visa" aria-expanded={open} onClick={() => setOpen((o) => !o)} className={barIcon}>
           <BarLabel Icon={Eye} short="Visa" menu />
@@ -168,6 +171,86 @@ function VisibilityMenu({ id, always = false }: { id: string; always?: boolean }
               hideSelection(id)
             }}
           >
+            Dölj
+          </MenuItem>
+        </div>
+      )}
+    </div>
+  )
+}
+
+/** Speglingarna, i planet genom det valdas mitt: tvärs mot x, z och y. Ikonen visar spegelns linje. */
+const MIRRORS: readonly { axis: WorldAxis; label: string; Icon: LucideIcon }[] = [
+  { axis: 'x', label: 'Vänster–höger', Icon: TrianglesCenterlineDashedVertical },
+  { axis: 'z', label: 'Fram–bak', Icon: TrianglesCenterlineDashedVertical },
+  { axis: 'y', label: 'Upp–ner', Icon: TrianglesCenterlineDashedHorizontal },
+]
+
+/** Speglar det valda på stället. En länkad kopia förblir länkad, men spegelvänd (vänster och höger sida). */
+const mirrorSelection = (axis: WorldAxis) => {
+  const s = useDocumentStore.getState()
+  s.mirrorInstances(selectedBodyIds(s), axis)
+}
+
+function MirrorMenu() {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+  const close = useCallback(() => setOpen(false), [])
+  useDismiss(ref, open, close)
+  return (
+    <div ref={ref} className={`relative shrink-0 ${wideOnly}`}>
+      <Tip label="Spegla">
+        <button aria-label="Spegla" aria-expanded={open} onClick={() => setOpen((o) => !o)} className={barIcon}>
+          <BarLabel Icon={TrianglesCenterlineDashedVertical} short="Spegla" menu />
+        </button>
+      </Tip>
+      {open && (
+        <div className="absolute top-full left-0 z-50 mt-1 w-max min-w-40 rounded-lg border border-line bg-panel p-1 shadow-lg">
+          {MIRRORS.map(({ axis, label, Icon }) => (
+            <MenuItem
+              key={axis}
+              Icon={Icon}
+              onClick={() => {
+                close()
+                mirrorSelection(axis)
+              }}
+            >
+              {label}
+            </MenuItem>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+/** Mer för flera valda, bara på telefon: Spegla och Visa, som på bred skärm har egna knappar. */
+function MultiMoreMenu({ id }: { id: string }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+  const close = useCallback(() => setOpen(false), [])
+  useDismiss(ref, open, close)
+  const run = (action: () => void) => () => {
+    close()
+    action()
+  }
+  return (
+    <div ref={ref} className="hidden shrink-0 narrow:block">
+      <button aria-label="Mer" aria-expanded={open} onClick={() => setOpen((o) => !o)} className={barIcon}>
+        <BarLabel Icon={Ellipsis} short="Mer" />
+      </button>
+      {open && (
+        <div className="absolute top-full left-0 z-50 mt-1 w-max max-w-[calc(100vw-24px)] min-w-48 rounded-lg border border-line bg-panel p-1 shadow-lg">
+          {MIRRORS.map(({ axis, label, Icon }) => (
+            <MenuItem key={axis} Icon={Icon} onClick={run(() => mirrorSelection(axis))}>
+              Spegla {label.toLowerCase()}
+            </MenuItem>
+          ))}
+          <div role="separator" className="mx-2 my-1 h-px bg-line" />
+          <MenuItem Icon={ScanEye} onClick={run(() => isolateSelection(id))}>
+            Isolera
+          </MenuItem>
+          <MenuItem Icon={EyeOff} onClick={run(() => hideSelection(id))}>
             Dölj
           </MenuItem>
         </div>
@@ -208,6 +291,12 @@ function MoreMenu({ id, name, onZoom, onCopy }: { id: string; name: string; onZo
             Välj allt som sitter ihop
           </MenuItem>
           <div role="separator" className="mx-2 my-1 h-px bg-line" />
+          {MIRRORS.map(({ axis, label, Icon }) => (
+            <MenuItem key={axis} Icon={Icon} onClick={run(() => mirrorSelection(axis))}>
+              Spegla {label.toLowerCase()}
+            </MenuItem>
+          ))}
+          <div role="separator" className="mx-2 my-1 h-px bg-line" />
           <MenuItem Icon={SquaresSubtract} onClick={run(() => setCombining({ op: 'subtract', host: id }))}>
             Skär ut en del ur <PartName name={name} />
           </MenuItem>
@@ -230,9 +319,9 @@ function MoreMenu({ id, name, onZoom, onCopy }: { id: string; name: string; onZo
 /**
  * Är 3D-vyn för smal för raden och vyknapparna (Visa allt m.fl.) bredvid varandra står raden
  * under dem i stället. Bara på bred skärm: på smal står vyknapparna i en smal kolumn vid kanten.
- * 45rem ≈ raden (360 px) + vyknapparna med VR (325 px) + marginaler. VisibilityBar har samma gräns.
+ * 52rem ≈ raden (470 px) + vyknapparna med VR (325 px) + marginaler. VisibilityBar har samma gräns.
  */
-const BELOW_VIEW_BUTTONS = 'min-[721px]:@max-[45rem]/view:top-[3.75rem]'
+const BELOW_VIEW_BUTTONS = 'min-[721px]:@max-[52rem]/view:top-[3.75rem]'
 
 /**
  * Det man oftast gör med det valda, direkt i 3D-vyn: på mobil slipper man
@@ -309,7 +398,9 @@ export function SelectionBar() {
         />
         <BarButton label="Flytta eller vrid" short="Flytta" Icon={Move} onClick={() => setTool('move')} />
         <BarButton label="Länkade kopior" short="Kopia" Icon={Copy} onClick={duplicateSelection} />
-        <VisibilityMenu id={body.id} always />
+        <MirrorMenu />
+        <VisibilityMenu id={body.id} />
+        <MultiMoreMenu id={body.id} />
         {addButton}
         <BarButton label={`Ta bort ${count} delar`} short="Ta bort" Icon={Trash2} onClick={deleteSelection} danger />
         {deselect}
@@ -342,6 +433,7 @@ export function SelectionBar() {
               />
               <BarButton label="Tapp" Icon={Puzzle} onClick={() => setCombining({ op: 'joint', host: body.id })} />
               <ShapeMenu hostId={body.id} name={body.name} />
+              <MirrorMenu />
               <VisibilityMenu id={body.id} />
             </>
           )}
