@@ -965,6 +965,21 @@ describe('flera valda', () => {
     expect(selectedBodyIds(docs())).not.toContain(loose.id)
   })
 
+  it('kopierar alla längs en pil med en parameter: varje kopia följer den', () => {
+    const id = docs().addParam()!
+    docs().updateParam(id, { name: 'steg', expr: '1500' })
+    twoSelected()
+    tools().setTool('move')
+    setCopy(true)
+    dragX(500)
+    tools().setMeasure(0, 'steg')
+    expect(applyMeasure()).toBe(true)
+    // Den senast valda (b) kopieras först.
+    expect(doc().instances.map((i) => i.pos?.x)).toEqual([undefined, undefined, '700 + steg', 'steg'])
+    docs().updateParam(id, { expr: '2000' })
+    expect(lefts()).toEqual([0, 700, 2700, 2000])
+  })
+
   it('döljer alla valda', () => {
     const [a, b] = twoSelected()
     hideSelection(b.id)
@@ -1027,6 +1042,60 @@ describe('kopia i Flytta-läget', () => {
     expect(extendCopies(5)).toBe(true)
     expect(bodies()).toHaveLength(6)
     expect(extendCopies(3)).toBe(false)
+  })
+
+  /** En parameter, t.ex. steg = 700. */
+  function param(name: string, expr: string) {
+    const id = docs().addParam()!
+    expect(docs().updateParam(id, { name, expr })).toBeNull()
+    return id
+  }
+  const xs = () => bodies().map((x) => x.frame.origin[0])
+  const pos = () => doc().instances.map((i) => i.pos?.x)
+
+  it('ett avstånd med en parameter ger en rad som följer parametern', () => {
+    const steg = param('steg', '700')
+    setup()
+    dragX(500)
+    tools().setMeasure(0, 'steg')
+    expect(applyMeasure()).toBe(true)
+    tools().setMeasure(0, '3')
+    expect(applyMeasure()).toBe(true)
+    expect(xs()).toEqual([0, 700, 1400, 2100])
+    expect(pos()).toEqual([undefined, 'steg', '2 * steg', '3 * steg'])
+    expect(tools().lastCopy?.row).toEqual({ axis: 'x', step: 'steg' })
+    // Parametern ändras: raden följer med, originalet står kvar.
+    docs().updateParam(steg, { expr: '800' })
+    expect(xs()).toEqual([0, 800, 1600, 2400])
+  })
+
+  it('åt andra hållet blir steget negativt', () => {
+    param('steg', '700')
+    setup()
+    dragX(-500)
+    tools().setMeasure(0, 'steg / 2')
+    applyMeasure()
+    expect(xs()).toEqual([0, -350])
+    expect(pos()).toEqual([undefined, '-(steg / 2)'])
+  })
+
+  it('står originalet efter en parameter följer kopiorna den, också med ett draget avstånd', () => {
+    const start = param('start', '100')
+    const b = setup()
+    expect(docs().setPosition(b.id, 'x', 'start')).toBeNull()
+    dragX(700)
+    commit()
+    expect(pos()).toEqual(['start', 'start + 700'])
+    docs().updateParam(start, { expr: '200' })
+    expect(xs()).toEqual([200, 900])
+  })
+
+  it('ett draget avstånd utan uttryck ger kopior utan lägesuttryck, som förut', () => {
+    setup()
+    dragX(700)
+    commit()
+    expect(pos()).toEqual([undefined, undefined])
+    expect(tools().lastCopy?.row).toBeUndefined()
   })
 
   it('vridning med kopia och antal ger kopior i steg runt mitten', () => {

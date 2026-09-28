@@ -63,3 +63,52 @@ export function withoutPos(inst: Instance, axes: readonly WorldAxis[]): Instance
   void _old
   return Object.keys(pos).length ? { ...rest, pos } : rest
 }
+
+/** Uttrycket som en faktor i "k * …": inom parentes om det är en summa eller börjar med minus. */
+function factor(expr: string): string {
+  const e = expr.trim()
+  return isTerm(e) || (!/^[-−]/.test(e) && !topLevelSum(e)) ? e : `(${e})`
+}
+
+/** Har ett + eller − utanför alla parenteser (inte ett minustecken först). */
+function topLevelSum(e: string): boolean {
+  let depth = 0
+  return [...e].some((c, i) => {
+    depth += c === '(' ? 1 : c === ')' ? -1 : 0
+    return depth === 0 && i > 0 && /[+\-−]/.test(c)
+  })
+}
+
+/** Ett namn, ett tal eller något inom en parentes som omsluter allt. */
+function isTerm(expr: string): boolean {
+  const e = expr.trim()
+  if (/^[\p{L}_][\p{L}\d_]*$|^\d+([.,]\d+)?$/u.test(e)) return true
+  if (!e.startsWith('(') || !e.endsWith(')')) return false
+  let depth = 0
+  return [...e].every((c, i) => {
+    depth += c === '(' ? 1 : c === ')' ? -1 : 0
+    return depth > 0 || i === e.length - 1
+  })
+}
+
+/**
+ * Läget för kopia nummer k i en rad längs axis med steget step (ett uttryck): originalets
+ * läge plus k steg. Originalets uttryck följer med, också längs de andra axlarna; saknas
+ * det längs radens axel används talet där originalet står. Så följer raden parametrarna.
+ */
+export function rowPos(
+  source: Instance,
+  def: PartDef,
+  row: { axis: WorldAxis; step: string },
+  k: number,
+): Partial<Record<WorldAxis, string>> {
+  const corner = minCorner(source, def)[INDEX[row.axis]]
+  const base = source.pos?.[row.axis] ?? String(Math.round(corner * 1000) / 1000 + 0)
+  // Minus först dras ut bara när det gäller hela steget: "-(a + b)", men inte "-a + b".
+  const trimmed = row.step.trim()
+  const negative = /^[-−]/.test(trimmed) && isTerm(trimmed.slice(1))
+  const step = negative ? trimmed.slice(1) : trimmed
+  const steps = k === 1 ? (/^[-−]/.test(step) ? `(${step})` : step) : `${k} * ${factor(step)}`
+  const expr = base === '0' ? (negative ? `-${steps}` : steps) : `${base} ${negative ? '-' : '+'} ${steps}`
+  return { ...source.pos, [row.axis]: expr }
+}

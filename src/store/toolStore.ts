@@ -5,7 +5,7 @@ import type { PlaneTargets } from '../model/snapping'
 import type { StockTarget } from '../model/stockSnap'
 import type { Combine, ModelDocument, Shape } from '../model/types'
 import { useDocumentStore, type Selection } from './documentStore'
-import type { Face, Frame, Rect, Vec2, Vec3 } from '../model/types'
+import type { Face, Frame, Rect, Vec2, Vec3, WorldAxis } from '../model/types'
 
 export type Tool = 'select' | 'rect' | 'circle' | 'pushpull' | 'move' | 'measure'
 
@@ -125,6 +125,14 @@ export interface LastCopy {
   count: number
   /** Den senast gjorda kopian. Antalet går bara att ändra så länge den finns och är vald. */
   lastId: string
+  /** Raden följer ett uttryck längs en världsaxel (se rowPos): kopiorna får lägesuttryck. */
+  row?: Row
+}
+
+/** Ett steg längs en världsaxel som ett uttryck, t.ex. "(höjd - 18) / 4". Negativt steg börjar med "-". */
+export interface Row {
+  axis: WorldAxis
+  step: string
 }
 
 /**

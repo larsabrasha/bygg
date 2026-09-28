@@ -113,7 +113,12 @@ interface DocumentState extends Snapshot {
    * En länkad kopia av var och en av delarna, med frame ändrad av transform, i ett steg.
    * Kopiorna blir valda. Returnerar deras id:n, i samma ordning.
    */
-  copyInstances: (ids: readonly string[], transform: (frame: Frame) => Frame) => string[]
+  copyInstances: (
+    ids: readonly string[],
+    transform: (frame: Frame) => Frame,
+    /** Lägesuttryck för kopian av en del (en rad som följer en parameter, se rowPos). */
+    posOf?: (source: Instance, def: PartDef) => Instance['pos'],
+  ) => string[]
   /** Länkade kopior av alla valda delar, bredvid dem (längs x), som duplicateLinked för en. */
   duplicateSelection: () => void
   /**
@@ -123,10 +128,11 @@ interface DocumentState extends Snapshot {
   setAngle: (instanceId: string, axis: WorldAxis, text: string) => string | null
   /**
    * Länkade kopior av en kopia, en per frame, i ett steg. Den sista blir vald.
-   * Kopiorna får inga lägesuttryck (de skulle dra dem tillbaka till originalet).
+   * Kopiorna får inte originalets lägesuttryck (de skulle dra dem tillbaka till det), bara de i pos
+   * (en rad, se rowPos).
    * Returnerar de nya id:na.
    */
-  addCopies: (sourceId: string, frames: readonly Frame[]) => string[]
+  addCopies: (sourceId: string, frames: readonly Frame[], pos?: readonly Instance['pos'][]) => string[]
   /** Ny kopia som delar form med originalet. Returnerar den nya kopians id. */
   duplicateLinked: (instanceId: string) => string | null
   /** Ger kopian en egen form, så att den inte längre ändras med de andra. */
@@ -486,12 +492,17 @@ export const useDocumentStore = create<DocumentState>()((set, get) => {
       commit({ ...doc, instances })
     },
 
-    copyInstances: (ids, transform) => {
+    copyInstances: (ids, transform, posOf) => {
       const { doc } = get()
-      const copies = ids.flatMap((id) => {
+      const copies = ids.flatMap((id): Instance[] => {
         const inst = doc.instances.find((i) => i.id === id)
+        const def = inst && doc.defs.find((d) => d.id === inst.defId)
+        if (!inst || !def) return []
+        const pos = posOf?.(inst, def)
         // Kopiorna räknar sina vinklar från samma viloläge som originalen.
-        return inst ? [{ id: newId(), defId: inst.defId, frame: transform(inst.frame), rest: restOf(inst) }] : []
+        return [
+          { id: newId(), defId: inst.defId, frame: transform(inst.frame), rest: restOf(inst), ...(pos && { pos }) },
+        ]
       })
       const last = copies.at(-1)
       if (!last) return []
@@ -536,12 +547,15 @@ export const useDocumentStore = create<DocumentState>()((set, get) => {
       return reorient(inst, def, withAngles(inst.frame, rest, bodyCenter(body), angles)) ? null : LIMIT_REFUSED
     },
 
-    addCopies: (sourceId, frames) => {
+    addCopies: (sourceId, frames, pos) => {
       const found = findInstance(sourceId)
       if (!found || frames.length === 0) return []
       // Kopiorna räknar sina vinklar från samma viloläge som originalet.
       const rest = restOf(found.inst)
-      const copies = frames.map((frame) => ({ id: newId(), defId: found.def.id, frame, rest }))
+      const copies = frames.map((frame, k): Instance => {
+        const p = pos?.[k]
+        return { id: newId(), defId: found.def.id, frame, rest, ...(p && { pos: p }) }
+      })
       const { doc } = get()
       const ok = commit({ ...doc, instances: [...doc.instances, ...copies] }, { kind: 'body', id: copies.at(-1)!.id })
       return ok ? copies.map((c) => c.id) : []

@@ -46,7 +46,9 @@ export function measureModel() {
   // Samma text och samma knappar på samma plats, så att rutan inte hoppar när läget byts.
   const pushpullBox = ready !== null || shown?.kind === 'pushpull'
   const hint = extending
-    ? 'Kopian är gjord. Skriv antal för fler med samma avstånd.'
+    ? extending.row
+      ? 'Kopian är gjord och följer parametrarna. Skriv antal för fler med samma avstånd.'
+      : 'Kopian är gjord. Skriv antal för fler med samma avstånd.'
     : pushpullBox
       ? 'Dra i pilen, eller skriv måttet.'
       : amend
@@ -70,7 +72,9 @@ export function measureModel() {
                 pushpull: 'Dra längs pilen, eller skriv avståndet.',
                 move:
                   op.kind === 'move' && op.axis !== null
-                    ? 'Dra längs pilen, eller skriv avståndet.'
+                    ? copy
+                      ? 'Dra längs pilen, eller skriv avståndet. Med en parameter, t.ex. höjd / 4, följer raden den.'
+                      : 'Dra längs pilen, eller skriv avståndet.'
                     : 'Dra dit delen ska, eller skriv avståndet.',
                 rotate: 'Dra runt bågen (steg om 15°), eller skriv vinkeln.',
               }[op.kind]

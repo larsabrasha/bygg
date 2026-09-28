@@ -12,6 +12,7 @@ import {
 } from '../model/geometry'
 import { evaluateIn } from '../model/params'
 import { extent, widthAxis } from '../model/partAxes'
+import { rowPos, WORLD_AXES } from '../model/placement'
 import { rulerPointOn, type RulerPoint } from '../model/ruler'
 import { resolveBodies } from '../model/resolve'
 import {
@@ -56,6 +57,7 @@ import {
   type PushPullTarget,
   type RectOp,
   type RotateOp,
+  type Row,
   type HandleHover,
   type Tool,
 } from '../store/toolStore'
@@ -758,7 +760,10 @@ export function moveDeltaWorld(op: Extract<Op, { kind: 'move' }>): Vec3 {
 }
 
 /** Avslutar operationen med nuvarande förhandsvisning. */
-export function commit(op: Op | null = tools().op, exprs: { dims?: DimExprs; depth?: string; dim?: DimExpr } = {}) {
+export function commit(
+  op: Op | null = tools().op,
+  exprs: { dims?: DimExprs; depth?: string; dim?: DimExpr; step?: string } = {},
+) {
   if (!op) return
   const d = docs()
   const before = d.doc
@@ -767,9 +772,17 @@ export function commit(op: Op | null = tools().op, exprs: { dims?: DimExprs; dep
     // Man stannar i Flytta, så att man kan flytta längs en axel till. Klar eller Esc går till Välj.
     const step = stepOf(op)
     const ids = [op.instanceId, ...(op.others ?? [])]
+    // En kopia längs en pil med ett uttryck (eller från ett original vars läge är ett uttryck):
+    // kopiorna får lägesuttryck och följer parametrarna (se rowPos).
+    const row = op.kind === 'move' ? rowOf(op, exprs.step) : undefined
     // Flera valda: alla flyttas, vrids eller kopieras i ett steg.
     if (step && op.others?.length) {
-      if (tools().copy) d.copyInstances(ids, (f) => applyStep(f, step, 1))
+      if (tools().copy)
+        d.copyInstances(
+          ids,
+          (f) => applyStep(f, step, 1),
+          (inst, def) => (row && (exprs.step || inst.pos?.[row.axis]) ? rowPos(inst, def, row, 1) : undefined),
+        )
       else if (step.kind === 'move') d.moveInstances(ids, step.delta)
       else d.rotateInstances(ids, step.center, step.axis, step.degrees)
       tools().setOp(null)
@@ -777,9 +790,15 @@ export function commit(op: Op | null = tools().op, exprs: { dims?: DimExprs; dep
     }
     const source = step && tools().copy ? d.doc.instances.find((i) => i.id === op.instanceId) : undefined
     if (step && source) {
-      const [id] = d.addCopies(source.id, [applyStep(source.frame, step, 1)])
+      const def = d.doc.defs.find((x) => x.id === source.defId)
+      const follows = row && def && (exprs.step || source.pos?.[row.axis]) ? row : undefined
+      const [id] = d.addCopies(
+        source.id,
+        [applyStep(source.frame, step, 1)],
+        [follows && def ? rowPos(source, def, follows, 1) : undefined],
+      )
       tools().setOp(null)
-      if (id) tools().setLastCopy({ sourceId: source.id, step, count: 1, lastId: id })
+      if (id) tools().setLastCopy({ sourceId: source.id, step, count: 1, lastId: id, ...(follows && { row: follows }) })
       return
     }
     if (step?.kind === 'move') d.moveInstance(op.instanceId, step.delta)
@@ -861,6 +880,16 @@ export function stepOf(op: MoveOp | RotateOp): CopyStep | null {
   return op.delta[0] === 0 && op.delta[1] === 0 ? null : { kind: 'move', delta: moveDeltaWorld(op) }
 }
 
+/**
+ * Raden en kopia längs en pil blir: steget längs världsaxeln, som det skrivna uttrycket
+ * eller (dragen) som talet. Undefined vid fri flytt, där steget inte ligger längs en axel.
+ */
+function rowOf(op: MoveOp, typed?: string): Row | undefined {
+  if (op.axis === null || op.delta[0] === 0) return undefined
+  const step = typed ?? String(Math.round(op.delta[0] * 1000) / 1000)
+  return { axis: WORLD_AXES[op.axis]!, step }
+}
+
 /** Framen efter times steg. */
 export function applyStep(f: Frame, step: CopyStep, times: number): Frame {
   return step.kind === 'move'
@@ -887,10 +916,15 @@ export function extendCopies(total: number): boolean {
   if (!last || !(n > last.count) || n > MAX_COPIES) return false
   const source = docs().doc.instances.find((i) => i.id === last.sourceId)
   if (!source) return false
-  const frames = Array.from({ length: n - last.count }, (_, i) =>
-    applyStep(source.frame, last.step, last.count + 1 + i),
+  const ks = Array.from({ length: n - last.count }, (_, i) => last.count + 1 + i)
+  const frames = ks.map((k) => applyStep(source.frame, last.step, k))
+  const def = docs().doc.defs.find((d) => d.id === source.defId)
+  const row = last.row
+  const ids = docs().addCopies(
+    source.id,
+    frames,
+    ks.map((k) => (row && def ? rowPos(source, def, row, k) : undefined)),
   )
-  const ids = docs().addCopies(source.id, frames)
   // Stoppad av gränserna (se model/limits); skälet visas redan.
   if (ids.length === 0) return false
   tools().setLastCopy({ ...last, count: n, lastId: ids.at(-1)! })
@@ -1063,7 +1097,11 @@ function applyMeasureNow(): boolean {
   }
 
   if (op.kind === 'move' && op.axis !== null) {
-    commit({ ...op, delta: [signed(measure[0], value, Math.sign(op.delta[0])), 0] })
+    const delta = signed(measure[0], value, Math.sign(op.delta[0]))
+    // Ett uttryck blir steget i en rad kopior, med tecknet som förhandsvisningen gav.
+    const e = exprOf(measure[0])
+    const step = e && (/^[-−]/.test(e) || delta >= 0 ? e : `-(${e})`)
+    commit({ ...op, delta: [delta, 0] }, step ? { step } : {})
     return true
   }
 
