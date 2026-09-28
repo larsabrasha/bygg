@@ -21,6 +21,7 @@ import {
   opFocus,
   regrab,
   repeatLastPushPull,
+  selectConnected,
   tap,
   type Hit,
   type Ray,
@@ -104,6 +105,11 @@ export function ToolController() {
     let startTap: TapPoint | null = null
     /** Förra trycket utan pågående operation, för dubbeltryck (se doubleTap). */
     let lastTap: TapPoint | null = null
+    /**
+     * De senaste två trycken (vad de än gjorde). Ett tredje tätt efter på samma ställe väljer allt som
+     * sitter ihop, också när det andra träffade pilen på sidan och började dra ut den.
+     */
+    let recentTaps: TapPoint[] = []
     /**
      * Operationen som den såg ut när den började. Följer den musen (klicka,
      * flytta, klicka) och musen lämnar vyn, t.ex. för att skriva i måttrutan,
@@ -310,6 +316,21 @@ export function ToolController() {
         op = null
       }
       const hit = pick(e.clientX, e.clientY, kind)
+      // Trippeltryck på en del: allt som sitter ihop med den. De två första har valt delen och kanske
+      // gått till Flytta eller börjat dra ut pilen; det avbryts, och selectConnected går till Välj.
+      const [first, second] = recentTaps
+      const slop = TAP_SLOP[kind]
+      const triple = !!first && !!second && isDoubleTap(first, second, slop) && isDoubleTap(second, here, slop)
+      const sel0 = useDocumentStore.getState().selection
+      const tripleId = hit?.target.kind === 'body' ? hit.target.id : sel0?.kind === 'body' && hit ? sel0.id : null
+      if (triple && tripleId && !fingerOnly) {
+        recentTaps = []
+        if (op) cancel()
+        waiting = false
+        if (controls) applyCameraButtons(controls, cameraButtons(tool, 'tool'))
+        selectConnected(tripleId)
+        return
+      }
       const sel = useDocumentStore.getState().selection
       const onSelected = hit?.target.kind === 'body' && sel?.kind === 'body' && sel.id === hit.target.id
       // En pil som pekar rakt mot kameran går inte att dra i: ett drag där vrider vyn, så att den syns
@@ -467,6 +488,7 @@ export function ToolController() {
       const isTap = moved <= press.slop && !(wasMulti && press.kind !== 'pen')
       const p = press
       press = null
+      recentTaps = isTap ? [...recentTaps.slice(-1), { x: e.clientX, y: e.clientY, time: e.timeStamp }] : []
 
       if (p.lasso) {
         const path = useToolStore.getState().lasso

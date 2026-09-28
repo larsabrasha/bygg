@@ -1,5 +1,6 @@
 import {
   ArrowUpFromLine,
+  Boxes,
   ChevronDown,
   Copy,
   Ellipsis,
@@ -22,7 +23,7 @@ import { resolveBodies } from '../model/resolve'
 import { useDocumentStore } from '../store/documentStore'
 import { useToolStore } from '../store/toolStore'
 import { useViewStore } from '../store/viewStore'
-import { beginPushPull, hideSelection, isolateSelection } from '../tools/actions'
+import { beginPushPull, hideSelection, isolateSelection, selectConnected } from '../tools/actions'
 import { MenuItem } from './MenuItem'
 import { Tip } from './Tip'
 import { useDismiss } from './useDismiss'
@@ -202,6 +203,9 @@ function MoreMenu({ id, name, onZoom, onCopy }: { id: string; name: string; onZo
           </MenuItem>
           <MenuItem Icon={Copy} onClick={run(onCopy)}>
             Länkad kopia
+          </MenuItem>
+          <MenuItem Icon={Boxes} onClick={run(() => selectConnected(id))}>
+            Välj allt som sitter ihop
           </MenuItem>
           <div role="separator" className="mx-2 my-1 h-px bg-line" />
           <MenuItem Icon={SquaresSubtract} onClick={run(() => setCombining({ op: 'subtract', host: id }))}>

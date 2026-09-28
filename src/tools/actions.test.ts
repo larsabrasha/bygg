@@ -21,6 +21,7 @@ import {
   handleOf,
   hideSelection,
   hoverAt,
+  selectConnected,
   liveMeasure,
   move,
   moveDeltaWorld,
@@ -945,6 +946,23 @@ describe('flera valda', () => {
     expect(chosen).toHaveLength(2)
     expect(chosen).not.toContain(a.id)
     expect(chosen).not.toContain(b.id)
+  })
+
+  it('väljer allt som sitter ihop, och går till Välj', () => {
+    // En skiva på två ben, och en lös del bredvid på golvet.
+    const leg1 = extrude(drawGroundRect(0, 0, 40, -40), '400')
+    const leg2 = extrude(drawGroundRect(560, 0, 600, -40), '400')
+    const loose = extrude(drawGroundRect(1000, 0, 1400, -400), '22')
+    tools().setTool('rect')
+    tap({ point: [0, 400, 0], target: { kind: 'body', id: leg1.id, face: 'n+' } }, 0)
+    move(down(600, -40), 0)
+    commit()
+    const top = extrude(doc().sketches.at(-1)!.id, '22')
+    tools().setTool('move')
+    selectConnected(leg1.id)
+    expect(tools().tool).toBe('select')
+    expect(selectedBodyIds(docs()).sort()).toEqual([leg1.id, leg2.id, top.id].sort())
+    expect(selectedBodyIds(docs())).not.toContain(loose.id)
   })
 
   it('döljer alla valda', () => {

@@ -15,9 +15,12 @@ const KEYS: [string, string][] = [
   ['M', 'Flytta'],
   ['T', 'Mät'],
   ['⌘Z', 'Ångra'],
+  ['⇧', 'Klicka eller dra runt: välj fler'],
+  ['3×', 'Klick: allt som sitter ihop'],
 ]
 const GESTURES: [string, string][] = [
   ['Dubbeltryck på en del', 'Flytta och vrid'],
+  ['Tre tryck på en del', 'Allt som sitter ihop'],
   ['Tryck med två fingrar', 'Ångra'],
   ['Tryck med tre fingrar', 'Gör om'],
 ]

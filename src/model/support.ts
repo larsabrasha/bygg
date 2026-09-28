@@ -14,7 +14,7 @@ const UP: Vec3 = [0, 1, 0]
 const PARALLEL = 0.999
 
 /** Om sidan face på moving vilar mot någon sida av other: motsatta normaler, samma plan (inom CONTACT_TOLERANCE), överlapp. */
-function contact(moving: Body, face: Face, other: Body): boolean {
+export function contact(moving: Body, face: Face, other: Body): boolean {
   const a = faceFrame(moving, face)
   const bounds = faceBounds(moving, face)
   return FACES.some((g) => {

@@ -26,6 +26,7 @@ import {
 } from '../model/snapping'
 import { snapStock, thicknessTargets, type StockTarget } from '../model/stockSnap'
 import { supportPlane } from '../model/support'
+import { connectedParts } from '../model/connected'
 import {
   DEFAULT_MATERIAL,
   FACES,
@@ -42,7 +43,7 @@ import { arrowDir, isHeadOn } from '../model/arrowDir'
 import { add, closestParamOnLine, cross, dot, length, scale, sub } from '../model/vec'
 import { selectedBodyIds, useDocumentStore, type Selection } from '../store/documentStore'
 import { useLibraryStore } from '../store/libraryStore'
-import { useViewStore } from '../store/viewStore'
+import { isShown, useViewStore } from '../store/viewStore'
 import {
   useToolStore,
   type Axis,
@@ -379,6 +380,19 @@ export function doubleTap(hit: Hit | null): boolean {
   docs().select({ kind: 'body', id: target.id, face: target.face })
   tools().setTool('move')
   return true
+}
+
+/**
+ * Väljer allt som sitter ihop med delen (trippelklick, som i SketchUp): en hel stol när man klickar
+ * på ett ben. Bara det som syns. Man hamnar i Välj, också efter dubbelklickets Flytta.
+ */
+export function selectConnected(id: string) {
+  const view = useViewStore.getState()
+  const shown = bodies().filter((b) => isShown(view, b.id, b.tool?.host))
+  const ids = connectedParts(shown, id)
+  if (ids.length === 0) return
+  if (tools().tool !== 'select') tools().setTool('select')
+  docs().selectBodies(ids)
 }
 
 /** Rektangeln en pågående rektangel eller cirkel ritar; för en cirkel kvadraten den ligger inskriven i. */

@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { ArrowUpFromLine, Copy, RotateCw, Trash2, Unlink } from 'lucide-react'
+import { ArrowUpFromLine, Boxes, Copy, RotateCw, Trash2, Unlink } from 'lucide-react'
 import { rectSize } from '../model/geometry'
 import { AXES, extent, widthAxis } from '../model/partAxes'
 import { anglesOf, restOf } from '../model/orientation'
@@ -12,7 +12,7 @@ import { AXIS_COLORS } from '../scene/colors'
 import { useCatalogStore } from '../store/catalogStore'
 import { useDocumentStore } from '../store/documentStore'
 import { useLibraryStore } from '../store/libraryStore'
-import { beginPushPull } from '../tools/actions'
+import { beginPushPull, selectConnected } from '../tools/actions'
 import { HostTools, ToolCard } from './CombineGroup'
 import { CommitField } from './CommitField'
 import { Group } from './Group'
@@ -350,6 +350,14 @@ export function Properties() {
               <>
                 <MaterialField value={def.material} onChange={(material) => updatePart(body.id, { material })} />
                 <PaintField instanceId={body.id} def={def} />
+                {/* Samma som ett trippelklick på delen. */}
+                <button
+                  className="-mx-1 flex cursor-pointer items-center gap-1.5 self-start rounded-md px-1 py-0.5 text-[13px] text-accent hover:bg-hover"
+                  onClick={() => selectConnected(body.id)}
+                >
+                  <Boxes {...ICON_SM} />
+                  Välj allt som sitter ihop
+                </button>
               </>
             )}
           </Group>
