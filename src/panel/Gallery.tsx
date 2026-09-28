@@ -11,6 +11,7 @@ import {
   Pencil,
   Plus,
   Presentation,
+  Search,
   Settings,
   Trash2,
   X,
@@ -33,6 +34,7 @@ import {
   showTrash,
 } from '../sync/session'
 import { MenuItem } from './MenuItem'
+import { matchesSearch, SEARCH_FROM } from './modelSearch'
 import { splitConflict } from './modelName'
 import { Notices } from './Notices'
 import { Logo } from './Logo'
@@ -353,6 +355,39 @@ function ImportButton() {
   )
 }
 
+/** Sök bland modellerna på namnet. Esc tömmer fältet; krysset också. */
+function SearchField({ query, onChange }: { query: string; onChange: (q: string) => void }) {
+  return (
+    <div className="relative mb-4 w-full max-w-sm">
+      <Search
+        size={16}
+        strokeWidth={1.75}
+        aria-hidden
+        className="pointer-events-none absolute top-1/2 left-2.5 -translate-y-1/2 text-muted"
+      />
+      <input
+        type="search"
+        aria-label="Sök bland modellerna"
+        placeholder="Sök"
+        value={query}
+        onChange={(e) => onChange(e.target.value)}
+        onKeyDown={(e) => e.key === 'Escape' && onChange('')}
+        className={`${field} pr-9 pl-8 [&::-webkit-search-cancel-button]:hidden`}
+      />
+      {query && (
+        <button
+          type="button"
+          aria-label="Töm sökningen"
+          onClick={() => onChange('')}
+          className="absolute top-1/2 right-1 grid size-8 -translate-y-1/2 cursor-pointer place-items-center rounded-md text-muted hover:bg-hover hover:text-ink"
+        >
+          <X size={16} aria-hidden />
+        </button>
+      )}
+    </div>
+  )
+}
+
 /**
  * Startvyn: alla modeller som bilder, senast ändrade först, som i Shapr3D
  * eller Pages. Ligger ovanpå 3D-vyn, som hålls kvar i bakgrunden så att det
@@ -368,7 +403,10 @@ function Models() {
   const thumbs = useLibraryStore((s) => s.thumbs)
   const currentId = useLibraryStore((s) => s.currentId)
   const pending = useLibraryStore((s) => s.pendingDelete)
-  const visible = models.filter((m) => !pending.includes(m.id))
+  const [query, setQuery] = useState('')
+  const listed = models.filter((m) => !pending.includes(m.id))
+  const searchable = listed.length >= SEARCH_FROM
+  const visible = searchable ? listed.filter((m) => matchesSearch(m.name, query)) : listed
 
   return (
     <div className="fixed inset-0 z-40 flex flex-col bg-canvas print:hidden">
@@ -405,6 +443,10 @@ function Models() {
       <main className="relative flex min-h-0 flex-1 flex-col overflow-y-auto p-4 pb-[max(16px,env(safe-area-inset-bottom))]">
         <Notices />
         <GuestIntro />
+        {searchable && <SearchField query={query} onChange={setQuery} />}
+        {visible.length === 0 && query.trim() !== '' && (
+          <p className="py-8 text-center text-[13px] text-muted">Ingen modell heter något med ”{query.trim()}”.</p>
+        )}
         <ul className="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-x-4 gap-y-5 narrow:grid-cols-2 narrow:gap-x-3">
           {visible.map((m) => (
             <ModelTile key={m.id} model={m} thumb={thumbs[m.id]} isCurrent={m.id === currentId} />
