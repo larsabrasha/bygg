@@ -462,13 +462,15 @@ export function ToolController() {
           return
         }
         // Dubbeltryck på en del: Flytta/vrid. Första trycket har redan valt den.
-        if (isDoubleTap(lastTap, here, p.slop) && doubleTap(hit)) {
+        const adding = e.shiftKey || e.metaKey || e.ctrlKey
+        if (!adding && isDoubleTap(lastTap, here, p.slop) && doubleTap(hit)) {
           lastTap = null
           return
         }
         lastTap = here
         const before = useToolStore.getState().op
-        tap(hit, hit ? tolFor(hit.point, kind) : 0)
+        // Skift-, ⌘- eller Ctrl-klick lägger till i valet eller tar bort ur det, som i Finder och SketchUp.
+        tap(hit, hit ? tolFor(hit.point, kind) : 0, adding)
         // Trycket startade något (första hörnet på en rektangel med mus): samma regel som i onDown,
         // inte som en operation från utanför vyn.
         const started = useToolStore.getState().op

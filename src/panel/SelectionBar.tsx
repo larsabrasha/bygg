@@ -7,7 +7,9 @@ import {
   EyeOff,
   ScanEye,
   Focus,
+  Move,
   Puzzle,
+  SquareDashedMousePointer,
   SquaresSubtract,
   SquaresUnite,
   Trash2,
@@ -36,7 +38,7 @@ const ICON = { size: 18, strokeWidth: 1.75, 'aria-hidden': true } as const
  * Hela namnet står i tipset och i aria-label.
  */
 const barIcon =
-  'flex h-12 min-w-12 shrink-0 cursor-pointer flex-col items-center justify-center gap-1 rounded-lg px-1.5 hover:bg-hover aria-expanded:bg-accent-soft aria-expanded:text-accent narrow:h-11'
+  'flex h-12 min-w-12 shrink-0 cursor-pointer flex-col items-center justify-center gap-1 rounded-lg px-1.5 hover:bg-hover aria-expanded:bg-accent-soft aria-expanded:text-accent aria-pressed:bg-accent-soft aria-pressed:text-accent narrow:h-11'
 
 /** Knappar som på telefon ligger under Mer i stället. */
 const wideOnly = 'narrow:hidden'
@@ -65,6 +67,7 @@ function BarButton({
   Icon,
   onClick,
   danger = false,
+  pressed,
   className = '',
 }: {
   label: string
@@ -73,11 +76,18 @@ function BarButton({
   Icon: LucideIcon
   onClick: () => void
   danger?: boolean
+  /** Knappen slår av och på ett läge (Välj fler). */
+  pressed?: boolean
   className?: string
 }) {
   return (
     <Tip label={label}>
-      <button aria-label={label} onClick={onClick} className={`${barIcon} ${danger ? 'text-danger' : ''} ${className}`}>
+      <button
+        aria-label={label}
+        aria-pressed={pressed}
+        onClick={onClick}
+        className={`${barIcon} ${danger ? 'text-danger' : ''} ${className}`}
+      >
         <BarLabel Icon={Icon} short={short} />
       </button>
     </Tip>
@@ -127,13 +137,13 @@ function ShapeMenu({ hostId, name }: { hostId: string; name: string }) {
  * Isolerat syns de andra genomskinliga och går inte att trycka på. I en meny, så att raden får plats på en telefon.
  * VisibilityBar visar att något är dolt och tar fram allt igen.
  */
-function VisibilityMenu({ id }: { id: string }) {
+function VisibilityMenu({ id, always = false }: { id: string; always?: boolean }) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
   const close = useCallback(() => setOpen(false), [])
   useDismiss(ref, open, close)
   return (
-    <div ref={ref} className={`relative shrink-0 ${wideOnly}`}>
+    <div ref={ref} className={`relative shrink-0 ${always ? '' : wideOnly}`}>
       <Tip label="Visa">
         <button aria-label="Visa" aria-expanded={open} onClick={() => setOpen((o) => !o)} className={barIcon}>
           <BarLabel Icon={Eye} short="Visa" menu />
@@ -236,6 +246,11 @@ export function SelectionBar() {
   const combining = useToolStore((s) => s.combining)
   const setCombining = useToolStore((s) => s.setCombining)
   const detach = useDocumentStore((s) => s.detach)
+  const also = useDocumentStore((s) => s.also)
+  const duplicateSelection = useDocumentStore((s) => s.duplicateSelection)
+  const adding = useToolStore((s) => s.adding)
+  const setAdding = useToolStore((s) => s.setAdding)
+  const setTool = useToolStore((s) => s.setTool)
 
   const cover = useCoversView<HTMLDivElement>()
 
@@ -243,14 +258,62 @@ export function SelectionBar() {
   if (!selection || opActive || combining) return null
   const body = selection.kind === 'body' ? resolveBodies(doc).find((b) => b.id === selection.id) : undefined
   if (selection.kind === 'body' && !body) return null
+  const count = body ? 1 + also.length : 0
+  // Välj fler: på pekskärm, där det inte finns Skift. Knappen visar hur många som är valda.
+  const addButton = body && !body.tool && (
+    <BarButton
+      label={adding ? 'Klar med att välja' : 'Välj fler'}
+      short={count > 1 ? `${count} valda` : 'Fler'}
+      Icon={SquareDashedMousePointer}
+      pressed={adding}
+      onClick={() => setAdding(!adding)}
+    />
+  )
+  const deselect = (
+    <>
+      {/*
+        Avmarkera gör inget med delen, så den står för sig: bara ett kryss, som på en etikett.
+        På smal skärm visas namnet vid delen i vyn, och ett tryck bredvid avmarkerar, så de två tas bort.
+      */}
+      <span aria-hidden className="mx-0.5 h-6 w-px bg-line narrow:hidden" />
+      <Tip label="Avmarkera">
+        <button
+          aria-label="Avmarkera"
+          onClick={() => {
+            setAdding(false)
+            select(null)
+          }}
+          className="grid size-9 shrink-0 cursor-pointer place-items-center rounded-full text-muted hover:bg-hover hover:text-ink narrow:hidden"
+        >
+          <X size={16} strokeWidth={2} aria-hidden />
+        </button>
+      </Tip>
+    </>
+  )
+  const barClass = `absolute top-3 left-3 flex max-w-[calc(100%-24px)] items-center gap-0.5 rounded-lg border border-line bg-panel/95 p-0.5 shadow-md narrow:max-w-[calc(100%-80px)] ${BELOW_VIEW_BUTTONS}`
+
+  // Flera valda: det som går att göra med alla på en gång. Tapp och Forma gäller en del och finns inte här.
+  if (body && count > 1)
+    return (
+      <div ref={cover} role="toolbar" aria-label={`${count} valda delar`} className={barClass}>
+        <BarButton
+          label="Zooma till"
+          short="Zooma"
+          Icon={Focus}
+          onClick={() => requestFit('selection')}
+          className={wideOnly}
+        />
+        <BarButton label="Flytta eller vrid" short="Flytta" Icon={Move} onClick={() => setTool('move')} />
+        <BarButton label="Länkade kopior" short="Kopia" Icon={Copy} onClick={duplicateSelection} />
+        <VisibilityMenu id={body.id} always />
+        {addButton}
+        <BarButton label={`Ta bort ${count} delar`} short="Ta bort" Icon={Trash2} onClick={deleteSelection} danger />
+        {deselect}
+      </div>
+    )
 
   return (
-    <div
-      ref={cover}
-      role="toolbar"
-      aria-label="Det valda"
-      className={`absolute top-3 left-3 flex max-w-[calc(100%-24px)] items-center gap-0.5 rounded-lg border border-line bg-panel/95 p-0.5 shadow-md narrow:max-w-[calc(100%-80px)] ${BELOW_VIEW_BUTTONS}`}
-    >
+    <div ref={cover} role="toolbar" aria-label="Det valda" className={barClass}>
       {body ? (
         <>
           {/* Ett verktyg har få knappar; de ryms också på telefon. */}
@@ -286,6 +349,7 @@ export function SelectionBar() {
           onClick={() => beginPushPull({ kind: 'sketch', id: selection.id })}
         />
       )}
+      {addButton}
       <BarButton label="Ta bort" Icon={Trash2} onClick={deleteSelection} danger />
       {body && !body.tool && (
         <MoreMenu
@@ -295,20 +359,7 @@ export function SelectionBar() {
           onCopy={() => duplicateLinked(body.id)}
         />
       )}
-      {/*
-        Avmarkera gör inget med delen, så den står för sig: bara ett kryss, som på en etikett.
-        På smal skärm visas namnet vid delen i vyn, och ett tryck bredvid avmarkerar, så de två tas bort.
-      */}
-      <span aria-hidden className="mx-0.5 h-6 w-px bg-line narrow:hidden" />
-      <Tip label="Avmarkera">
-        <button
-          aria-label="Avmarkera"
-          onClick={() => select(null)}
-          className="grid size-9 shrink-0 cursor-pointer place-items-center rounded-full text-muted hover:bg-hover hover:text-ink narrow:hidden"
-        >
-          <X size={16} strokeWidth={2} aria-hidden />
-        </button>
-      </Tip>
+      {deselect}
     </div>
   )
 }

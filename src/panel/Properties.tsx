@@ -197,6 +197,115 @@ function GrainControls({ body, def }: { body: Body; def: PartDef }) {
 
 const ICON_SM = { size: 16, strokeWidth: 1.75, 'aria-hidden': true } as const
 
+/** Materialväljaren, med materialen grupperade som i Inställningar. Sista raden öppnar materiallistan. */
+function MaterialField({ value, onChange }: { value: string; onChange: (material: string) => void }) {
+  const catalog = useCatalogStore((s) => s.catalog)
+  const choices = useMemo(() => pickerMaterials(catalog), [catalog])
+  return (
+    <label className={fieldLabel}>
+      Material
+      <select
+        className={field}
+        value={value}
+        onChange={(e) => {
+          if (e.target.value === EDIT_MATERIALS) useLibraryStore.getState().set({ settings: 'materials' })
+          else if (e.target.value !== MIXED) onChange(e.target.value)
+        }}
+      >
+        {/* Flera valda delar med olika material. */}
+        {value === MIXED && <option value={MIXED}>Olika material</option>}
+        {MATERIAL_GROUPS.map((g) => {
+          const list = choices.filter((m) => m.kind === g.kind)
+          return (
+            list.length > 0 && (
+              <optgroup key={g.kind} label={g.title}>
+                {list.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {firstUpper(m.name)}
+                  </option>
+                ))}
+              </optgroup>
+            )
+          )
+        })}
+        {/* Ett dolt, borttaget eller okänt material står kvar för den del som har det. */}
+        {value !== MIXED && !choices.some((m) => m.id === value) && (
+          <option value={value}>{materialTitle(value)}</option>
+        )}
+        <option value={EDIT_MATERIALS}>Redigera materiallistan…</option>
+      </select>
+    </label>
+  )
+}
+
+/** Värdet i materialväljaren när de valda delarna har olika material. */
+const MIXED = '\u0000olika'
+
+/**
+ * Flera valda delar: det som går att ändra på alla på en gång. Namnen står som en lista; ett tryck
+ * på ett namn väljer bara den delen.
+ */
+function MultiProperties({ ids }: { ids: readonly string[] }) {
+  const doc = useDocumentStore((s) => s.doc)
+  const updateParts = useDocumentStore((s) => s.updateParts)
+  const duplicateSelection = useDocumentStore((s) => s.duplicateSelection)
+  const deleteSelection = useDocumentStore((s) => s.deleteSelection)
+  const select = useDocumentStore((s) => s.select)
+  const all = resolveBodies(doc)
+  const chosen = ids.flatMap((id) => all.filter((b) => b.id === id))
+  const first = chosen[0]
+  const def = first && doc.defs.find((d) => d.id === first.defId)
+  if (!first || !def) return null
+  const parts = chosen.filter((b) => !b.tool)
+  const materials = new Set(parts.map((b) => b.material))
+  return (
+    <div className="flex flex-col gap-4">
+      <Group title={`${chosen.length} delar valda`}>
+        <ul className="flex flex-wrap gap-1.5">
+          {chosen.map((b) => (
+            <li key={b.id}>
+              <button
+                className="h-8 cursor-pointer rounded-md bg-button px-2.5 text-[13px] hover:bg-hover"
+                onClick={() => select({ kind: 'body', id: b.id })}
+              >
+                {b.name}
+              </button>
+            </li>
+          ))}
+        </ul>
+        {parts.length > 0 && (
+          <>
+            <MaterialField
+              value={materials.size === 1 ? [...materials][0]! : MIXED}
+              onChange={(material) =>
+                updateParts(
+                  parts.map((b) => b.id),
+                  { material },
+                )
+              }
+            />
+            <PaintField instanceId={first.id} def={def} ids={parts.map((b) => b.id)} />
+          </>
+        )}
+        <p className="text-xs text-faint">
+          Skift-klicka, eller tryck på Välj fler, för att lägga till eller ta bort delar. Mått ändrar du på en del i
+          taget.
+        </p>
+      </Group>
+      <div className="grid grid-cols-2 gap-2">
+        <button className={secondaryButton} onClick={duplicateSelection}>
+          <Copy {...ICON_SM} />
+          Länkade kopior
+        </button>
+        <button className={dangerButton} onClick={deleteSelection}>
+          <Trash2 {...ICON_SM} />
+          Ta bort alla
+        </button>
+      </div>
+    </div>
+  )
+}
+
 export function Properties() {
   const selection = useDocumentStore((s) => s.selection)
   const doc = useDocumentStore((s) => s.doc)
@@ -204,8 +313,7 @@ export function Properties() {
   const deleteSelection = useDocumentStore((s) => s.deleteSelection)
   const duplicateLinked = useDocumentStore((s) => s.duplicateLinked)
   const makeUnique = useDocumentStore((s) => s.makeUnique)
-  const catalog = useCatalogStore((s) => s.catalog)
-  const choices = useMemo(() => pickerMaterials(catalog), [catalog])
+  const also = useDocumentStore((s) => s.also)
 
   const body = selection?.kind === 'body' ? resolveBodies(doc).find((b) => b.id === selection.id) : undefined
   const def = body && doc.defs.find((d) => d.id === body.defId)
@@ -217,7 +325,9 @@ export function Properties() {
   return (
     <section className="flex flex-1 flex-col group-data-[tab=cutlist]/sheet:hidden group-data-[tab=params]/sheet:hidden">
       <h2 className={sectionTitle}>Egenskaper</h2>
-      {body && def ? (
+      {body && also.length > 0 ? (
+        <MultiProperties ids={[body.id, ...also]} />
+      ) : body && def ? (
         <div className="flex flex-col gap-4">
           {/* Ett verktyg: först vad det formar. Material, färg, fiber och kopior gäller det inte. */}
           {body.tool && <ToolCard body={body} />}
@@ -238,37 +348,7 @@ export function Properties() {
             </label>
             {!body.tool && (
               <>
-                <label className={fieldLabel}>
-                  Material
-                  <select
-                    className={field}
-                    value={def.material}
-                    onChange={(e) => {
-                      if (e.target.value === EDIT_MATERIALS) useLibraryStore.getState().set({ settings: 'materials' })
-                      else updatePart(body.id, { material: e.target.value })
-                    }}
-                  >
-                    {MATERIAL_GROUPS.map((g) => {
-                      const list = choices.filter((m) => m.kind === g.kind)
-                      return (
-                        list.length > 0 && (
-                          <optgroup key={g.kind} label={g.title}>
-                            {list.map((m) => (
-                              <option key={m.id} value={m.id}>
-                                {firstUpper(m.name)}
-                              </option>
-                            ))}
-                          </optgroup>
-                        )
-                      )
-                    })}
-                    {/* Ett dolt, borttaget eller okänt material står kvar för den del som har det. */}
-                    {!choices.some((m) => m.id === def.material) && (
-                      <option value={def.material}>{materialTitle(def.material)}</option>
-                    )}
-                    <option value={EDIT_MATERIALS}>Redigera materiallistan…</option>
-                  </select>
-                </label>
+                <MaterialField value={def.material} onChange={(material) => updatePart(body.id, { material })} />
                 <PaintField instanceId={body.id} def={def} />
               </>
             )}

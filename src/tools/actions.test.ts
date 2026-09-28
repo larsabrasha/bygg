@@ -5,8 +5,9 @@ import { buildCutList } from '../model/cutlist'
 import { resolveBodies } from '../model/resolve'
 import { alignedGuides, movedPoints } from '../model/snapping'
 import type { Vec3 } from '../model/types'
-import { resetDocumentStore, useDocumentStore } from '../store/documentStore'
+import { resetDocumentStore, selectedBodyIds, useDocumentStore } from '../store/documentStore'
 import { useLibraryStore } from '../store/libraryStore'
+import { useViewStore } from '../store/viewStore'
 import { useToolStore, type PushPullOp } from '../store/toolStore'
 import {
   amendableOp,
@@ -18,6 +19,7 @@ import {
   doubleTap,
   extendCopies,
   handleOf,
+  hideSelection,
   hoverAt,
   liveMeasure,
   move,
@@ -876,6 +878,71 @@ describe('välj', () => {
     expect(docs().selection).toEqual({ kind: 'body', id: 'x', face: 'n+' })
     tap({ point: [0, 0, 0], target: { kind: 'ground' } }, 0)
     expect(docs().selection).toBeNull()
+  })
+})
+
+describe('flera valda', () => {
+  const front = (x: number, y: number) => ({ origin: [x, y, 3000] as Vec3, dir: [0, 0, -1] as Vec3 })
+  const lefts = () =>
+    bodies().map((b) => Math.min(toWorld(b.frame, [b.profile.x0, 0, 0])[0], toWorld(b.frame, [b.profile.x1, 0, 0])[0]))
+
+  /** Två delar 600 × 22 × 400 på golvet, bredvid varandra, båda valda med Skift-klick. */
+  function twoSelected() {
+    const a = extrude(drawGroundRect(0, 0, 600, -400), '22')
+    const b = extrude(drawGroundRect(700, 0, 1300, -400), '22')
+    tools().setTool('select')
+    tap({ point: [300, 22, -200], target: { kind: 'body', id: a.id } }, 0)
+    tap({ point: [1000, 22, -200], target: { kind: 'body', id: b.id } }, 0, true)
+    expect(selectedBodyIds(docs())).toEqual([b.id, a.id])
+    return [a, b] as const
+  }
+
+  function dragX(dx: number) {
+    if (tools().tool !== 'move') tools().setTool('move')
+    tap({ point: [650, 11, -200], target: { kind: 'axis', axis: 0 } }, 0)
+    regrab(front(650, 11))
+    move(front(650 + dx, 11), 0)
+  }
+
+  it('Skift-klick bredvid avmarkerar; i Välj fler står valet kvar', () => {
+    twoSelected()
+    tools().setAdding(true)
+    tap({ point: [0, 0, 500], target: { kind: 'ground' } }, 0)
+    expect(selectedBodyIds(docs())).toHaveLength(2)
+    tools().setAdding(false)
+    tap({ point: [0, 0, 500], target: { kind: 'ground' } }, 0, true)
+    expect(docs().selection).toBeNull()
+  })
+
+  it('flyttar alla lika mycket, och visar alla medan man drar', () => {
+    twoSelected()
+    dragX(500)
+    const p = previewDoc(tools().op!, doc())!
+    expect(p.affected.size).toBe(2)
+    commit()
+    expect(lefts()).toEqual([500, 1200])
+  })
+
+  it('kopierar alla med Kopia, och kopiorna blir valda', () => {
+    const [a, b] = twoSelected()
+    tools().setTool('move')
+    setCopy(true)
+    dragX(1500)
+    expect(previewDoc(tools().op!, doc(), true)!.affected.size).toBe(2)
+    commit()
+    expect(lefts().sort((x, y) => x - y)).toEqual([0, 700, 1500, 2200])
+    const chosen = selectedBodyIds(docs())
+    expect(chosen).toHaveLength(2)
+    expect(chosen).not.toContain(a.id)
+    expect(chosen).not.toContain(b.id)
+  })
+
+  it('döljer alla valda', () => {
+    const [a, b] = twoSelected()
+    hideSelection(b.id)
+    expect(useViewStore.getState().hidden.sort()).toEqual([a.id, b.id].sort())
+    expect(docs().selection).toBeNull()
+    useViewStore.getState().showAll()
   })
 })
 

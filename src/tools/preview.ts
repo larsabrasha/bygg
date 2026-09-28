@@ -26,18 +26,24 @@ export function previewDoc(op: Op, doc: ModelDocument, copy = false): Preview | 
 
   if (op.kind === 'move' || op.kind === 'rotate') {
     const step = stepOf(op)
-    const src = doc.instances.find((i) => i.id === op.instanceId)
-    if (!src) return null
-    // Utan rörelse visas delen som den är, men halvgenomskinlig så att man ser vad man tagit i.
-    const moved = { ...src, frame: step ? applyStep(src.frame, step, 1) : src.frame }
-    // Med Kopia står originalet kvar och kopian visas där den hamnar.
+    // Med flera valda rör sig alla (op.others), och den man tog i först.
+    const ids = [op.instanceId, ...(op.others ?? [])]
+    const sources = ids.flatMap((id) => doc.instances.filter((i) => i.id === id))
+    if (sources.length === 0 || sources[0]!.id !== op.instanceId) return null
+    // Utan rörelse visas delarna som de är, men halvgenomskinliga så att man ser vad man tagit i.
+    const moved = sources.map((src) => ({ ...src, frame: step ? applyStep(src.frame, step, 1) : src.frame }))
+    // Med Kopia står originalen kvar och kopiorna visas där de hamnar.
     if (copy) {
-      const ghost = { ...moved, id: COPY_PREVIEW_ID }
-      return { doc: { ...doc, instances: [...doc.instances, ghost] }, affected: new Set([COPY_PREVIEW_ID]) }
+      const ghosts = moved.map((m, k) => ({ ...m, id: k === 0 ? COPY_PREVIEW_ID : `${COPY_PREVIEW_ID}-${k}` }))
+      return {
+        doc: { ...doc, instances: [...doc.instances, ...ghosts] },
+        affected: new Set(ghosts.map((g) => g.id)),
+      }
     }
+    const byId = new Map(moved.map((m) => [m.id, m]))
     return {
-      doc: { ...doc, instances: doc.instances.map((i) => (i.id === src.id ? moved : i)) },
-      affected: new Set([src.id]),
+      doc: { ...doc, instances: doc.instances.map((i) => byId.get(i.id) ?? i) },
+      affected: new Set(byId.keys()),
     }
   }
 

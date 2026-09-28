@@ -13,12 +13,12 @@ declare global {
 }
 
 /** Lådan runt allt man kan peka på (delar och skisser), eller bara det valda. */
-function boundsOf(scene: Scene, onlyId: string | null): Box3 {
+function boundsOf(scene: Scene, only: readonly string[] | null): Box3 {
   scene.updateMatrixWorld()
   const box = new Box3()
   scene.traverse((o) => {
     const pick = o.userData.pick as { id: string } | undefined
-    if (pick && (onlyId === null || pick.id === onlyId)) box.expandByObject(o)
+    if (pick && (only === null || only.includes(pick.id))) box.expandByObject(o)
   })
   return box
 }
@@ -63,8 +63,9 @@ export function CameraRig() {
   useEffect(() => {
     const c = ref.current
     if (!c || !fit || fit === restoredFit.current) return
-    const selection = useDocumentStore.getState().selection
-    const box = boundsOf(scene, fit.target === 'selection' ? (selection?.id ?? null) : null)
+    const docs = useDocumentStore.getState()
+    const chosen = docs.selection ? [docs.selection.id, ...docs.also] : null
+    const box = boundsOf(scene, fit.target === 'selection' ? chosen : null)
     void c.setFocalOffset(0, 0, 0, fit.animate)
     // Kameran flyttas när den uppdateras, i nästa bild; utan glidning ritar inget annat den bilden.
     invalidate()

@@ -9,7 +9,7 @@ import { useToolStore } from '../store/toolStore'
 import { isShown, useViewStore } from '../store/viewStore'
 import { explodeOffsets } from '../model/explode'
 import { PartNames } from './PartNames'
-import { bodyCenter } from '../model/geometry'
+import { bodiesBox, bodyCenter } from '../model/geometry'
 import { pushPullAnchor, pushPullTargetOf, sideHandleFaces } from '../tools/actions'
 import { toolTargets } from '../model/combine'
 import { previewDoc } from '../tools/preview'
@@ -45,6 +45,9 @@ function Scene() {
 
   const doc = useDocumentStore((s) => s.doc)
   const selection = useDocumentStore((s) => s.selection)
+  // Flera valda: alla markeras, och pilarna för push/pull och måtten visas inte (de gäller en del).
+  const also = useDocumentStore((s) => s.also)
+  const multi = also.length > 0
   const op = useToolStore((s) => s.op)
   const hover = useToolStore((s) => s.hover)
   const hoverPoint = useToolStore((s) => s.hoverPoint)
@@ -74,21 +77,29 @@ function Scene() {
   const selectedBody = selection?.kind === 'body' ? bodies.find((b) => b.id === selection.id) : undefined
   // Pilen på det valda syns i Välj och Rektangel (så att en ny skiss kan dras ut direkt), när inget annat pågår.
   const handleTarget =
-    !op && (tool === 'select' || tool === 'rect' || tool === 'circle') && selection ? pushPullTargetOf(selection) : null
+    !op && !multi && (tool === 'select' || tool === 'rect' || tool === 'circle') && selection
+      ? pushPullTargetOf(selection)
+      : null
   const handle = !exploded && handleTarget && pushPullAnchor(handleTarget, doc)
   const selectedFace = handleTarget?.kind === 'body' ? handleTarget : null
   // I Välj får den valda delens andra sidor mindre pilar; PushPullHandle visar bara dem som vetter mot en.
   const sideHandles =
-    op || exploded || !selectedBody
+    op || exploded || !selectedBody || multi
       ? []
       : sideHandleFaces(selection, tool).flatMap((face) => {
           const at = pushPullAnchor({ kind: 'body', id: selectedBody.id, face }, doc)
           return at ? [{ face, ...at }] : []
         })
   // I Flytta-läget får den valda delen tre färgade pilar i stället.
-  const gizmoAt = !op && !exploded && tool === 'move' && selectedBody ? bodyCenter(selectedBody) : null
+  // Med flera valda sitter pilarna mitt i dem alla, och flyttar alla.
+  const gizmoAt =
+    !op && !exploded && tool === 'move' && selectedBody
+      ? multi
+        ? bodiesBox(bodies.filter((b) => b.id === selectedBody.id || also.includes(b.id))).center
+        : bodyCenter(selectedBody)
+      : null
   // I Välj visas den valda delens mått vid kanterna (etiketterna i panel/DimensionLabels).
-  const dims = exploded ? null : dimensionsFor(doc, op, shownDimensionsOf(showDims, tool, op, selection))
+  const dims = exploded || multi ? null : dimensionsFor(doc, op, shownDimensionsOf(showDims, tool, op, selection))
 
   // Verktyg (tillägg och urtag) syns som spöken när deras värd, eller de själva, är valda.
   const shownHost = selectedBody?.tool?.host ?? selectedBody?.id
@@ -110,9 +121,9 @@ function Scene() {
             faded={fadedIds.has(b.id)}
             look={look}
             preview={preview?.affected.has(b.id)}
-            selected={selectedBody?.id === b.id}
+            selected={selectedBody?.id === b.id || also.includes(b.id)}
             peek={!!b.tool && !!peekTools?.includes(b.id)}
-            sibling={!!selectedBody && !b.tool && selectedBody.id !== b.id && selectedBody.defId === b.defId}
+            sibling={!!selectedBody && !multi && !b.tool && selectedBody.id !== b.id && selectedBody.defId === b.defId}
             highlightFace={
               active?.kind === 'body' && active.id === b.id
                 ? active.face

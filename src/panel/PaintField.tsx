@@ -32,8 +32,9 @@ const Dot = ({ color }: { color: string }) => (
  * + ger delen en egen färg: färgväljaren och koden man beställer efter (fri
  * text, t.ex. "NCS S 0502-Y"). Gäller formen, alltså alla länkade kopior.
  */
-export function PaintField({ instanceId, def }: { instanceId: string; def: PartDef }) {
-  const updatePart = useDocumentStore((s) => s.updatePart)
+/** ids: flera valda delar, som alla får färgen; def är då den valdas, och dess färg visas. */
+export function PaintField({ instanceId, def, ids }: { instanceId: string; def: PartDef; ids?: readonly string[] }) {
+  const updateParts = useDocumentStore((s) => s.updateParts)
   const doc = useDocumentStore((s) => s.doc)
   const catalog = useCatalogStore((s) => s.catalog)
   const paint = def.paint
@@ -85,7 +86,7 @@ export function PaintField({ instanceId, def }: { instanceId: string; def: PartD
   const currentCode = paint && current?.name ? paint.code : undefined
 
   const choose = (next: Paint | undefined) => {
-    updatePart(instanceId, { paint: next })
+    updateParts(ids ?? [instanceId], { paint: next })
     setOpen(false)
     setCustom(null)
   }

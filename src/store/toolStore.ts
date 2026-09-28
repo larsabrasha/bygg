@@ -66,6 +66,8 @@ export type Axis = 0 | 1 | 2
 export interface MoveOp {
   kind: 'move'
   instanceId: string
+  /** De andra valda delarna, som flyttas lika mycket (flera valda). */
+  others?: string[]
   /**
    * Planet man flyttar i. Origo = där man tryckte (fri flytt) eller delens
    * mitt (pil). Längs en pil är u = axeln och delta[1] alltid 0.
@@ -89,6 +91,8 @@ export interface MoveOp {
 export interface RotateOp {
   kind: 'rotate'
   instanceId: string
+  /** De andra valda delarna, som vrids runt samma mitt (flera valda). */
+  others?: string[]
   axis: Axis
   /** Planet man vrider i: origo = delens mitt, n = axeln. Vinklar räknas från u mot v. */
   plane: Frame
@@ -193,6 +197,11 @@ interface ToolSnapshot {
    * är verktyget. error = varför förra trycket inte gick.
    */
   combining: { op: Combine['op']; host: string; error?: string } | null
+  /**
+   * Välj fler: ett tryck på en del lägger till den i valet eller tar bort den, i stället för att
+   * välja bara den. På pekskärm, där det inte finns någon Skift; med mus gör Skift-klick samma sak.
+   */
+  adding: boolean
 }
 
 interface ToolState extends ToolSnapshot {
@@ -211,6 +220,7 @@ interface ToolState extends ToolSnapshot {
   setRuler: (points: RulerPoint[]) => void
   setRulerHover: (p: RulerPoint | null) => void
   setCombining: (c: ToolSnapshot['combining']) => void
+  setAdding: (on: boolean) => void
 }
 
 const STOCK_SNAP_KEY = 'bygg.stockSnap'
@@ -250,6 +260,7 @@ const initial: ToolSnapshot = previous
       ruler: [],
       rulerHover: null,
       combining: null,
+      adding: previous.getState().adding ?? false,
       ...idle,
     }
   : {
@@ -265,6 +276,7 @@ const initial: ToolSnapshot = previous
       ruler: [],
       rulerHover: null,
       combining: null,
+      adding: false,
       ...idle,
     }
 
@@ -282,12 +294,14 @@ export const useToolStore = create<ToolState>()((set) => ({
       ruler: [],
       rulerHover: null,
       combining: null,
+      adding: false,
       ...idle,
     }),
   // En ny operation gör att förra kopieringen och förra operationen inte längre går att ändra.
   setOp: (op) => set(op ? { op, hoverPoint: null, hoverHandle: null, lastCopy: null, lastOp: null } : idle),
   setHover: (hover) => set({ hover }),
   setCombining: (combining) => set({ combining }),
+  setAdding: (adding) => set({ adding }),
   setHoverPoint: (hoverPoint) => set({ hoverPoint }),
   setHoverHandle: (hoverHandle) => set((s) => (sameHandle(s.hoverHandle, hoverHandle) ? s : { hoverHandle })),
   setMeasure: (field, text) =>

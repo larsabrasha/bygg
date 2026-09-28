@@ -12,6 +12,7 @@ import {
   uniqueCopyName,
 } from '../model/geometry'
 import { rotateFrame } from '../model/frame'
+import { bodiesBox } from '../model/geometry'
 import {
   carryTools,
   combineError,
@@ -74,6 +75,18 @@ export type PartPatch = Partial<Pick<PartDef, 'name' | 'material' | 'grainAxis' 
 
 interface DocumentState extends Snapshot {
   /**
+   * Fler valda delar, utöver selection (som då är en del). Tomt när bara en sak är vald.
+   * Inte med i ångra-historiken: efter ångra är bara det som var valt då valt.
+   */
+  also: string[]
+  /**
+   * Lägger till delen i valet, eller tar bort den om den redan är vald (Skift-klick, Välj fler).
+   * Den senast tillagda blir selection, den som pilarna och Egenskaper gäller.
+   */
+  toggleSelected: (id: string) => void
+  /** Väljer delarna; den sista blir selection. */
+  selectBodies: (ids: readonly string[]) => void
+  /**
    * Returnerar skissens id, eller null om rektangeln är för liten. shape = cirkel
    * inskriven i rect. on = kopian skissen ritas på.
    */
@@ -84,8 +97,19 @@ interface DocumentState extends Snapshot {
   /** dim: måttet längs sidans axel ska styras av ett uttryck (hela måttet skrevs som en parameter). */
   pushPullBody: (instanceId: string, face: Face, distance: number, dim?: DimExpr) => boolean
   moveInstance: (instanceId: string, delta: Vec3) => void
+  /** Flyttar flera kopior lika mycket, i ett steg. */
+  moveInstances: (ids: readonly string[], delta: Vec3) => void
   /** Vrider en kopia degrees grader runt en axel (enhetsvektor) genom center. */
   rotateInstance: (instanceId: string, center: Vec3, axis: Vec3, degrees: number) => void
+  /** Vrider flera kopior runt samma axel genom center, i ett steg. */
+  rotateInstances: (ids: readonly string[], center: Vec3, axis: Vec3, degrees: number) => void
+  /**
+   * En länkad kopia av var och en av delarna, med frame ändrad av transform, i ett steg.
+   * Kopiorna blir valda. Returnerar deras id:n, i samma ordning.
+   */
+  copyInstances: (ids: readonly string[], transform: (frame: Frame) => Frame) => string[]
+  /** Länkade kopior av alla valda delar, bredvid dem (längs x), som duplicateLinked för en. */
+  duplicateSelection: () => void
   /**
    * Sätter en av vinklarna i detaljpanelen (grader, från viloläget) och vrider
    * runt delens mitt. Tar emot uttryck, men sparar bara värdet. Returnerar felmeddelande eller null.
@@ -102,6 +126,8 @@ interface DocumentState extends Snapshot {
   /** Ger kopian en egen form, så att den inte längre ändras med de andra. */
   makeUnique: (instanceId: string) => void
   updatePart: (instanceId: string, patch: PartPatch) => void
+  /** Samma ändring på flera delars former, i ett steg (t.ex. material på alla valda). */
+  updateParts: (ids: readonly string[], patch: PartPatch) => void
   /** Sätter en axels längd från ett tal eller ett uttryck. Returnerar felmeddelande eller null. */
   setExtent: (instanceId: string, axis: Axis, text: string) => string | null
   /** Sätter läget för delens hörn närmast origo längs en världsaxel, från ett tal eller ett uttryck. */
@@ -172,6 +198,17 @@ export const emptyDocument = (): ModelDocument => ({ sketches: [], defs: [], ins
 
 const emptySnapshot = (): Snapshot => ({ doc: emptyDocument(), selection: null, past: [], future: [] })
 
+/** Alla valda delar: den valda (selection) först, sedan de tillagda (also). Tomt om ingen del är vald. */
+export const selectedBodyIds = (s: Pick<DocumentState, 'selection' | 'also'>): string[] =>
+  s.selection?.kind === 'body' ? [s.selection.id, ...s.also] : []
+
+/** also utan det som inte finns i doc längre, och tomt om det valda inte är en del. */
+function alsoExisting(doc: ModelDocument, selection: Selection | null, also: readonly string[]): string[] {
+  if (selection?.kind !== 'body' || also.length === 0) return []
+  const ids = new Set(doc.instances.map((i) => i.id))
+  return also.filter((id) => id !== selection.id && ids.has(id))
+}
+
 function selectionExists(doc: ModelDocument, sel: Selection | null): Selection | null {
   if (!sel) return null
   const list = sel.kind === 'body' ? doc.instances : doc.sketches
@@ -230,7 +267,12 @@ export const useDocumentStore = create<DocumentState>()((set, get) => {
    * Sparar nuvarande dokument i historiken och byter till next (med parametrar omräknade).
    * Blir modellen större än gränserna (se model/limits) ändras inget: false, och ett meddelande.
    */
-  const commit = (next: ModelDocument, selection: Selection | null = get().selection): boolean => {
+  const commit = (
+    next: ModelDocument,
+    selection: Selection | null = get().selection,
+    // Ett nytt val (t.ex. en ny kopia) ersätter också de tillagda; samma val behåller dem.
+    also: readonly string[] = selection === get().selection ? get().also : [],
+  ): boolean => {
     const { doc, past, selection: before } = get()
     // Verktyg följer sin värd när den flyttas, en ändrad tapp ändrar sina tvillingar (samma tapp från
     // länkade ben), och tappar räknas om när sargen eller benet ändras; verktyg utan värd blir vanliga delar.
@@ -242,9 +284,11 @@ export const useDocumentStore = create<DocumentState>()((set, get) => {
       refused(error)
       return false
     }
+    const chosen = selectionExists(applied, selection)
     set({
       doc: applied,
-      selection: selectionExists(applied, selection),
+      selection: chosen,
+      also: alsoExisting(applied, chosen, also),
       past: [...past, { doc, selection: before }].slice(-HISTORY_LIMIT),
       future: [],
     })
@@ -256,13 +300,19 @@ export const useDocumentStore = create<DocumentState>()((set, get) => {
    * att vinklarna räknas från hur den låg innan. Som vid flytt: flyttas hörnet
    * närmast origo längs en axel, slutar den axeln styras av sitt uttryck.
    */
-  const reorient = (inst: Instance, def: PartDef, frame: Frame) => {
+  const reoriented = (inst: Instance, def: PartDef, frame: Frame): Instance => {
     const next = { ...inst, frame, rest: restOf(inst) }
     const before = minCorner(inst, def)
     const after = minCorner(next, def)
-    const moved = WORLD_AXES.filter((_, k) => Math.abs(after[k]! - before[k]!) > 1e-6)
+    return withoutPos(
+      next,
+      WORLD_AXES.filter((_, k) => Math.abs(after[k]! - before[k]!) > 1e-6),
+    )
+  }
+  const reorient = (inst: Instance, def: PartDef, frame: Frame) => {
     const { doc } = get()
-    return commit({ ...doc, instances: doc.instances.map((i) => (i.id === inst.id ? withoutPos(next, moved) : i)) })
+    const next = reoriented(inst, def, frame)
+    return commit({ ...doc, instances: doc.instances.map((i) => (i.id === inst.id ? next : i)) })
   }
 
   const findInstance = (id: string) => {
@@ -279,6 +329,26 @@ export const useDocumentStore = create<DocumentState>()((set, get) => {
 
   return {
     ...initial,
+    also: alsoExisting(initial.doc, initial.selection, previousState?.also ?? []),
+
+    toggleSelected: (id) => {
+      const { selection, also, doc } = get()
+      if (!doc.instances.some((i) => i.id === id)) return
+      if (selection?.kind !== 'body') return set({ selection: { kind: 'body', id }, also: [] })
+      if (selection.id === id) {
+        const [next, ...rest] = also
+        return set(next ? { selection: { kind: 'body', id: next }, also: rest } : { selection: null, also: [] })
+      }
+      if (also.includes(id)) return set({ also: also.filter((x) => x !== id) })
+      set({ selection: { kind: 'body', id }, also: [selection.id, ...also] })
+    },
+
+    selectBodies: (ids) => {
+      const existing = new Set(get().doc.instances.map((i) => i.id))
+      const list = [...new Set(ids)].filter((id) => existing.has(id))
+      const last = list.at(-1)
+      set(last ? { selection: { kind: 'body', id: last }, also: list.slice(0, -1) } : { selection: null, also: [] })
+    },
 
     addSketch: (frame, rect, dims, shape, on) => {
       if (!isValidRect(rect)) return null
@@ -349,12 +419,15 @@ export const useDocumentStore = create<DocumentState>()((set, get) => {
       return commit({ ...doc, instances }, { kind: 'body', id: instanceId, face })
     },
 
-    moveInstance: (instanceId, delta) => {
+    moveInstance: (instanceId, delta) => get().moveInstances([instanceId], delta),
+
+    moveInstances: (ids, delta) => {
       const { doc } = get()
+      const moving = new Set(ids)
       commit({
         ...doc,
         instances: doc.instances.map((i) =>
-          i.id === instanceId
+          moving.has(i.id)
             ? withoutPos(
                 { ...i, frame: { ...i.frame, origin: add(i.frame.origin, delta) } },
                 WORLD_AXES.filter((_, k) => delta[k] !== 0),
@@ -364,10 +437,55 @@ export const useDocumentStore = create<DocumentState>()((set, get) => {
       })
     },
 
-    rotateInstance: (instanceId, center, axis, degrees) => {
-      const found = findInstance(instanceId)
-      if (!found || degrees % 360 === 0) return
-      reorient(found.inst, found.def, rotateFrame(found.inst.frame, center, axis, degrees))
+    rotateInstance: (instanceId, center, axis, degrees) => get().rotateInstances([instanceId], center, axis, degrees),
+
+    rotateInstances: (ids, center, axis, degrees) => {
+      if (degrees % 360 === 0) return
+      const { doc } = get()
+      const turning = new Set(ids)
+      const defs = new Map(doc.defs.map((d) => [d.id, d]))
+      let changed = false
+      const instances = doc.instances.map((i) => {
+        const def = defs.get(i.defId)
+        if (!turning.has(i.id) || !def) return i
+        changed = true
+        return reoriented(i, def, rotateFrame(i.frame, center, axis, degrees))
+      })
+      if (changed) commit({ ...doc, instances })
+    },
+
+    copyInstances: (ids, transform) => {
+      const { doc } = get()
+      const copies = ids.flatMap((id) => {
+        const inst = doc.instances.find((i) => i.id === id)
+        // Kopiorna räknar sina vinklar från samma viloläge som originalen.
+        return inst ? [{ id: newId(), defId: inst.defId, frame: transform(inst.frame), rest: restOf(inst) }] : []
+      })
+      const last = copies.at(-1)
+      if (!last) return []
+      const ok = commit(
+        { ...doc, instances: [...doc.instances, ...copies] },
+        { kind: 'body', id: last.id },
+        copies.slice(0, -1).map((c) => c.id),
+      )
+      return ok ? copies.map((c) => c.id) : []
+    },
+
+    duplicateSelection: () => {
+      const ids = selectedBodyIds(get())
+      if (ids.length <= 1) {
+        if (ids[0]) get().duplicateLinked(ids[0])
+        return
+      }
+      const chosen = new Set(ids)
+      const bodies = resolveBodies(get().doc).filter((b) => chosen.has(b.id))
+      if (bodies.length === 0) return
+      const box = bodiesBox(bodies)
+      const offset: Vec3 = [box.max[0] - box.min[0] + DUPLICATE_GAP, 0, 0]
+      get().copyInstances(
+        bodies.map((b) => b.id),
+        (f) => ({ ...f, origin: add(f.origin, offset) }),
+      )
     },
 
     setAngle: (instanceId, axis, text) => {
@@ -425,14 +543,22 @@ export const useDocumentStore = create<DocumentState>()((set, get) => {
       })
     },
 
-    updatePart: (instanceId, patch) => {
-      const found = findInstance(instanceId)
-      if (!found || Object.entries(patch).every(([k, v]) => found.def[k as keyof PartDef] === v)) return
-      // Fiber och tjocklek måste ligga på olika axlar; withAxes löser krockar.
-      const def = { ...found.def, ...patch, ...withAxes(found.def, patch) }
-      // paint: undefined tar bort färgen; nyckeln ska inte ligga kvar i dokumentet.
-      if (def.paint === undefined) delete def.paint
-      commit(replaceDef(get().doc, def))
+    updatePart: (instanceId, patch) => get().updateParts([instanceId], patch),
+
+    updateParts: (ids, patch) => {
+      const { doc } = get()
+      // Länkade kopior delar form: varje form ändras en gång.
+      const defIds = new Set(doc.instances.filter((i) => ids.includes(i.id)).map((i) => i.defId))
+      let next = doc
+      for (const old of doc.defs) {
+        if (!defIds.has(old.id) || Object.entries(patch).every(([k, v]) => old[k as keyof PartDef] === v)) continue
+        // Fiber och tjocklek måste ligga på olika axlar; withAxes löser krockar.
+        const def = { ...old, ...patch, ...withAxes(old, patch) }
+        // paint: undefined tar bort färgen; nyckeln ska inte ligga kvar i dokumentet.
+        if (def.paint === undefined) delete def.paint
+        next = replaceDef(next, def)
+      }
+      if (next !== doc) commit(next)
     },
 
     setExtent: (instanceId, axis, text) => {
@@ -550,8 +676,21 @@ export const useDocumentStore = create<DocumentState>()((set, get) => {
     },
 
     deleteSelection: () => {
-      const { doc, selection } = get()
+      const { doc, selection, also } = get()
       if (!selection) return
+      if (selection.kind === 'body' && also.length > 0) {
+        // Flera delar: var och en tar sina verktyg och tvillingar med sig, och inget är valt efteråt.
+        const ids = [selection.id, ...also]
+        const gone = new Set(ids.flatMap((id) => [id, ...jointTwins(doc, id).map((t) => t.id)]))
+        commit(
+          {
+            ...doc,
+            instances: doc.instances.filter((i) => !gone.has(i.id) && !(i.combine && gone.has(i.combine.host))),
+          },
+          null,
+        )
+        return
+      }
       // Ett verktyg: delen det satt på blir vald, så att man är kvar där man arbetade.
       const host = selection.kind === 'body' && doc.instances.find((i) => i.id === selection.id)?.combine?.host
       // En tapp tar sina tvillingar med sig: på de länkade benen är de samma tapp.
@@ -650,11 +789,11 @@ export const useDocumentStore = create<DocumentState>()((set, get) => {
       )
     },
 
-    select: (selection) => set({ selection }),
+    select: (selection) => set({ selection, also: [] }),
 
     clearDocument: () => commit(emptyDocument(), null),
 
-    load: (doc) => set({ doc: applyParams(doc), selection: null, past: [], future: [] }),
+    load: (doc) => set({ doc: applyParams(doc), selection: null, also: [], past: [], future: [] }),
 
     refreshMaterials: () => {
       const { doc } = get()
@@ -675,6 +814,7 @@ export const useDocumentStore = create<DocumentState>()((set, get) => {
         past: past.slice(0, -1),
         future: [{ doc, selection }, ...future],
         selection: selectionExists(prev.doc, prev.selection) ?? selectionExists(prev.doc, selection),
+        also: [],
       })
     },
 
@@ -687,6 +827,7 @@ export const useDocumentStore = create<DocumentState>()((set, get) => {
         past: [...past, { doc, selection }],
         future: future.slice(1),
         selection: selectionExists(next.doc, next.selection) ?? selectionExists(next.doc, selection),
+        also: [],
       })
     },
   }
@@ -699,5 +840,5 @@ export const useBodies = () => useDocumentStore((s) => resolveBodies(s.doc))
 
 /** Endast för tester. */
 export function resetDocumentStore() {
-  useDocumentStore.setState(emptySnapshot())
+  useDocumentStore.setState({ ...emptySnapshot(), also: [] })
 }

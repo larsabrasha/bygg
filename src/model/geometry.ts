@@ -14,6 +14,25 @@ export function bodyCenter(b: Body): Vec3 {
   return toWorld(b.frame, [(x0 + x1) / 2, (y0 + y1) / 2, (b.z0 + b.z1) / 2])
 }
 
+/** Lådan längs världsaxlarna runt delarna (deras hörn), och dess mitt. För flera valda delar. */
+export function bodiesBox(bodies: readonly Body[]): { min: Vec3; max: Vec3; center: Vec3 } {
+  const min: Vec3 = [Infinity, Infinity, Infinity]
+  const max: Vec3 = [-Infinity, -Infinity, -Infinity]
+  for (const b of bodies) {
+    const { x0, x1, y0, y1 } = b.profile
+    for (const x of [x0, x1])
+      for (const y of [y0, y1])
+        for (const z of [b.z0, b.z1]) {
+          const p = toWorld(b.frame, [x, y, z])
+          for (let k = 0; k < 3; k++) {
+            min[k] = Math.min(min[k]!, p[k]!)
+            max[k] = Math.max(max[k]!, p[k]!)
+          }
+        }
+  }
+  return { min, max, center: [(min[0] + max[0]) / 2, (min[1] + max[1]) / 2, (min[2] + max[2]) / 2] }
+}
+
 /** Minsta mått en skiss eller kropp får ha, i mm. */
 export const MIN_SIZE = 1
 

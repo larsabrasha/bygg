@@ -1,6 +1,7 @@
 import { faceBounds, faceFrame, GROUND_FRAME, rotateFrame, toLocal2D, toWorld } from '../model/frame'
 import { isConstant } from '../model/expr'
 import {
+  bodiesBox,
   bodyCenter,
   bodyExtents,
   circleRect,
@@ -38,7 +39,7 @@ import {
 } from '../model/types'
 import { arrowDir, isHeadOn } from '../model/arrowDir'
 import { add, closestParamOnLine, cross, dot, length, scale, sub } from '../model/vec'
-import { useDocumentStore, type Selection } from '../store/documentStore'
+import { selectedBodyIds, useDocumentStore, type Selection } from '../store/documentStore'
 import { useLibraryStore } from '../store/libraryStore'
 import { useViewStore } from '../store/viewStore'
 import {
@@ -124,6 +125,25 @@ const tools = () => useToolStore.getState()
 const bodies = () => resolveBodies(docs().doc)
 const findBody = (id: string): Body | undefined => bodies().find((b) => b.id === id)
 
+/**
+ * Det som flyttas eller vrids när man tar i b: alla valda delar om b är en av dem, annars bara b.
+ * Mitten och radien gäller dem tillsammans.
+ */
+function movingSet(b: Body): { others: string[]; bodies: Body[]; center: Vec3; size: number } {
+  const chosen = selectedBodyIds(docs())
+  const others = chosen.includes(b.id) ? chosen.filter((id) => id !== b.id) : []
+  if (others.length === 0) return { others, bodies: [b], center: bodyCenter(b), size: Math.max(...bodyExtents(b)) }
+  const set = new Set([b.id, ...others])
+  const list = bodies().filter((x) => set.has(x.id))
+  const box = bodiesBox(list)
+  return {
+    others,
+    bodies: list,
+    center: box.center,
+    size: Math.max(box.max[0] - box.min[0], box.max[1] - box.min[1], box.max[2] - box.min[2]),
+  }
+}
+
 /** Planet och ytans kanter för en träff. Null om träffen inte går att rita på. */
 function planeForHit(hit: Hit): { frame: Frame; bounds: Rect | null; on?: string } | null {
   switch (hit.target.kind) {
@@ -198,7 +218,8 @@ function pushPullTargetFor(hit: Hit): { target: PushPullTarget; normal: Vec3 } |
 }
 
 /** Tryck/klick utan pågående operation. tol = snäpptolerans i mm. */
-export function tap(hit: Hit | null, tol: number) {
+/** add: Skift (eller ⌘) hölls ned: trycket lägger till delen i valet eller tar bort den (se Välj fler). */
+export function tap(hit: Hit | null, tol: number, add = false) {
   const { tool, setOp, combining } = tools()
 
   // Skär ut / Lägg till: trycket väljer verktyget. Utanför alla delar avbryts det.
@@ -244,24 +265,29 @@ export function tap(hit: Hit | null, tol: number) {
   }
 
   if (tool === 'move') {
-    const sel = docs().selection
-    const selected = sel?.kind === 'body' ? sel.id : null
+    const selected = selectedBodyIds(docs())
     const t = hit?.target
     // Inget valt (man kom hit med M): trycket väljer delen man ska flytta.
-    if (selected === null && t?.kind === 'body') {
+    if (selected.length === 0 && t?.kind === 'body') {
       docs().select({ kind: 'body', id: t.id, face: t.face })
       return
     }
     // Tryck utanför det man flyttar: tillbaka till Välj, som om man tryckt där i Välj.
-    if (t?.kind !== 'body' || t.id !== selected) {
+    if (t?.kind !== 'body' || !selected.includes(t.id)) {
       tools().setTool('select')
-      tap(hit, tol)
+      tap(hit, tol, add)
       return
     }
   }
 
   if (tool === 'select') {
     const t = hit?.target
+    // Välj fler: delen läggs till eller tas bort. Ett tryck bredvid gör inget, så att valet står kvar.
+    if (add || tools().adding) {
+      if (t?.kind === 'body') docs().toggleSelected(t.id)
+      else if (add && !tools().adding) docs().select(null)
+      return
+    }
     docs().select(
       t?.kind === 'body'
         ? { kind: 'body', id: t.id, face: t.face }
@@ -331,7 +357,8 @@ export function tap(hit: Hit | null, tol: number) {
  * False om dubbeltrycket inte betyder något här; då räknas det som ett vanligt tryck.
  */
 export function doubleTap(hit: Hit | null): boolean {
-  if (tools().tool !== 'select') return false
+  // I Välj fler är två tryck två val, inte Flytta.
+  if (tools().tool !== 'select' || tools().adding) return false
   const sel = docs().selection
   // Första trycket valde en sida, och dess pil står mitt på den: trycker man där igen träffas pilen.
   const target = hit?.target.kind === 'handle' && sel?.kind === 'body' ? sel : hit?.target
@@ -430,10 +457,12 @@ function pushPullMinOf(target: PushPullTarget): number {
 }
 
 function moveOp(b: Body, plane: Frame, axis: Axis | null, face?: MoveOp['face']): MoveOp {
-  const keys = bodyKeyPoints(b)
+  const moving = movingSet(b)
+  const keys = moving.bodies.flatMap(bodyKeyPoints)
   return {
     kind: 'move',
     instanceId: b.id,
+    ...(moving.others.length > 0 && { others: moving.others }),
     plane,
     axis,
     grab: 0,
@@ -441,7 +470,7 @@ function moveOp(b: Body, plane: Frame, axis: Axis | null, face?: MoveOp['face'])
     movingWorld: keys,
     ...(face && { face }),
     // Med Kopia står originalet kvar och går att snäppa mot.
-    targets: planeTargets(bodies(), plane, tools().copy ? undefined : b.id),
+    targets: planeTargets(bodies(), plane, tools().copy ? undefined : [b.id, ...moving.others]),
     delta: [0, 0],
     onTarget: [false, false],
   }
@@ -459,7 +488,7 @@ export function beginAxisMove(axis: Axis) {
   const sel = docs().selection
   const b = sel?.kind === 'body' ? findBody(sel.id) : undefined
   if (!b) return
-  tools().setOp(moveOp(b, { origin: bodyCenter(b), ...AXIS_PLANES[axis] }, axis))
+  tools().setOp(moveOp(b, { origin: movingSet(b).center, ...AXIS_PLANES[axis] }, axis))
 }
 
 /** Vridning när man drar: steg om 15°, så att 90° och 45° är lätta att träffa. */
@@ -476,12 +505,14 @@ export function beginRotate(axis: Axis, at?: Vec3) {
   const sel = docs().selection
   const b = sel?.kind === 'body' ? findBody(sel.id) : undefined
   if (!b) return
+  const moving = movingSet(b)
   tools().setOp({
     kind: 'rotate',
     instanceId: b.id,
+    ...(moving.others.length > 0 && { others: moving.others }),
     axis,
-    plane: rotatePlane(axis, bodyCenter(b)),
-    radius: Math.max(...bodyExtents(b)) * 0.6,
+    plane: rotatePlane(axis, moving.center),
+    radius: moving.size * 0.6,
     grab: 0,
     angle: 0,
     ...(at && { at }),
@@ -708,6 +739,15 @@ export function commit(op: Op | null = tools().op, exprs: { dims?: DimExprs; dep
   else if (op.kind === 'move' || op.kind === 'rotate') {
     // Man stannar i Flytta, så att man kan flytta längs en axel till. Klar eller Esc går till Välj.
     const step = stepOf(op)
+    const ids = [op.instanceId, ...(op.others ?? [])]
+    // Flera valda: alla flyttas, vrids eller kopieras i ett steg.
+    if (step && op.others?.length) {
+      if (tools().copy) d.copyInstances(ids, (f) => applyStep(f, step, 1))
+      else if (step.kind === 'move') d.moveInstances(ids, step.delta)
+      else d.rotateInstances(ids, step.center, step.axis, step.degrees)
+      tools().setOp(null)
+      return
+    }
     const source = step && tools().copy ? d.doc.instances.find((i) => i.id === op.instanceId) : undefined
     if (step && source) {
       const [id] = d.addCopies(source.id, [applyStep(source.frame, step, 1)])
@@ -880,15 +920,23 @@ export function startReadyPushPull(): boolean {
 
 /** Döljer delen (se ViewState.hidden) och avmarkerar den: det dolda går inte att se eller trycka på. */
 export function hideSelection(id: string) {
-  useViewStore.getState().hide([id])
-  if (docs().selection?.id === id) docs().select(null)
+  const chosen = selectedBodyIds(docs())
+  const ids = chosen.includes(id) ? chosen : [id]
+  useViewStore.getState().hide(ids)
+  if (ids.includes(docs().selection?.id ?? '')) docs().select(null)
 }
 
-/** Isolerar delen (de andra blir genomskinliga), eller visar allt igen om den redan är isolerad. Kameran står kvar. */
+/**
+ * Isolerar delen, eller alla valda om den är en av dem (de andra blir genomskinliga), eller visar
+ * allt igen om just de redan är isolerade. Kameran står kvar.
+ */
 export function isolateSelection(id: string) {
   const view = useViewStore.getState()
-  if (view.isolated?.length === 1 && view.isolated[0] === id) view.showAll()
-  else view.isolate([id])
+  const chosen = selectedBodyIds(docs())
+  const ids = chosen.includes(id) ? chosen : [id]
+  const same = view.isolated?.length === ids.length && ids.every((x) => view.isolated!.includes(x))
+  if (same) view.showAll()
+  else view.isolate(ids)
 }
 
 /**

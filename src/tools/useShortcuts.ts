@@ -2,7 +2,8 @@ import { useEffect } from 'react'
 import { useDocumentStore } from '../store/documentStore'
 import { useLibraryStore } from '../store/libraryStore'
 import { useToolStore, type Op } from '../store/toolStore'
-import { LOOKS, useViewStore } from '../store/viewStore'
+import { isShown, LOOKS, useViewStore } from '../store/viewStore'
+import { resolveBodies } from '../model/resolve'
 import {
   amendableOp,
   applyMeasure,
@@ -56,6 +57,18 @@ export function useShortcuts() {
         cancel()
         if (e.shiftKey) docs.redo()
         else docs.undo()
+        return
+      }
+      // ⌘A väljer alla delar som syns (inte verktygen, som Skär ut och tappar).
+      if (mod && e.key.toLowerCase() === 'a') {
+        e.preventDefault()
+        cancel()
+        const view = useViewStore.getState()
+        docs.selectBodies(
+          resolveBodies(docs.doc)
+            .filter((b) => !b.tool && isShown(view, b.id))
+            .map((b) => b.id),
+        )
         return
       }
       if (mod && e.key.toLowerCase() === 'y') {

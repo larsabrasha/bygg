@@ -33,12 +33,17 @@ export interface PlaneTargets {
 }
 
 /** Andra kroppars nyckelpunkter projicerade på planet: linjer man kan snäppa i linje med. */
-export function planeTargets(bodies: readonly Body[], frame: Frame, excludeId?: string): PlaneTargets {
+export function planeTargets(
+  bodies: readonly Body[],
+  frame: Frame,
+  exclude?: string | readonly string[],
+): PlaneTargets {
   const xs: number[] = []
   const ys: number[] = []
   const points: TargetPoint[] = []
+  const skip = new Set(typeof exclude === 'string' ? [exclude] : exclude)
   for (const b of bodies) {
-    if (b.id === excludeId) continue
+    if (skip.has(b.id)) continue
     for (const world of bodyKeyPoints(b)) {
       const at = toLocal2D(frame, world)
       xs.push(at[0])
