@@ -296,7 +296,7 @@ function MultiProperties({ ids }: { ids: readonly string[] }) {
       <div className="grid grid-cols-2 gap-2">
         <button className={secondaryButton} onClick={duplicateSelection}>
           <Copy {...ICON_SM} />
-          Länkade kopior
+          Nya länkade kopior
         </button>
         <button className={dangerButton} onClick={deleteSelection}>
           <Trash2 {...ICON_SM} />
@@ -394,29 +394,34 @@ export function Properties() {
                 <p className="text-[13px] text-muted">
                   {copies > 1 ? (
                     <>
-                      {def.name} finns {copies} gånger, länkade: ändrar du måtten på en ändras alla. Gör unik om just
-                      den här ska få egna mått.
+                      {def.name} finns {copies} gånger, länkade: ändrar du måtten på en ändras alla.
                       {isMirrored(body.frame) && ' Den här är spegelvänd: hål och tappar sitter åt andra hållet.'}
                     </>
                   ) : (
-                    <>
-                      Behöver du fler likadana, t.ex. fyra ben? En länkad kopia får samma mått och följer med när du
-                      ändrar dem.
-                    </>
+                    'Behöver du fler likadana, t.ex. fyra ben? Gör länkade kopior, så räcker det att ändra måtten på en.'
                   )}
                 </p>
-                <div className="grid grid-cols-2 gap-2">
+                {/* Vad knappen gör står under den: "länkad" och "koppla loss" säger inte allt på egen hand. */}
+                <div className="grid grid-cols-2 gap-x-2 gap-y-1">
                   <button className={secondaryButton} onClick={() => duplicateLinked(body.id)}>
                     <Copy {...ICON_SM} />
-                    Länkad kopia
+                    Ny länkad kopia
                   </button>
+                  {copies > 1 ? (
+                    <button className={secondaryButton} onClick={() => makeUnique(body.id)}>
+                      <Unlink {...ICON_SM} />
+                      Koppla loss
+                    </button>
+                  ) : (
+                    <span />
+                  )}
+                  <p className="px-1 text-xs text-faint">
+                    Kopian blir likadan. Ändrar du ett mått på en av dem, ändras alla.
+                  </p>
                   {copies > 1 && (
-                    <Tip label="Ge den här kopian en egen form">
-                      <button className={secondaryButton} onClick={() => makeUnique(body.id)}>
-                        <Unlink {...ICON_SM} />
-                        Gör unik
-                      </button>
-                    </Tip>
+                    <p className="px-1 text-xs text-faint">
+                      Den här slutar följa de andra. Sedan kan du ändra den för sig.
+                    </p>
                   )}
                 </div>
               </Group>

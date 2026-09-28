@@ -285,7 +285,7 @@ function MoreMenu({ id, name, onZoom, onCopy }: { id: string; name: string; onZo
             Zooma till
           </MenuItem>
           <MenuItem Icon={Copy} onClick={run(onCopy)}>
-            Länkad kopia
+            Ny länkad kopia
           </MenuItem>
           <MenuItem Icon={Boxes} onClick={run(() => selectConnected(id))}>
             Välj allt som sitter ihop
@@ -397,7 +397,7 @@ export function SelectionBar() {
           className={wideOnly}
         />
         <BarButton label="Flytta eller vrid" short="Flytta" Icon={Move} onClick={() => setTool('move')} />
-        <BarButton label="Länkade kopior" short="Kopia" Icon={Copy} onClick={duplicateSelection} />
+        <BarButton label="Nya länkade kopior" short="Kopia" Icon={Copy} onClick={duplicateSelection} />
         <MirrorMenu />
         <VisibilityMenu id={body.id} />
         <MultiMoreMenu id={body.id} />
@@ -425,7 +425,7 @@ export function SelectionBar() {
           ) : (
             <>
               <BarButton
-                label="Länkad kopia"
+                label="Ny länkad kopia"
                 short="Kopia"
                 Icon={Copy}
                 onClick={() => duplicateLinked(body.id)}
