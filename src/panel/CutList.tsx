@@ -1,13 +1,16 @@
+import { FileSpreadsheet } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { buildCutList, groupByMaterial, paintText, type CutListRow } from '../model/cutlist'
-import { compactNames } from '../model/cutlistExport'
+import { compactNames, cutListCsv, safeFileName } from '../model/cutlistExport'
 import { numberFormat } from '../model/numberFormat'
 import { materialColor } from '../scene/colors'
 import { useBodies, useDocumentStore } from '../store/documentStore'
+import { useLibraryStore } from '../store/libraryStore'
+import { deliverFile } from './fileOut'
 import { EmptyState } from './EmptyState'
 import { CutPlanView } from './CutPlanView'
 import { CutListPicture } from './pictures'
-import { groupTitle, listCard, sectionTitle, selectableListRow, segment, segmentGroup } from './ui'
+import { ghostButton, groupTitle, listCard, sectionTitle, selectableListRow, segment, segmentGroup } from './ui'
 import { firstUpper, isOrdered, materialTitle } from '../model/materials'
 
 const num = numberFormat(1, true)
@@ -92,15 +95,29 @@ export function CutList() {
 
           {/* Siffrorna för hela listan står längst ner, bleka: bra att veta, men inget man planerar efter. */}
           {view === 'list' && (
-            <p className="text-xs text-faint tabular-nums">
-              {cutList.totalCount} {cutList.totalCount === 1 ? 'del' : 'delar'} · {cutList.rows.length} olika mått ·{' '}
-              {volume.format(cutList.totalVolumeM3)} m³. Mått i mm: L längs fibern, T tjocklek.
-            </p>
+            <div className="flex flex-col items-start gap-2">
+              <p className="text-xs text-faint tabular-nums">
+                {cutList.totalCount} {cutList.totalCount === 1 ? 'del' : 'delar'} · {cutList.rows.length} olika mått ·{' '}
+                {volume.format(cutList.totalVolumeM3)} m³. Mått i mm: L längs fibern, T tjocklek.
+              </p>
+              {/* För Excel och Numbers: att räkna pris, eller skicka listan till den som sågar. */}
+              <button className={`${ghostButton} -ml-2 text-muted`} onClick={() => void saveCsv(cutList.rows)}>
+                <FileSpreadsheet size={16} strokeWidth={1.75} aria-hidden />
+                Spara som CSV
+              </button>
+            </div>
           )}
         </div>
       )}
     </section>
   )
+}
+
+/** Kaplistan som CSV-fil med modellens namn: delas på pekskärm, laddas ner annars. */
+async function saveCsv(rows: readonly CutListRow[]) {
+  const name = safeFileName(useLibraryStore.getState().currentName) || 'Modell'
+  const file = new File([cutListCsv(rows, materialTitle)], `${name} – kaplista.csv`, { type: 'text/csv' })
+  await deliverFile(file)
 }
 
 function Row({ row }: { row: CutListRow }) {

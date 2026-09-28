@@ -47,3 +47,42 @@ export function safeFileName(name: string): string {
     .replace(/\s+/g, ' ')
     .trim()
 }
+
+/** Ett fält i CSV: inom citattecken om det har semikolon, citattecken eller radbrytning. */
+const csvField = (value: string) => (/[;"\n\r]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value)
+
+/**
+ * Kaplistan som CSV, som svenska Excel och Numbers läser den: semikolon mellan fälten,
+ * decimalkomma och BOM först, så att å, ä och ö blir rätt. En rad per rad i kaplistan,
+ * i samma ordning. Mått i mm, volym i m³.
+ */
+export function cutListCsv(rows: readonly CutListRow[], title: (material: string) => string): string {
+  const head = [
+    'Antal',
+    'Namn',
+    'Material',
+    'Längd (mm)',
+    'Bredd (mm)',
+    'Tjocklek (mm)',
+    'Diameter (mm)',
+    'Färg',
+    'Volym (m³)',
+  ]
+  const volume = numberFormat(6)
+  const lines = rows.map((r) =>
+    [
+      String(r.count),
+      r.names.join(', '),
+      title(r.material),
+      formatMm(r.length),
+      formatMm(r.width),
+      formatMm(r.thickness),
+      r.round ? formatMm(r.round.diameter) : '',
+      r.paint ? (r.paint.code ?? r.paint.color) : '',
+      volume.format(r.volumeM3),
+    ]
+      .map(csvField)
+      .join(';'),
+  )
+  return '﻿' + [head.join(';'), ...lines].join('\r\n') + '\r\n'
+}

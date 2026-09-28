@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { compactNames, compactNumbers, formatMm } from './cutlistExport'
+import { buildCutList } from './cutlist'
+import { compactNames, compactNumbers, cutListCsv, formatMm } from './cutlistExport'
+import { testBody } from './testFixtures'
 
 describe('formatMm', () => {
   it('visar högst en decimal', () => {
@@ -31,5 +33,31 @@ describe('compactNames', () => {
 
   it('lämnar ett ensamt namn orört', () => {
     expect(compactNames(['Sarg fram'])).toBe('Sarg fram')
+  })
+})
+
+describe('cutListCsv', () => {
+  it('semikolon, decimalkomma och BOM, en rad per rad i kaplistan', () => {
+    const rows = buildCutList([
+      testBody({ id: 'a', name: 'Hylla; lång', profile: { x0: 0, y0: 0, x1: 800.25, y1: 120 } }),
+      testBody({ id: 'b', name: 'Hylla; lång', profile: { x0: 0, y0: 0, x1: 800.25, y1: 120 } }),
+      testBody({
+        id: 'c',
+        name: 'Pinne',
+        grainAxis: 'n',
+        thicknessAxis: 'u',
+        shape: 'circle',
+        profile: { x0: 0, y0: 0, x1: 20, y1: 20 },
+        z1: 400,
+        paint: { color: '#ffffff', code: 'NCS S 0502-Y' },
+      }),
+    ]).rows
+    const csv = cutListCsv(rows, (m) => m.toUpperCase())
+    expect(csv.startsWith('\uFEFFAntal;Namn;Material;')).toBe(true)
+    const lines = csv.slice(1).trimEnd().split('\r\n')
+    expect(lines).toHaveLength(3)
+    // Semikolon i namnet: inom citattecken.
+    expect(lines).toContain('2;"Hylla; lång";FURU;800,3;120;22;;;0,004226')
+    expect(lines.find((l) => l.includes('Pinne'))).toMatch(/^1;Pinne;FURU;400;20;20;20;NCS S 0502-Y;/)
   })
 })
