@@ -1,7 +1,11 @@
 /**
  * Små aritmetiska uttryck för mått: tal, parameternamn, + − * / och parenteser.
- * Decimalkomma och decimalpunkt fungerar. "mm" direkt efter ett tal ignoreras.
+ * Decimalkomma och decimalpunkt fungerar. Svaret är i mm; efter ett tal får man skriva
+ * mm, cm eller m ("12 cm" = 120).
  */
+
+/** Enheterna efter ett tal, i mm. */
+const UNITS: Record<string, number> = { mm: 1, cm: 10, m: 1000 }
 
 type Token =
   | { kind: 'num'; value: number; start: number; end: number }
@@ -33,8 +37,11 @@ function tokenize(text: string): Token[] | string {
       let j = i + 1
       while (j < text.length && IDENT_PART.test(text[j]!)) j++
       const name = text.slice(i, j)
-      // "mm" efter ett tal är en enhet, inget namn.
-      if (name === 'mm' && tokens.at(-1)?.kind === 'num') {
+      // En enhet efter ett tal är inget namn: talet räknas om till mm.
+      const prev = tokens.at(-1)
+      if (name in UNITS && prev?.kind === 'num') {
+        prev.value = Math.round(prev.value * UNITS[name]! * 1e6) / 1e6
+        prev.end = j
         i = j
         continue
       }
@@ -110,7 +117,9 @@ export function evaluate(text: string, lookup: (name: string) => number | undefi
 
   try {
     const value = expr()
-    if (pos < tokens.length) return { ok: false, error: 'Oväntat slut på uttrycket' }
+    // Två tal eller namn i rad ("2 3", "bredd höjd"): det saknas ett räknesätt emellan.
+    const rest = tokens[pos]
+    if (rest) return { ok: false, error: `Något saknas före "${text.slice(rest.start).trim()}", t.ex. + eller *` }
     if (!Number.isFinite(value)) return { ok: false, error: 'Ogiltigt resultat' }
     return { ok: true, value }
   } catch (e) {

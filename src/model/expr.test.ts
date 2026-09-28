@@ -10,6 +10,10 @@ describe('evaluate', () => {
     ['12,5', 12.5],
     ['450 mm', 450],
     ['450mm', 450],
+    ['12cm', 120],
+    ['12,5 cm', 125],
+    ['1,2 m', 1200],
+    ['bredd - 2 cm', 580],
     ['tjocklek', 22],
     ['bredd - 2 * tjocklek', 556],
     ['(bredd - 100) / 2', 250],
@@ -24,7 +28,9 @@ describe('evaluate', () => {
     ['okänd', 'Okänd parameter'],
     ['2 +', 'för tidigt'],
     ['(2 + 3', 'Saknar )'],
-    ['2 3', 'Oväntat slut'],
+    ['2 3', 'Något saknas före "3"'],
+    ['bredd tjocklek', 'Något saknas före "tjocklek"'],
+    ['12 tum', 'Något saknas före "tum"'],
     ['1 / 0', 'Division med noll'],
     ['2 # 3', 'Okänt tecken'],
   ])('avvisar %j', (text, error) => {
@@ -40,8 +46,9 @@ describe('identifiers och renameIdentifier', () => {
     expect(evaluate('10 \u2212 2,5', () => undefined)).toEqual({ ok: true, value: 7.5 })
   })
 
-  it('hittar namn men inte enheten mm', () => {
-    expect(identifiers('bredd - 2 * tjocklek + 5 mm')).toEqual(['bredd', 'tjocklek'])
+  it('hittar namn men inte enheterna', () => {
+    expect(identifiers('bredd - 2 * tjocklek + 5 mm + 2 cm')).toEqual(['bredd', 'tjocklek'])
+    expect(isConstant('1,2 m')).toBe(true)
     expect(isConstant('12,5 mm')).toBe(true)
   })
 
