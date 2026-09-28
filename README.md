@@ -117,3 +117,13 @@ bygg.larsabrasha.com {
 	reverse_proxy localhost:8787 # or the machine running the container, e.g. 192.168.1.20:8787
 }
 ```
+
+## License
+
+Copyright (C) 2026 Lars Arvidsson
+
+Bygg is free software: you can redistribute it and/or modify it under the terms of the
+GNU Affero General Public License as published by the Free Software Foundation, either version 3
+of the License, or (at your option) any later version. See [LICENSE](LICENSE).
+
+If you run a modified version on a server that others use, the AGPL requires you to offer them its source code.
