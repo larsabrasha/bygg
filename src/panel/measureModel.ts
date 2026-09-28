@@ -26,7 +26,7 @@ const fmt = numberFormat(1)
  * Komponenter som använder den prenumererar själva på det som ändras.
  */
 export function measureModel() {
-  const { tool, op, measure, copy } = useToolStore.getState()
+  const { tool, op, measure, copy, adding } = useToolStore.getState()
   // Efter en kopia kan man skriva hur många det ska bli (som "5x" i SketchUp).
   const extending = !op && tool === 'move' ? extendableCopy() : null
   // Efter ett drag ligger rutan kvar med värdet, så att man kan skriva ett exakt mått i stället.
@@ -39,7 +39,8 @@ export function measureModel() {
   const ready = !shown && !extending ? readyPushPull() : null
 
   // I Välj syns rutan bara när något är valt, och under och direkt efter en operation.
-  const visible = !(tool === 'select' && !shown && !ready)
+  // Välj fler: bara tipset om hur man väljer.
+  const visible = !(tool === 'select' && !shown && !ready && !adding)
 
   // Push/pull ser likadan ut hela vägen: vald sida, medan man drar och efter ett drag (ändra).
   // Samma text och samma knappar på samma plats, så att rutan inte hoppar när läget byts.
@@ -54,7 +55,7 @@ export function measureModel() {
           ? 'Kopia: dra i en pil, en båge eller delen. Originalet står kvar.'
           : !op
             ? {
-                select: '',
+                select: adding ? 'Tryck på delar, eller dra runt dem, för att lägga till dem i valet.' : '',
                 rect: 'Tryck där första hörnet ska vara – på golvet eller på en yta.',
                 circle: 'Tryck där mitten ska vara – på golvet eller på en yta.',
                 pushpull: 'Dra i en skiss eller en sida av en del, eller tryck på den.',

@@ -2,11 +2,14 @@ import type { CameraControlsImpl } from '@react-three/drei'
 import { useThree } from '@react-three/fiber'
 import { useEffect, useMemo } from 'react'
 import { Raycaster, Vector2, Vector3, type Intersection, type Object3D, type PerspectiveCamera } from 'three'
-import type { Vec3 } from '../model/types'
-import { useDocumentStore } from '../store/documentStore'
+import type { Vec2, Vec3 } from '../model/types'
+import { bodyCenter } from '../model/geometry'
+import { lassoPick } from '../model/lasso'
+import { resolveBodies } from '../model/resolve'
+import { selectedBodyIds, useDocumentStore } from '../store/documentStore'
 import { useLibraryStore } from '../store/libraryStore'
 import { useToolStore, type Op } from '../store/toolStore'
-import { useViewStore } from '../store/viewStore'
+import { isShown, useViewStore } from '../store/viewStore'
 import {
   cancel,
   commit,
@@ -69,7 +72,12 @@ interface Press {
   startedOp: boolean
   /** Vad operationen gör om trycket inte blir en dragning (se afterTapStart). */
   afterTap: ReturnType<typeof afterTapStart>
+  /** En dragning ritar en slinga runt delar som läggs till i valet (Skift eller Välj fler). */
+  lasso?: boolean
 }
+
+/** Så långt (px) mellan två punkter i slingan; tätare ger bara fler punkter att räkna på. */
+const LASSO_STEP = 4
 
 /**
  * Översätter pekarhändelser till verktygsanrop och styr vad kameran får göra
@@ -266,6 +274,7 @@ export function ToolController() {
         // Fler fingrar: kameran tar över. Det första fingrets verkan tas tillbaka.
         multiTouch = true
         if (press?.owner === 'tool') useToolStore.getState().setOp(press.opBefore)
+        if (press?.lasso) useToolStore.getState().setLasso(null)
         press = null
         // Två fingrar vrider runt det som ligger mellan dem.
         if (pointers.size === 2) {
@@ -308,8 +317,18 @@ export function ToolController() {
       // kameran eller väljer, inget annat.
       const t = hit?.target
       const headOn = (t?.kind === 'handle' || t?.kind === 'axis') && !!t.headOn
-      const owner =
-        useViewStore.getState().exploded || (headOn && !op) || fingerOnly
+      // Skift (eller Välj fler) i Välj: en dragning ritar en slinga i stället för att vrida vyn.
+      // Två fingrar vrider och zoomar som vanligt. Ett tryck väljer som förut (se onUp).
+      const lasso =
+        tool === 'select' &&
+        !op &&
+        !fingerOnly &&
+        !useViewStore.getState().exploded &&
+        (e.shiftKey || e.metaKey || e.ctrlKey || useToolStore.getState().adding) &&
+        t?.kind !== 'handle'
+      const owner = lasso
+        ? 'tool'
+        : useViewStore.getState().exploded || (headOn && !op) || fingerOnly
           ? 'camera'
           : pressOwner(tool, op !== null, kind, t?.kind ?? null, onSelected)
       // Pennan vrider aldrig vyn när pennläget är på: ett tryck med den väljer ändå (se onUp).
@@ -324,10 +343,15 @@ export function ToolController() {
         opBefore: op,
         startedOp: false,
         afterTap: 'follow',
+        ...(lasso && { lasso }),
       }
 
       if (owner === 'camera') {
         setPivot(e.clientX, e.clientY)
+        return
+      }
+      if (lasso) {
+        el.setPointerCapture(e.pointerId)
         return
       }
       // Släpp utanför vyn ska ändå avsluta dragningen.
@@ -359,6 +383,20 @@ export function ToolController() {
       if (fingerOnlyCamera(kind, penMode())) return
       if (!e.isPrimary || (multiTouch && kind !== 'pen')) return
       if (press && press.pointerId !== e.pointerId) return
+      if (press?.lasso) {
+        const tools = useToolStore.getState()
+        const path = tools.lasso
+        const here: Vec2 = [e.clientX, e.clientY]
+        // Slingan börjar först när trycket blivit en dragning; ett tryck väljer som vanligt.
+        if (!path) {
+          if (Math.hypot(e.clientX - press.x, e.clientY - press.y) > press.slop)
+            tools.setLasso([[press.x, press.y], here])
+          return
+        }
+        const last = path.at(-1)!
+        if (Math.hypot(here[0] - last[0], here[1] - last[1]) >= LASSO_STEP) tools.setLasso([...path, here])
+        return
+      }
       const { op, tool, hover, setHover } = useToolStore.getState()
       if (op) {
         // Med mitt- eller högerknappen nere rör man kameran, inte operationen.
@@ -430,6 +468,15 @@ export function ToolController() {
       const p = press
       press = null
 
+      if (p.lasso) {
+        const path = useToolStore.getState().lasso
+        useToolStore.getState().setLasso(null)
+        if (path) {
+          finishLasso([...path, [e.clientX, e.clientY]])
+          return
+        }
+      }
+
       if (useToolStore.getState().op) {
         if (wasMulti || p.owner !== 'tool') return
         const here = { x: e.clientX, y: e.clientY, time: e.timeStamp }
@@ -449,7 +496,7 @@ export function ToolController() {
         commit()
         return
       }
-      if (isTap && p.owner === 'camera') {
+      if (isTap && (p.owner === 'camera' || p.lasso)) {
         // Ett finger i pennläget gör inget med modellen, som i Shapr3D: det styr bara vyn.
         // (Tvåfinger- och trefingertryck för ångra och gör om räknas ändå, se endGesture.)
         if (fingerOnlyCamera(p.kind, penMode())) return
@@ -489,7 +536,30 @@ export function ToolController() {
       if (press?.pointerId !== e.pointerId) return
       dropMove()
       if (press.owner === 'tool') useToolStore.getState().setOp(press.opBefore)
+      if (press.lasso) useToolStore.getState().setLasso(null)
       press = null
+    }
+
+    /**
+     * Lägger delarna man ringat in till valet (se lassoPick): de som syns, utom verktygen
+     * (Skär ut, tappar). Den sista av de nya blir den valda.
+     */
+    const finishLasso = (path: Vec2[]) => {
+      const r = el.getBoundingClientRect()
+      const view = useViewStore.getState()
+      const docs = useDocumentStore.getState()
+      const at = new Vector3()
+      const centers = new Map<string, Vec2 | null>()
+      for (const b of resolveBodies(docs.doc)) {
+        if (b.tool || !isShown(view, b.id)) continue
+        at.set(...bodyCenter(b)).project(camera)
+        // Bakom kameran, eller långt utanför bilden.
+        centers.set(b.id, at.z > 1 ? null : [r.left + ((at.x + 1) / 2) * r.width, r.top + ((1 - at.y) / 2) * r.height])
+      }
+      const picked = lassoPick(centers, path)
+      if (picked.length === 0) return
+      const before = selectedBodyIds(docs)
+      docs.selectBodies([...before.filter((id) => !picked.includes(id)).reverse(), ...picked])
     }
 
     const onLeave = () => {

@@ -905,7 +905,9 @@ export function cancel() {
 export function readyPushPull(): PushPullTarget | null {
   const t = tools()
   const sel = docs().selection
-  if (t.op || t.tool !== 'select' || t.combining || !sel || useViewStore.getState().exploded) return null
+  // Push/pull gäller en del: inte med flera valda, och inte medan man väljer fler.
+  if (t.op || t.tool !== 'select' || t.combining || t.adding || docs().also.length > 0) return null
+  if (!sel || useViewStore.getState().exploded) return null
   if (amendableOp()) return null
   const target = pushPullTargetOf(sel)
   return target && pushPullAnchor(target) ? target : null

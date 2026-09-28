@@ -76,6 +76,8 @@ export function MeasureBox() {
   const filled = useRef<(string | null)[]>([null, null])
 
   useToolStore((s) => s.combining)
+  useToolStore((s) => s.adding)
+  useDocumentStore((s) => s.also)
   useViewStore((s) => s.exploded)
   const { visible, shown, amend, extending, ready, pushpullBox, hint, total, live, fields, unit } = measureModel()
   if (!visible) return null

@@ -1,6 +1,7 @@
 import { CombineBar } from './panel/CombineBar'
 import { Gallery } from './panel/Gallery'
 import { DimensionLabels } from './panel/DimensionLabels'
+import { LassoOverlay } from './panel/LassoOverlay'
 import { MeasureBox } from './panel/MeasureBox'
 import { Notices } from './panel/Notices'
 import { OpeningOverlay } from './panel/OpeningOverlay'
@@ -59,6 +60,7 @@ export function App() {
               bilder behöver på en telefon. Kameran står kvar när den öppnas igen (CameraRig). */}
           {!drawing && <Viewport />}
           <DimensionLabels />
+          <LassoOverlay />
           {/* Startvyn visar samma meddelanden själv. Under knapparna i vyns hörn, och på smal
               skärm mellan kolumnerna av knappar, så att de inte täcks. */}
           {screen === 'model' && <Notices place="top-16 max-w-[calc(100%-16px)] narrow:max-w-[calc(100%-8rem)]" />}

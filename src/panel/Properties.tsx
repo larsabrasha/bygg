@@ -288,8 +288,8 @@ function MultiProperties({ ids }: { ids: readonly string[] }) {
           </>
         )}
         <p className="text-xs text-faint">
-          Skift-klicka, eller tryck på Välj fler, för att lägga till eller ta bort delar. Mått ändrar du på en del i
-          taget.
+          Skift-klicka på delar, eller Skift-dra runt dem, för att lägga till fler. På pekskärm: tryck på Fler. Mått
+          ändrar du på en del i taget.
         </p>
       </Group>
       <div className="grid grid-cols-2 gap-2">

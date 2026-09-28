@@ -202,6 +202,8 @@ interface ToolSnapshot {
    * välja bara den. På pekskärm, där det inte finns någon Skift; med mus gör Skift-klick samma sak.
    */
   adding: boolean
+  /** Slingan man ritar runt delar för att välja dem, i skärmens koordinater (clientX/Y). */
+  lasso: Vec2[] | null
 }
 
 interface ToolState extends ToolSnapshot {
@@ -221,6 +223,7 @@ interface ToolState extends ToolSnapshot {
   setRulerHover: (p: RulerPoint | null) => void
   setCombining: (c: ToolSnapshot['combining']) => void
   setAdding: (on: boolean) => void
+  setLasso: (path: Vec2[] | null) => void
 }
 
 const STOCK_SNAP_KEY = 'bygg.stockSnap'
@@ -261,6 +264,7 @@ const initial: ToolSnapshot = previous
       rulerHover: null,
       combining: null,
       adding: previous.getState().adding ?? false,
+      lasso: null,
       ...idle,
     }
   : {
@@ -277,6 +281,7 @@ const initial: ToolSnapshot = previous
       rulerHover: null,
       combining: null,
       adding: false,
+      lasso: null,
       ...idle,
     }
 
@@ -302,6 +307,7 @@ export const useToolStore = create<ToolState>()((set) => ({
   setHover: (hover) => set({ hover }),
   setCombining: (combining) => set({ combining }),
   setAdding: (adding) => set({ adding }),
+  setLasso: (lasso) => set({ lasso }),
   setHoverPoint: (hoverPoint) => set({ hoverPoint }),
   setHoverHandle: (hoverHandle) => set((s) => (sameHandle(s.hoverHandle, hoverHandle) ? s : { hoverHandle })),
   setMeasure: (field, text) =>
