@@ -79,6 +79,9 @@ export function MeasureBox() {
   useToolStore((s) => s.adding)
   useDocumentStore((s) => s.also)
   useViewStore((s) => s.exploded)
+  // Öppet blad på smal skärm: 3D-vyn är låg, och en ruta som bara väntar på ett mått (en vald sida)
+  // skulle tillsammans med bladet täcka nästan hela vyn. Under en operation står den kvar.
+  const sheetOpen = useViewStore((s) => s.sheetOpen)
   const { visible, shown, amend, extending, ready, pushpullBox, hint, total, live, fields, unit } = measureModel()
   if (!visible) return null
   const copyToggle = tool === 'move' && (
@@ -124,7 +127,7 @@ export function MeasureBox() {
   if (tool === 'measure') return <RulerBox ruler={ruler} hover={rulerHover} onDone={() => setTool('select')} />
 
   return (
-    <div ref={cover} className={bottomBox}>
+    <div ref={cover} className={`${bottomBox} ${sheetOpen && !op ? 'narrow:hidden' : ''}`}>
       {shown || extending || ready ? (
         <>
           {/* Samma höjd hela tiden: vad det skrivna blir står i stället för hjälptexten, inte på en egen rad. */}

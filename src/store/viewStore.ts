@@ -16,6 +16,9 @@ export interface ViewState {
   /** Detaljpanelen på bred skärm. På smal skärm är den ett blad som alltid finns. */
   panelOpen: boolean
   togglePanel: () => void
+  /** Bladet på smal skärm är öppet (halvöppet eller helt). Sätts av Sidebar. */
+  sheetOpen: boolean
+  setSheetOpen: (open: boolean) => void
   /** Fokusläge (Tab, som i Photoshop): bara 3D-vyn, utan raden överst och detaljpanelen. Sparas inte. */
   focusMode: boolean
   toggleFocusMode: () => void
@@ -153,6 +156,8 @@ export const useViewStore = create<ViewState>()((set) => ({
   setPenMode: (penMode) => set({ penMode }),
   focusMode: false,
   toggleFocusMode: () => set((s) => ({ focusMode: !s.focusMode })),
+  sheetOpen: false,
+  setSheetOpen: (sheetOpen) => set({ sheetOpen }),
   panelOpen: readPanelOpen(),
   togglePanel: () =>
     set((s) => {

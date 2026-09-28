@@ -57,6 +57,9 @@ export function Sidebar() {
   const hidden = useViewStore((s) => s.focusMode) ? 'hidden' : panelOpen ? '' : 'hidden narrow:flex'
   const open = detent !== 'closed'
   const full = narrow && detent === 'full'
+  const setSheetOpen = useViewStore((s) => s.setSheetOpen)
+  // Måttrutan ger plats åt bladet (se MeasureBox).
+  useEffect(() => setSheetOpen(open), [open, setSheetOpen])
 
   const asideRef = useRef<HTMLElement>(null)
   const contentRef = useRef<HTMLDivElement>(null)
