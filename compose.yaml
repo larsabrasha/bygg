@@ -15,7 +15,6 @@ services:
       # OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:?missing in .env}
       # OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:?missing in .env}
       # SESSION_SECRET: ${SESSION_SECRET:?missing in .env}
-      # OIDC_SESSION_MINUTES: 60   # Pocket ID's "Session Duration", if changed there
     volumes:
       - bygg-data:/data
     restart: unless-stopped

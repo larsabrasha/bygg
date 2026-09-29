@@ -80,8 +80,6 @@ export interface OidcOptions {
   clientSecret: string
   /** Nyckeln som signerar cookies. */
   sessionSecret: string
-  /** Hur länge en inloggning i Pocket ID räcker ("Session Duration", 60 minuter som standard). */
-  idpSessionMinutes?: number
   /** Efter varje lyckad inloggning, innan sessionen ges (här skapas användarens mapp). */
   onLogin?: (user: User) => Promise<unknown>
   now?: () => number
@@ -118,7 +116,6 @@ export function oidcAuth(opts: OidcOptions): Auth {
   const idTokenCookie = secure ? '__Secure-bygg-id' : 'bygg-id'
   const now = opts.now ?? Date.now
   const secret = opts.sessionSecret
-  const idpSessionMs = (opts.idpSessionMinutes ?? 60) * 60_000
 
   // Hämtas första gången någon loggar in, och igen om det misslyckades (Pocket ID nere).
   let config: Promise<oidc.Configuration> | null = null
@@ -229,22 +226,20 @@ export function oidcAuth(opts: OidcOptions): Auth {
   })
 
   // Loggar ut här och i Pocket ID, annars loggar Pocket ID in en direkt igen.
-  // Loggar ut här och i Pocket ID, annars loggar Pocket ID in en direkt igen. Pocket ID skickar
-  // bara tillbaka hit med id_token_hint, om man fortfarande är inloggad där, och om adressen finns
-  // bland klientens "Logout Callback URLs". Annars stannar man på Pocket ID:s egen utloggningssida.
-  // Pocket ID:s inloggning förlängs inte, och den började senast när id-token gavs ut: är den
-  // äldre än så är man redan utloggad där, och då går man direkt tillbaka hit.
+  // Pocket ID skickar bara tillbaka hit med id_token_hint, och om adressen finns bland klientens
+  // "Logout Callback URLs". Annars stannar man på Pocket ID:s egen utloggningssida.
   routes.post('/logout', async (c) => {
     const idToken = getCookie(c, idTokenCookie)
     deleteCookie(c, sessionCookie, { path: '/', secure })
     deleteCookie(c, idTokenCookie, { path: '/auth', secure })
     const home = new URL('/', app).href
-    const issuedAt = idToken ? issuedAtMs(idToken) : null
-    if (issuedAt === null || now() > issuedAt + idpSessionMs) return c.json({ redirect: home })
     try {
       const cfg = await getConfig()
       if (!cfg.serverMetadata().end_session_endpoint) return c.json({ redirect: home })
-      const url = oidc.buildEndSessionUrl(cfg, { post_logout_redirect_uri: home, id_token_hint: idToken! })
+      const url = oidc.buildEndSessionUrl(cfg, {
+        post_logout_redirect_uri: home,
+        ...(idToken && { id_token_hint: idToken }),
+      })
       return c.json({ redirect: url.href })
     } catch {
       return c.json({ redirect: home })
@@ -252,14 +247,4 @@ export function oidcAuth(opts: OidcOptions): Auth {
   })
 
   return { user, routes, origin: app.origin }
-}
-
-/** När id-token gavs ut, i millisekunder. Den kontrolleras inte: den styr bara vart utloggningen leder. */
-function issuedAtMs(idToken: string): number | null {
-  try {
-    const { iat } = JSON.parse(Buffer.from(idToken.split('.')[1] ?? '', 'base64url').toString()) as { iat?: unknown }
-    return typeof iat === 'number' ? iat * 1000 : null
-  } catch {
-    return null
-  }
 }

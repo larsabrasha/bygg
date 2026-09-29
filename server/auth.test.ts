@@ -95,8 +95,7 @@ function makeAuth(appUrl = APP) {
 
 beforeEach(async () => {
   dir = await mkdtemp(path.join(tmpdir(), 'bygg-auth-'))
-  // openid-client kontrollerar id-token mot den riktiga klockan, och utloggningen jämför med när den gavs ut.
-  clock = Date.now()
+  clock = Date.parse('2026-09-27T10:00:00Z')
   storages = new UserStorages(dir)
   auth = makeAuth()
   app = createApp({ storages, auth })
@@ -236,19 +235,12 @@ describe('inloggning', () => {
     expect(claims).toMatchObject({ sub: 'user-a', aud: CLIENT_ID, iss: ISSUER })
   })
 
-  it('är man redan utloggad i Pocket ID går man direkt tillbaka hit', async () => {
-    // Pocket ID:s inloggning räcker 60 minuter; på dess utloggningssida kommer man inte tillbaka.
-    const { all } = await login()
-    clock += 61 * 60_000
-    const r = await app.request('/auth/logout', { method: 'POST', headers: { cookie: all } })
-    expect(await r.json()).toEqual({ redirect: `${APP}/` })
-    expect(r.headers.getSetCookie().find((c) => c.startsWith('bygg-session='))).toMatch(/Max-Age=0/)
-  })
-
-  it('en session från före id-token-cookien går direkt tillbaka hit', async () => {
+  it('en session från före id-token-cookien loggar ändå ut', async () => {
     const { cookie } = await login()
     const r = await app.request('/auth/logout', { method: 'POST', headers: { cookie } })
-    expect(await r.json()).toEqual({ redirect: `${APP}/` })
+    const q = new URL((await r.json()).redirect).searchParams
+    expect(q.get('id_token_hint')).toBeNull()
+    expect(q.get('post_logout_redirect_uri')).toBe(`${APP}/`)
   })
 
   it('med https: __Host-cookie med Secure', async () => {
