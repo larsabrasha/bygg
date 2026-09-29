@@ -1,5 +1,5 @@
 import { Hono, type Context } from 'hono'
-import { deleteCookie, getSignedCookie, setSignedCookie } from 'hono/cookie'
+import { deleteCookie, getCookie, getSignedCookie, setCookie, setSignedCookie } from 'hono/cookie'
 import * as oidc from 'openid-client'
 import type { LoggedOutResponse, MeResponse } from '../src/sync/protocol'
 
@@ -111,6 +111,9 @@ export function oidcAuth(opts: OidcOptions): Auth {
   const secure = app.protocol === 'https:'
   // __Host-: bara den här värden, bara https, hela sajten. Utan https (tester) går prefixet inte.
   const sessionCookie = secure ? '__Host-bygg-session' : 'bygg-session'
+  // Id-token, bara för utloggningen: utan den skickar Pocket ID inte tillbaka en hit.
+  // Egen cookie under /auth, så att den inte följer med varje API-anrop. __Host- kräver path=/.
+  const idTokenCookie = secure ? '__Secure-bygg-id' : 'bygg-id'
   const now = opts.now ?? Date.now
   const secret = opts.sessionSecret
 
@@ -206,6 +209,15 @@ export function oidcAuth(opts: OidcOptions): Auth {
         sameSite: 'Lax',
         maxAge: SESSION_DAYS * 86_400,
       })
+      // Pocket ID godtar en utgången id-token vid utloggning, så den räcker lika länge som sessionen.
+      if (tokens.id_token)
+        setCookie(c, idTokenCookie, tokens.id_token, {
+          path: '/auth',
+          httpOnly: true,
+          secure,
+          sameSite: 'Lax',
+          maxAge: SESSION_DAYS * 86_400,
+        })
       return c.redirect(login.returnTo)
     } catch (e) {
       console.warn('[bygg] Inloggningen misslyckades', e)
@@ -214,13 +226,20 @@ export function oidcAuth(opts: OidcOptions): Auth {
   })
 
   // Loggar ut här och i Pocket ID, annars loggar Pocket ID in en direkt igen.
+  // Pocket ID skickar bara tillbaka hit med id_token_hint, och om adressen finns bland klientens
+  // "Logout Callback URLs". Annars stannar man på Pocket ID:s egen utloggningssida.
   routes.post('/logout', async (c) => {
+    const idToken = getCookie(c, idTokenCookie)
     deleteCookie(c, sessionCookie, { path: '/', secure })
+    deleteCookie(c, idTokenCookie, { path: '/auth', secure })
     const home = new URL('/', app).href
     try {
       const cfg = await getConfig()
       if (!cfg.serverMetadata().end_session_endpoint) return c.json({ redirect: home })
-      const url = oidc.buildEndSessionUrl(cfg, { post_logout_redirect_uri: home })
+      const url = oidc.buildEndSessionUrl(cfg, {
+        post_logout_redirect_uri: home,
+        ...(idToken && { id_token_hint: idToken }),
+      })
       return c.json({ redirect: url.href })
     } catch {
       return c.json({ redirect: home })

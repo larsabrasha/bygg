@@ -127,6 +127,8 @@ async function login(sub = 'user-a', name = 'Lars', returnTo = '/m/abc') {
   })
   return {
     back,
+    /** Alla cookies från inloggningen, som en Cookie-header. */
+    all: cookiesFrom(back),
     cookie: cookiesFrom(back)
       .split('; ')
       .find((c) => c.startsWith('bygg-session='))!,
@@ -212,12 +214,33 @@ describe('inloggning', () => {
   })
 
   it('utloggning tar bort sessionen och loggar ut i Pocket ID', async () => {
-    const { cookie } = await login()
-    const r = await app.request('/auth/logout', { method: 'POST', headers: { cookie } })
+    const { all } = await login()
+    const r = await app.request('/auth/logout', { method: 'POST', headers: { cookie: all } })
     const { redirect } = await r.json()
     expect(redirect).toMatch(new RegExp(`^${ISSUER}/api/oidc/end-session\\?`))
-    expect(new URL(redirect).searchParams.get('post_logout_redirect_uri')).toBe(`${APP}/`)
+    const q = new URL(redirect).searchParams
+    expect(q.get('post_logout_redirect_uri')).toBe(`${APP}/`)
     expect(r.headers.getSetCookie().find((c) => c.startsWith('bygg-session='))).toMatch(/Max-Age=0/)
+    expect(r.headers.getSetCookie().find((c) => c.startsWith('bygg-id='))).toMatch(/Max-Age=0/)
+  })
+
+  it('utloggningen skickar med id-token, annars skickar Pocket ID inte tillbaka en', async () => {
+    const { back, all } = await login('user-a')
+    const set = back.headers.getSetCookie().find((c) => c.startsWith('bygg-id='))!
+    expect(set).toMatch(/HttpOnly/i)
+    expect(set).toMatch(/Path=\/auth(;|$)/)
+    const r = await app.request('/auth/logout', { method: 'POST', headers: { cookie: all } })
+    const hint = new URL((await r.json()).redirect).searchParams.get('id_token_hint')!
+    const claims = JSON.parse(Buffer.from(hint.split('.')[1]!, 'base64url').toString())
+    expect(claims).toMatchObject({ sub: 'user-a', aud: CLIENT_ID, iss: ISSUER })
+  })
+
+  it('en session från före id-token-cookien loggar ändå ut', async () => {
+    const { cookie } = await login()
+    const r = await app.request('/auth/logout', { method: 'POST', headers: { cookie } })
+    const q = new URL((await r.json()).redirect).searchParams
+    expect(q.get('id_token_hint')).toBeNull()
+    expect(q.get('post_logout_redirect_uri')).toBe(`${APP}/`)
   })
 
   it('med https: __Host-cookie med Secure', async () => {
