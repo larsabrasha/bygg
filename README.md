@@ -95,7 +95,9 @@ do not move into the account; they have to be exported and imported by hand.
 
 1. Create an OIDC client in Pocket ID:
    - Callback URL: `https://bygg.larsabrasha.com/auth/callback`
-   - Logout Callback URL: `https://bygg.larsabrasha.com/`
+   - Logout Callback URL: `https://bygg.larsabrasha.com/`. Signing out of Bygg also signs out of Pocket ID
+     and comes back here, but only while the Pocket ID session lasts ("Session Duration", 60 minutes by
+     default; set `OIDC_SESSION_MINUTES` if changed). After that, Bygg goes straight back to its start page.
    - Not "Public client" (the server has a secret). PKCE can be on.
    - To limit who may sign in: pick user groups under Allowed User Groups.
 2. Put a `.env` next to `compose.yaml` (not checked in):

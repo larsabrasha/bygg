@@ -22,6 +22,7 @@ import { TokenStore } from './tokens'
  *   OIDC_CLIENT_ID      från OIDC-klienten i Pocket ID
  *   OIDC_CLIENT_SECRET  d:o
  *   SESSION_SECRET      minst 32 slumpade tecken; signerar cookies (openssl rand -hex 32)
+ *   OIDC_SESSION_MINUTES  (60) samma som "Session Duration" i Pocket ID; styr vart utloggningen leder
  *   PORT                (8787)
  *   DATA_DIR            (./data)  – här hamnar users/<användare>/models, thumbs och trash
  *                                 (papperskorgen, som töms efter TRASH_DAYS dagar),
@@ -53,6 +54,7 @@ const auth = withLogin
       clientId: required('OIDC_CLIENT_ID'),
       clientSecret: required('OIDC_CLIENT_SECRET'),
       sessionSecret: required('SESSION_SECRET', (v) => v.length >= 32),
+      idpSessionMinutes: Number(process.env.OIDC_SESSION_MINUTES) || 60,
       // Den första som loggar in får modellerna från före inloggningen (se UserStorages).
       onLogin: (user) => storages.for(user.sub),
     })
