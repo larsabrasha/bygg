@@ -4,4 +4,6 @@ interface ImportMetaEnv {
   readonly BUILD_COMMIT: string
   /** Fanns det ändringar som inte var incheckade när appen byggdes. */
   readonly BUILD_DIRTY: boolean
+  /** Versionen ("0.4.0") när commiten har en versionstagg, annars tomt. */
+  readonly BUILD_VERSION: string
 }

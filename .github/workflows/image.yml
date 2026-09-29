@@ -51,6 +51,8 @@ jobs:
           context: .
           platforms: linux/amd64
           push: ${{ github.ref_type == 'tag' }}
+          # The version shown in "Om Bygg" (About); empty when run by hand.
+          build-args: BUILD_VERSION=${{ github.ref_type == 'tag' && github.ref_name || '' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha

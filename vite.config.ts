@@ -53,13 +53,14 @@ export default defineConfig(({ mode }) => {
   const git = gitInfo(fileURLToPath(new URL('.', import.meta.url)))
   const builtAt = new Date()
   const licenses = attributions(
-    `Version ${git.commit?.slice(0, 7) ?? 'okänd'}${git.dirty ? ' med ändringar som inte är incheckade' : ''}, byggd ${builtAt.toLocaleString('sv-SE', { dateStyle: 'medium', timeStyle: 'short' })}.`,
+    `Version ${git.version ? `${git.version} (${git.commit?.slice(0, 7) ?? 'okänd commit'})` : (git.commit?.slice(0, 7) ?? 'okänd')}${git.dirty ? ' med ändringar som inte är incheckade' : ''}, byggd ${builtAt.toLocaleString('sv-SE', { dateStyle: 'medium', timeStyle: 'short' })}.`,
   )
   return {
     // Vilken version som körs, för Om Bygg (src/panel/AboutSheet.tsx).
     define: {
       'import.meta.env.BUILD_COMMIT': JSON.stringify(git.commit ?? ''),
       'import.meta.env.BUILD_DIRTY': JSON.stringify(git.dirty),
+      'import.meta.env.BUILD_VERSION': JSON.stringify(git.version ?? ''),
     },
     worker: { plugins: () => [licenses.worker()] },
     // Egen cache för förbyggda beroenden: läget ingår i dess nyckel, och med samma katalog

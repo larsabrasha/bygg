@@ -4,6 +4,10 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci
 COPY . .
+# The version for "Om Bygg" (scripts/buildInfo.ts). The image workflow passes the tag it builds;
+# without it, a version tag on the commit in .git/refs is used, if there is one.
+ARG BUILD_VERSION=""
+ENV BUILD_VERSION=$BUILD_VERSION
 # The server is bundled into one file with its dependencies (scripts/buildServer.mjs),
 # so the image needs neither node_modules nor TypeScript at runtime. The CLI likewise
 # (scripts/buildCli.mjs), into dist/cli/, where /install.sh fetches it from.

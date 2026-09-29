@@ -54,17 +54,19 @@ function Row({ label, children }: { label: string; children: ReactNode }) {
   )
 }
 
-/** Commiten, kort och som länk till GitHub. */
+/** Versionen, om commiten har en versionstagg, och commiten, kort och som länk till GitHub. */
 function Commit() {
-  if (!COMMIT) return <span>okänd</span>
+  const version = import.meta.env.BUILD_VERSION
+  if (!COMMIT) return <span>{version || 'okänd'}</span>
   const dirty = import.meta.env.BUILD_DIRTY
   return (
     <span className="inline-flex flex-wrap items-baseline gap-x-2">
+      {version && <span className="font-semibold tabular-nums">{version}</span>}
       <a
         href={`${REPO_URL}/commit/${COMMIT}`}
         target="_blank"
         rel="noreferrer"
-        className="font-mono hover:underline"
+        className={`font-mono hover:underline ${version ? 'text-muted' : ''}`}
         title="Commiten på GitHub"
       >
         {COMMIT.slice(0, 7)}
