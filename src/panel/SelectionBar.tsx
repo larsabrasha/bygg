@@ -42,10 +42,15 @@ const ICON = { size: 18, strokeWidth: 1.75, 'aria-hidden': true } as const
  * Hela namnet står i tipset och i aria-label.
  */
 const barIcon =
-  'flex h-12 min-w-12 shrink-0 cursor-pointer flex-col items-center justify-center gap-1 rounded-lg px-1.5 hover:bg-hover aria-expanded:bg-accent-soft aria-expanded:text-accent aria-pressed:bg-accent-soft aria-pressed:text-accent narrow:h-11'
+  'flex h-12 min-w-12 shrink-0 cursor-pointer flex-col items-center justify-center gap-1 rounded-lg px-1.5 hover:bg-hover aria-expanded:bg-accent-soft aria-expanded:text-accent aria-pressed:bg-accent-soft aria-pressed:text-accent narrow:h-11 disabled:cursor-default disabled:text-disabled disabled:hover:bg-transparent'
 
-/** Knappar som på telefon ligger under Mer i stället. */
-const wideOnly = 'narrow:hidden'
+/** Knappar som ligger under Mer i stället när raden inte får plats (se compactOnly). */
+const wideOnly = 'narrow:hidden @max-[35rem]/view:hidden'
+/**
+ * Mer: bara när raden inte får plats. På telefon, och i en smal 3D-vy på bred skärm (smalt fönster
+ * med detaljpanelen öppen): hela raden behöver 35rem, annars flödade den över kanten.
+ */
+const compactOnly = 'hidden narrow:block @max-[35rem]/view:block'
 
 /** Delens namn i en menytext: halvfet, som i Egenskaper, så att det skiljer sig från orden runt. */
 function PartName({ name }: { name: string }) {
@@ -72,6 +77,7 @@ function BarButton({
   onClick,
   danger = false,
   pressed,
+  disabled = false,
   className = '',
 }: {
   label: string
@@ -82,6 +88,8 @@ function BarButton({
   danger?: boolean
   /** Knappen slår av och på ett läge (Välj fler). */
   pressed?: boolean
+  /** Går inte att använda just nu (gäller en del i taget); knappen står kvar, så att raden inte byter bredd. */
+  disabled?: boolean
   className?: string
 }) {
   return (
@@ -89,6 +97,7 @@ function BarButton({
       <button
         aria-label={label}
         aria-pressed={pressed}
+        disabled={disabled}
         onClick={onClick}
         className={`${barIcon} ${danger ? 'text-danger' : ''} ${className}`}
       >
@@ -104,7 +113,7 @@ function BarButton({
  * fog mellan två delar, och har en egen knapp. Efter valet trycker man på den
  * andra delen (se CombineBar).
  */
-function ShapeMenu({ hostId, name }: { hostId: string; name: string }) {
+function ShapeMenu({ hostId, name, disabled = false }: { hostId: string; name: string; disabled?: boolean }) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
   const close = useCallback(() => setOpen(false), [])
@@ -116,8 +125,14 @@ function ShapeMenu({ hostId, name }: { hostId: string; name: string }) {
   }
   return (
     <div ref={ref} className={`relative shrink-0 ${wideOnly}`}>
-      <Tip label="Forma">
-        <button aria-label="Forma" aria-expanded={open} onClick={() => setOpen((o) => !o)} className={barIcon}>
+      <Tip label={disabled ? 'Forma: en del i taget' : 'Forma'}>
+        <button
+          aria-label="Forma"
+          aria-expanded={open}
+          disabled={disabled}
+          onClick={() => setOpen((o) => !o)}
+          className={barIcon}
+        >
           <BarLabel Icon={SquaresUnite} short="Forma" menu />
         </button>
       </Tip>
@@ -224,47 +239,25 @@ function MirrorMenu() {
   )
 }
 
-/** Mer för flera valda, bara på telefon: Spegla och Visa, som på bred skärm har egna knappar. */
-function MultiMoreMenu({ id }: { id: string }) {
-  const [open, setOpen] = useState(false)
-  const ref = useRef<HTMLDivElement>(null)
-  const close = useCallback(() => setOpen(false), [])
-  useDismiss(ref, open, close)
-  const run = (action: () => void) => () => {
-    close()
-    action()
-  }
-  return (
-    <div ref={ref} className="hidden shrink-0 narrow:block">
-      <button aria-label="Mer" aria-expanded={open} onClick={() => setOpen((o) => !o)} className={barIcon}>
-        <BarLabel Icon={Ellipsis} short="Mer" />
-      </button>
-      {open && (
-        <div className="absolute top-full left-0 z-50 mt-1 w-max max-w-[calc(100vw-24px)] min-w-48 rounded-lg border border-line bg-panel p-1 shadow-lg">
-          {MIRRORS.map(({ axis, label, Icon }) => (
-            <MenuItem key={axis} Icon={Icon} onClick={run(() => mirrorSelection(axis))}>
-              Spegla {label.toLowerCase()}
-            </MenuItem>
-          ))}
-          <div role="separator" className="mx-2 my-1 h-px bg-line" />
-          <MenuItem Icon={ScanEye} onClick={run(() => isolateSelection(id))}>
-            Isolera
-          </MenuItem>
-          <MenuItem Icon={EyeOff} onClick={run(() => hideSelection(id))}>
-            Dölj
-          </MenuItem>
-        </div>
-      )}
-    </div>
-  )
-}
-
 /**
  * Mer, bara på telefon: det som på bred skärm har egna knappar, med hela namnen.
  * Menyn ligger under radens vänsterkant (knappens ruta är inte positionerad),
  * eftersom den inte får plats från knappen.
  */
-function MoreMenu({ id, name, onZoom, onCopy }: { id: string; name: string; onZoom: () => void; onCopy: () => void }) {
+function MoreMenu({
+  id,
+  name,
+  multi,
+  onZoom,
+  onCopy,
+}: {
+  id: string
+  name: string
+  /** Flera valda: det som gäller en del i taget står kvar men går inte att välja. */
+  multi: boolean
+  onZoom: () => void
+  onCopy: () => void
+}) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
   const close = useCallback(() => setOpen(false), [])
@@ -275,7 +268,7 @@ function MoreMenu({ id, name, onZoom, onCopy }: { id: string; name: string; onZo
     action()
   }
   return (
-    <div ref={ref} className="hidden shrink-0 narrow:block">
+    <div ref={ref} className={`shrink-0 ${compactOnly}`}>
       <button aria-label="Mer" aria-expanded={open} onClick={() => setOpen((o) => !o)} className={barIcon}>
         <BarLabel Icon={Ellipsis} short="Mer" />
       </button>
@@ -285,9 +278,9 @@ function MoreMenu({ id, name, onZoom, onCopy }: { id: string; name: string; onZo
             Zooma till
           </MenuItem>
           <MenuItem Icon={Copy} onClick={run(onCopy)}>
-            Ny länkad kopia
+            {multi ? 'Nya länkade kopior' : 'Ny länkad kopia'}
           </MenuItem>
-          <MenuItem Icon={Boxes} onClick={run(() => selectConnected(id))}>
+          <MenuItem Icon={Boxes} disabled={multi} onClick={run(() => selectConnected(id))}>
             Välj allt som sitter ihop
           </MenuItem>
           <div role="separator" className="mx-2 my-1 h-px bg-line" />
@@ -297,10 +290,14 @@ function MoreMenu({ id, name, onZoom, onCopy }: { id: string; name: string; onZo
             </MenuItem>
           ))}
           <div role="separator" className="mx-2 my-1 h-px bg-line" />
-          <MenuItem Icon={SquaresSubtract} onClick={run(() => setCombining({ op: 'subtract', host: id }))}>
+          <MenuItem
+            Icon={SquaresSubtract}
+            disabled={multi}
+            onClick={run(() => setCombining({ op: 'subtract', host: id }))}
+          >
             Skär ut en del ur <PartName name={name} />
           </MenuItem>
-          <MenuItem Icon={SquaresUnite} onClick={run(() => setCombining({ op: 'add', host: id }))}>
+          <MenuItem Icon={SquaresUnite} disabled={multi} onClick={run(() => setCombining({ op: 'add', host: id }))}>
             Lägg ihop en del med <PartName name={name} />
           </MenuItem>
           <div role="separator" className="mx-2 my-1 h-px bg-line" />
@@ -319,9 +316,9 @@ function MoreMenu({ id, name, onZoom, onCopy }: { id: string; name: string; onZo
 /**
  * Är 3D-vyn för smal för raden och vyknapparna (Visa allt m.fl.) bredvid varandra står raden
  * under dem i stället. Bara på bred skärm: på smal står vyknapparna i en smal kolumn vid kanten.
- * 52rem ≈ raden (470 px) + vyknapparna med VR (325 px) + marginaler. VisibilityBar har samma gräns.
+ * 55rem ≈ raden (525 px) + vyknapparna med VR (325 px) + marginaler. VisibilityBar har samma gräns.
  */
-const BELOW_VIEW_BUTTONS = 'min-[721px]:@max-[52rem]/view:top-[3.75rem]'
+const BELOW_VIEW_BUTTONS = 'min-[721px]:@max-[55rem]/view:top-[3.75rem]'
 
 /**
  * Det man oftast gör med det valda, direkt i 3D-vyn: på mobil slipper man
@@ -333,7 +330,6 @@ export function SelectionBar() {
   const doc = useDocumentStore((s) => s.doc)
   const select = useDocumentStore((s) => s.select)
   const deleteSelection = useDocumentStore((s) => s.deleteSelection)
-  const duplicateLinked = useDocumentStore((s) => s.duplicateLinked)
   const requestFit = useViewStore((s) => s.requestFit)
   const opActive = useToolStore((s) => s.op !== null)
   const combining = useToolStore((s) => s.combining)
@@ -362,6 +358,8 @@ export function SelectionBar() {
       onClick={() => setAdding(!adding)}
     />
   )
+  // Sist i raden, efter strecket, det som gäller själva valet och inte delarna: hur många som är
+  // valda, välj fler och avmarkera. Som i iOS, där antalet och Klar står för sig.
   const deselect = (
     <>
       {/*
@@ -369,6 +367,7 @@ export function SelectionBar() {
         På smal skärm visas namnet vid delen i vyn, och ett tryck bredvid avmarkerar, så de två tas bort.
       */}
       <span aria-hidden className="mx-0.5 h-6 w-px bg-line narrow:hidden" />
+      {addButton}
       <Tip label="Avmarkera">
         <button
           aria-label="Avmarkera"
@@ -385,30 +384,11 @@ export function SelectionBar() {
   )
   const barClass = `absolute top-3 left-3 flex max-w-[calc(100%-24px)] items-center gap-0.5 rounded-lg border border-line bg-panel/95 p-0.5 shadow-md narrow:max-w-[calc(100%-80px)] ${BELOW_VIEW_BUTTONS}`
 
-  // Flera valda: det som går att göra med alla på en gång. Tapp och Forma gäller en del och finns inte här.
-  if (body && count > 1)
-    return (
-      <div ref={cover} role="toolbar" aria-label={`${count} valda delar`} className={barClass}>
-        <BarButton
-          label="Zooma till"
-          short="Zooma"
-          Icon={Focus}
-          onClick={() => requestFit('selection')}
-          className={wideOnly}
-        />
-        <BarButton label="Flytta eller vrid" short="Flytta" Icon={Move} onClick={() => setTool('move')} />
-        <BarButton label="Nya länkade kopior" short="Kopia" Icon={Copy} onClick={duplicateSelection} />
-        <MirrorMenu />
-        <VisibilityMenu id={body.id} />
-        <MultiMoreMenu id={body.id} />
-        {addButton}
-        <BarButton label={`Ta bort ${count} delar`} short="Ta bort" Icon={Trash2} onClick={deleteSelection} danger />
-        {deselect}
-      </div>
-    )
-
+  // En del eller flera: samma knappar på samma platser, så att raden inte byter bredd när man väljer
+  // fler. Det som bara gäller en del (Tapp, Forma) blir grått med flera valda.
+  const multi = count > 1
   return (
-    <div ref={cover} role="toolbar" aria-label="Det valda" className={barClass}>
+    <div ref={cover} role="toolbar" aria-label={multi ? `${count} valda delar` : 'Det valda'} className={barClass}>
       {body ? (
         <>
           {/* Ett verktyg har få knappar; de ryms också på telefon. */}
@@ -424,15 +404,22 @@ export function SelectionBar() {
             <BarButton label="Lossa" Icon={Unlink} onClick={() => detach(body.id)} />
           ) : (
             <>
+              <BarButton label="Flytta eller vrid" short="Flytta" Icon={Move} onClick={() => setTool('move')} />
               <BarButton
-                label="Ny länkad kopia"
+                label={multi ? 'Nya länkade kopior' : 'Ny länkad kopia'}
                 short="Kopia"
                 Icon={Copy}
-                onClick={() => duplicateLinked(body.id)}
+                onClick={duplicateSelection}
                 className={wideOnly}
               />
-              <BarButton label="Tapp" Icon={Puzzle} onClick={() => setCombining({ op: 'joint', host: body.id })} />
-              <ShapeMenu hostId={body.id} name={body.name} />
+              <BarButton
+                label={multi ? 'Tapp: en del i taget' : 'Tapp'}
+                short="Tapp"
+                Icon={Puzzle}
+                disabled={multi}
+                onClick={() => setCombining({ op: 'joint', host: body.id })}
+              />
+              <ShapeMenu hostId={body.id} name={body.name} disabled={multi} />
               <MirrorMenu />
               <VisibilityMenu id={body.id} />
             </>
@@ -445,14 +432,20 @@ export function SelectionBar() {
           onClick={() => beginPushPull({ kind: 'sketch', id: selection.id })}
         />
       )}
-      {addButton}
-      <BarButton label="Ta bort" Icon={Trash2} onClick={deleteSelection} danger />
+      <BarButton
+        label={multi ? `Ta bort ${count} delar` : 'Ta bort'}
+        short="Ta bort"
+        Icon={Trash2}
+        onClick={deleteSelection}
+        danger
+      />
       {body && !body.tool && (
         <MoreMenu
           id={body.id}
           name={body.name}
+          multi={multi}
           onZoom={() => requestFit('selection')}
-          onCopy={() => duplicateLinked(body.id)}
+          onCopy={duplicateSelection}
         />
       )}
       {deselect}
