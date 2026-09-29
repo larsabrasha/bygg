@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { ArrowUpFromLine, Boxes, Copy, RotateCw, Trash2, Unlink } from 'lucide-react'
 import { isMirrored } from '../model/frame'
 import { rectSize } from '../model/geometry'
@@ -246,33 +246,59 @@ const MIXED = '\u0000olika'
  * Flera valda delar: det som går att ändra på alla på en gång. Namnen står som en lista; ett tryck
  * på ett namn väljer bara den delen.
  */
+/** Så många namn visas i listan över de valda innan resten fälls ihop. */
+const GROUPS_SHOWN = 12
+
 function MultiProperties({ ids }: { ids: readonly string[] }) {
   const doc = useDocumentStore((s) => s.doc)
   const updateParts = useDocumentStore((s) => s.updateParts)
   const duplicateSelection = useDocumentStore((s) => s.duplicateSelection)
   const deleteSelection = useDocumentStore((s) => s.deleteSelection)
-  const select = useDocumentStore((s) => s.select)
-  const all = resolveBodies(doc)
-  const chosen = ids.flatMap((id) => all.filter((b) => b.id === id))
+  const selectBodies = useDocumentStore((s) => s.selectBodies)
+  const [allGroups, setAllGroups] = useState(false)
+  const byId = new Map(resolveBodies(doc).map((b) => [b.id, b]))
+  const chosen = ids.flatMap((id) => byId.get(id) ?? [])
   const first = chosen[0]
   const def = first && doc.defs.find((d) => d.id === first.defId)
   if (!first || !def) return null
   const parts = chosen.filter((b) => !b.tool)
   const materials = new Set(parts.map((b) => b.material))
+  // De valda per namn, i den ordning namnen först kommer i valet.
+  const named = new Map<string, string[]>()
+  for (const b of chosen) {
+    const list = named.get(b.name)
+    if (list) list.push(b.id)
+    else named.set(b.name, [b.id])
+  }
+  const groups = [...named].map(([name, ids]) => ({ name, ids }))
   return (
     <div className="flex flex-col gap-4">
       <Group title={`${chosen.length} delar valda`}>
+        {/* En knapp per namn, med antalet: 173 ben är en knapp, inte 173. Trycket väljer bara dem. */}
         <ul className="flex flex-wrap gap-1.5">
-          {chosen.map((b) => (
-            <li key={b.id}>
-              <button
-                className="h-8 cursor-pointer rounded-md bg-button px-2.5 text-[13px] hover:bg-hover"
-                onClick={() => select({ kind: 'body', id: b.id })}
-              >
-                {b.name}
-              </button>
+          {(allGroups ? groups : groups.slice(0, GROUPS_SHOWN)).map(({ name, ids: named }) => (
+            <li key={name}>
+              <Tip label={named.length > 1 ? `Välj bara de ${named.length} som heter ${name}` : `Välj bara ${name}`}>
+                <button
+                  className="flex h-8 cursor-pointer items-center gap-1.5 rounded-md bg-button px-2.5 text-[13px] hover:bg-hover"
+                  onClick={() => selectBodies(named)}
+                >
+                  {name}
+                  {named.length > 1 && <span className="text-muted tabular-nums">{named.length}</span>}
+                </button>
+              </Tip>
             </li>
           ))}
+          {groups.length > GROUPS_SHOWN && (
+            <li>
+              <button
+                className="h-8 cursor-pointer rounded-md px-2.5 text-[13px] text-accent hover:bg-hover"
+                onClick={() => setAllGroups(!allGroups)}
+              >
+                {allGroups ? 'Visa färre' : `${groups.length - GROUPS_SHOWN} namn till`}
+              </button>
+            </li>
+          )}
         </ul>
         {parts.length > 0 && (
           <>
@@ -289,8 +315,8 @@ function MultiProperties({ ids }: { ids: readonly string[] }) {
           </>
         )}
         <p className="text-xs text-faint">
-          Skift-klicka på delar, eller Skift-dra runt dem, för att lägga till fler. På pekskärm: tryck på Fler. Mått
-          ändrar du på en del i taget.
+          Skift-klicka på delar, eller Skift-dra runt dem, för att lägga till fler. På pekskärm: tryck på ”
+          {chosen.length} valda” sist i raden. Mått ändrar du på en del i taget.
         </p>
       </Group>
       <div className="grid grid-cols-2 gap-2">
