@@ -47,7 +47,11 @@ function Scene() {
   const selection = useDocumentStore((s) => s.selection)
   // Flera valda: alla markeras, och pilarna för push/pull och måtten visas inte (de gäller en del).
   const also = useDocumentStore((s) => s.also)
-  const multi = also.length > 0
+  // Medan man ritar en slinga visas valet som flera valda, också när bara en del är inringad: pilarna,
+  // måtten och de länkade kopiornas kanter hör till en ensam vald del och ska inte blinka till.
+  const lassoing = useToolStore((s) => s.lasso !== null)
+  const multi = also.length > 0 || lassoing
+  const alsoSet = useMemo(() => new Set(also), [also])
   const op = useToolStore((s) => s.op)
   const hover = useToolStore((s) => s.hover)
   const hoverPoint = useToolStore((s) => s.hoverPoint)
@@ -95,7 +99,7 @@ function Scene() {
   const gizmoAt =
     !op && !exploded && tool === 'move' && selectedBody
       ? multi
-        ? bodiesBox(bodies.filter((b) => b.id === selectedBody.id || also.includes(b.id))).center
+        ? bodiesBox(bodies.filter((b) => b.id === selectedBody.id || alsoSet.has(b.id))).center
         : bodyCenter(selectedBody)
       : null
   // I Välj visas den valda delens mått vid kanterna (etiketterna i panel/DimensionLabels).
@@ -121,7 +125,9 @@ function Scene() {
             faded={fadedIds.has(b.id)}
             look={look}
             preview={preview?.affected.has(b.id)}
-            selected={selectedBody?.id === b.id || also.includes(b.id)}
+            selected={selectedBody?.id === b.id || alsoSet.has(b.id)}
+            // Valet ändras hela tiden medan man ritar en slinga: då syns det bara på glöden.
+            glowOnly={lassoing}
             peek={!!b.tool && !!peekTools?.includes(b.id)}
             sibling={!!selectedBody && !multi && !b.tool && selectedBody.id !== b.id && selectedBody.defId === b.defId}
             highlightFace={

@@ -144,7 +144,11 @@ export function DimensionLabels() {
   const showDims = useViewStore((s) => s.showDims)
   const selection = useDocumentStore((s) => s.selection)
   const tool = useToolStore((s) => s.tool)
-  const target = exploded ? null : dimensionsFor(doc, op, shownDimensionsOf(showDims, tool, op, selection))
+  // Måtten gäller en del: inte med flera valda, och inte medan man ritar en slinga (som 3D-vyn).
+  const multi = useDocumentStore((s) => s.also.length > 0)
+  const lassoing = useToolStore((s) => s.lasso !== null)
+  const target =
+    exploded || multi || lassoing ? null : dimensionsFor(doc, op, shownDimensionsOf(showDims, tool, op, selection))
   if (!target) return null
   const round = target.def.shape === 'circle'
   return (

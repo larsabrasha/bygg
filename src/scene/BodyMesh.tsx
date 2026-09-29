@@ -1,5 +1,5 @@
 import { Edges } from '@react-three/drei'
-import { useFrame } from '@react-three/fiber'
+import { useFrame, useThree } from '@react-three/fiber'
 import { memo, useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import {
   BoxGeometry,
@@ -34,6 +34,8 @@ import type { Look } from '../store/viewStore'
 /** Formens låda, för att räkna ut vilken sida en träff på resultatet ligger på (faceOnBox). */
 /** Hur synlig en del är när en annan är isolerad. */
 const FADED_OPACITY = 0.18
+/** Glöden på det valda medan man ritar en slinga, då det saknar kanter. Annars 0,2. */
+const GLOW_ONLY = 0.5
 /** Hur mycket av ådringens relief som syns genom täckfärg på massivt trä: en tredjedel. */
 const PAINTED_GRAIN = new Vector2(0.35, 0.35)
 
@@ -42,6 +44,12 @@ const boxOf = (b: Body): Box => ({ profile: b.profile, ...(b.shape && { shape: b
 interface Props {
   body: Body
   selected?: boolean
+  /**
+   * Man ritar en slinga för att välja: de valda syns bara på glöden, utan egna kanter. Kanterna är
+   * linjer som byggs för varje del som blir vald, och valet ändras medan man ritar. Släpper man
+   * får de valda sina kanter som vanligt.
+   */
+  glowOnly?: boolean
   /** Länkad kopia av den valda delen. */
   sibling?: boolean
   highlightFace?: Face | null
@@ -74,6 +82,7 @@ const WIRE_DARK = '#e6d8c2'
 function BodyMeshImpl({
   body,
   selected = false,
+  glowOnly = false,
   sibling = false,
   highlightFace = null,
   preview = false,
@@ -172,17 +181,10 @@ function BodyMeshImpl({
       : round
         ? [['u+', 'u-', 'v+', 'v-'], ['n+'], ['n-']]
         : FACES.map((f) => [f])
-    const list = parts.map((faces) => {
-      const marked = !hasSolid && !!highlightFace && faces.includes(highlightFace)
-      const lit = selected || marked
+    const list = parts.map(() => {
       if (wire && !ghost) {
-        // Trådmodell: ytan syns bara som en svag fyllning när den är markerad eller vald.
-        return new MeshStandardMaterial({
-          color: ACCENT,
-          transparent: true,
-          opacity: marked ? 0.25 : selected ? 0.08 : 0,
-          depthWrite: false,
-        })
+        // Trådmodell: ytan syns bara som en svag fyllning när den är markerad eller vald (se nedan).
+        return new MeshStandardMaterial({ color: ACCENT, transparent: true, opacity: 0, depthWrite: false })
       }
       // Trä i det realistiska utseendet: ett tunt lager lack eller olja som glänser svagt i ljuset.
       const material = new (real ? MeshPhysicalMaterial : MeshStandardMaterial)({
@@ -197,22 +199,8 @@ function BodyMeshImpl({
           (painted
             ? { normalMap: wood.normalMap, normalScale: PAINTED_GRAIN }
             : { map: wood.map, normalMap: wood.normalMap })),
-        emissive: lit ? ACCENT : '#000000',
-        emissiveIntensity: marked ? 0.45 : lit ? 0.2 : 0,
+        // Glöd och genomskinlighet sätts nedan, efter vad som är valt och markerat.
         transparent: preview || ghost || faded || !!clear,
-        opacity: ghost
-          ? peek
-            ? 0.6
-            : selected
-              ? 0.3
-              : 0.15
-          : faded
-            ? FADED_OPACITY
-            : clear
-              ? Math.max(clear, lit ? 0.45 : 0)
-              : preview
-                ? 0.8
-                : 1,
         // Ett spöke skymmer inte det bakom sig, och syns genom det framför (en tapp inne i ett ben).
         // En genomskinlig del (isolerat) skymmer inte heller den isolerade, och glas inte det bakom sig.
         depthWrite: !ghost && !faded && !clear,
@@ -223,27 +211,60 @@ function BodyMeshImpl({
       return material
     })
     return { materials: list, grainUniforms }
+  }, [hasSolid, round, color, clear, painted, preview, ghost, faded, wire, real, wood, grain, plywood, thickness, tone])
+  useEffect(() => () => materials.forEach((m) => m.dispose()), [materials])
+  // Vald och markerad sida ändrar bara värden i materialen, inte materialen själva. Ett nytt
+  // material för varje val kostade ett nytt shaderbyte per del: att ringa in 400 delar tog
+  // en bra stund, och att peka på en sida byggde om delen. Före ritningen, som ändträet nedan.
+  const invalidate = useThree((s) => s.invalidate)
+  useLayoutEffect(() => {
+    const faceList: (readonly Face[])[] = hasSolid
+      ? [FACES]
+      : round
+        ? [['u+', 'u-', 'v+', 'v-'], ['n+'], ['n-']]
+        : FACES.map((f) => [f])
+    faceList.forEach((faces, i) => {
+      const m = materials[i]
+      if (!m) return
+      const marked = !hasSolid && !!highlightFace && faces.includes(highlightFace)
+      const lit = selected || marked
+      // Medan man ritar en slinga har det valda inga kanter: glöden får synas tydligare än annars.
+      if (wire && !ghost) {
+        m.opacity = marked ? 0.25 : selected ? (glowOnly ? 0.25 : 0.08) : 0
+        return
+      }
+      m.emissive.set(lit ? ACCENT : '#000000')
+      m.emissiveIntensity = marked ? 0.45 : selected && glowOnly ? GLOW_ONLY : lit ? 0.2 : 0
+      m.opacity = ghost
+        ? peek
+          ? 0.6
+          : selected
+            ? 0.3
+            : 0.15
+        : faded
+          ? FADED_OPACITY
+          : clear
+            ? Math.max(clear, lit ? 0.45 : 0)
+            : preview
+              ? 0.8
+              : 1
+    })
+    invalidate()
   }, [
+    materials,
     hasSolid,
     round,
-    color,
-    clear,
-    painted,
-    selected,
     highlightFace,
-    preview,
+    selected,
+    glowOnly,
+    wire,
     ghost,
     peek,
     faded,
-    wire,
-    real,
-    wood,
-    grain,
-    plywood,
-    thickness,
-    tone,
+    clear,
+    preview,
+    invalidate,
   ])
-  useEffect(() => () => materials.forEach((m) => m.dispose()), [materials])
   // Före ritningen: en layouteffekt körs innan three.js ritar nästa bildruta.
   useLayoutEffect(() => {
     if (!wood || !endGrain) return
@@ -253,7 +274,8 @@ function BodyMeshImpl({
   const edge = selected || preview ? ACCENT : sibling ? ACCENT_LIGHT : wire && scheme === 'dark' ? WIRE_DARK : EDGE
   // Trä ritas utan kanter, som ett foto; det valda och kopiorna av det har dem ändå.
   // Glas har dem alltid: utan kanter syns det knappt.
-  const plainReal = real && !clear && !selected && !sibling && !preview && !faded
+  const outlined = selected && !glowOnly
+  const plainReal = real && !clear && !outlined && !sibling && !preview && !faded
 
   return (
     <group position={offset ? add(body.frame.origin, offset) : body.frame.origin} quaternion={quaternion} scale={scale}>
@@ -309,7 +331,7 @@ function BodyMeshImpl({
           GreaterDepth ritar bara bakom något. polygonOffset drar linjen mot
           kameran, så att ytorna vid en synlig kant inte räknas som framför.
         */}
-        {selected && !preview && !ghost && !wire && (
+        {outlined && !preview && !ghost && !wire && (
           <Edges
             side={DoubleSide}
             color={ACCENT}
@@ -406,6 +428,7 @@ export const BodyMesh = memo(
   (a, b) =>
     sameBody(a.body, b.body) &&
     a.selected === b.selected &&
+    a.glowOnly === b.glowOnly &&
     a.sibling === b.sibling &&
     a.highlightFace === b.highlightFace &&
     a.preview === b.preview &&

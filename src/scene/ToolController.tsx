@@ -2,9 +2,10 @@ import type { CameraControlsImpl } from '@react-three/drei'
 import { useThree } from '@react-three/fiber'
 import { useEffect, useMemo } from 'react'
 import { Raycaster, Vector2, Vector3, type Intersection, type Object3D, type PerspectiveCamera } from 'three'
+import { toWorld } from '../model/frame'
 import type { Vec2, Vec3 } from '../model/types'
 import { bodyCenter } from '../model/geometry'
-import { lassoPick } from '../model/lasso'
+import { convexHull, lassoPick, segmentHits } from '../model/lasso'
 import { resolveBodies } from '../model/resolve'
 import { selectedBodyIds, useDocumentStore } from '../store/documentStore'
 import { useLibraryStore } from '../store/libraryStore'
@@ -79,6 +80,8 @@ interface Press {
 
 /** Så långt (px) mellan två punkter i slingan; tätare ger bara fler punkter att räkna på. */
 const LASSO_STEP = 4
+/** Högst så många punkter i slingan när valet räknas medan man ritar. */
+const LIVE_POINTS = 256
 
 /**
  * Översätter pekarhändelser till verktygsanrop och styr vad kameran får göra
@@ -280,7 +283,7 @@ export function ToolController() {
         // Fler fingrar: kameran tar över. Det första fingrets verkan tas tillbaka.
         multiTouch = true
         if (press?.owner === 'tool') useToolStore.getState().setOp(press.opBefore)
-        if (press?.lasso) useToolStore.getState().setLasso(null)
+        if (press?.lasso) cancelLasso()
         press = null
         // Två fingrar vrider runt det som ligger mellan dem.
         if (pointers.size === 2) {
@@ -410,12 +413,17 @@ export function ToolController() {
         const here: Vec2 = [e.clientX, e.clientY]
         // Slingan börjar först när trycket blivit en dragning; ett tryck väljer som vanligt.
         if (!path) {
-          if (Math.hypot(e.clientX - press.x, e.clientY - press.y) > press.slop)
+          if (Math.hypot(e.clientX - press.x, e.clientY - press.y) > press.slop) {
             tools.setLasso([[press.x, press.y], here])
+            startLasso()
+            updateLasso([[press.x, press.y], here])
+          }
           return
         }
         const last = path.at(-1)!
         if (Math.hypot(here[0] - last[0], here[1] - last[1]) >= LASSO_STEP) tools.setLasso([...path, here])
+        // Valet följer slingan medan man ritar, som en ruta i Finder: slingan räknas som sluten.
+        updateLasso([...path, here])
         return
       }
       const { op, tool, hover, setHover } = useToolStore.getState()
@@ -558,30 +566,140 @@ export function ToolController() {
       if (press?.pointerId !== e.pointerId) return
       dropMove()
       if (press.owner === 'tool') useToolStore.getState().setOp(press.opBefore)
-      if (press.lasso) useToolStore.getState().setLasso(null)
+      if (press.lasso) cancelLasso()
       press = null
     }
 
     /**
-     * Lägger delarna man ringat in till valet (se lassoPick): de som syns, utom verktygen
-     * (Skär ut, tappar). Den sista av de nya blir den valda.
+     * Slingan som ritas: valet före den, delarnas mitt och kontur på skärmen (kameran står still medan
+     * man ritar), och delarna som slingan träffat hittills.
      */
-    const finishLasso = (path: Vec2[]) => {
+    let live: {
+      base: string[]
+      centers: Map<string, Vec2 | null>
+      /** Konturen (konvexa höljet av lådans hörn) och rutan runt den; saknas för delar bakom kameran. */
+      outlines: Map<string, { hull: Vec2[]; box: [number, number, number, number] }>
+      /** Träffade delar, i den ordning de träffades. Valet växer bara medan man ritar. */
+      hit: string[]
+      hitSet: Set<string>
+      /** Så många punkter i slingan är redan prövade som linje (se pickLasso). */
+      done: number
+      /** Punkterna som väntar på nästa bildruta, och den väntande bildrutan (0 = ingen). */
+      points: Vec2[]
+      frame: number
+    } | null = null
+
+    const startLasso = () => {
       const r = el.getBoundingClientRect()
       const view = useViewStore.getState()
       const docs = useDocumentStore.getState()
       const at = new Vector3()
+      const screen = (p: Vec3): Vec2 | null => {
+        at.set(...p).project(camera)
+        // Bakom kameran, eller långt utanför bilden.
+        return at.z > 1 ? null : [r.left + ((at.x + 1) / 2) * r.width, r.top + ((1 - at.y) / 2) * r.height]
+      }
       const centers = new Map<string, Vec2 | null>()
+      const outlines = new Map<string, { hull: Vec2[]; box: [number, number, number, number] }>()
+      // De som syns, utom verktygen (Skär ut, tappar).
       for (const b of resolveBodies(docs.doc)) {
         if (b.tool || !isShown(view, b.id)) continue
-        at.set(...bodyCenter(b)).project(camera)
-        // Bakom kameran, eller långt utanför bilden.
-        centers.set(b.id, at.z > 1 ? null : [r.left + ((at.x + 1) / 2) * r.width, r.top + ((1 - at.y) / 2) * r.height])
+        centers.set(b.id, screen(bodyCenter(b)))
+        const { profile: q, z0, z1 } = b
+        const corners: Vec2[] = []
+        for (const x of [q.x0, q.x1])
+          for (const y of [q.y0, q.y1])
+            for (const z of [z0, z1]) {
+              const c = screen(toWorld(b.frame, [x, y, z]))
+              if (c) corners.push(c)
+            }
+        if (corners.length < 8) continue
+        const hull = convexHull(corners)
+        const xs = hull.map((c) => c[0])
+        const ys = hull.map((c) => c[1])
+        outlines.set(b.id, { hull, box: [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)] })
       }
-      const picked = lassoPick(centers, path)
-      if (picked.length === 0) return
-      const before = selectedBodyIds(docs)
-      docs.selectBodies([...before.filter((id) => !picked.includes(id)).reverse(), ...picked])
+      live = {
+        base: selectedBodyIds(docs),
+        centers,
+        outlines,
+        hit: [],
+        hitSet: new Set(),
+        done: 0,
+        points: [],
+        frame: 0,
+      }
+      // Pekningen uppdateras inte medan man ritar; en markerad sida från före dragningen skulle lysa kvar.
+      const t = useToolStore.getState()
+      t.setHover(null)
+      t.setHoverPoint(null)
+      t.setHoverHandle(null)
+    }
+
+    /**
+     * points: slingans punkter och sist pekaren. Valet räknas högst en gång per bildruta: pekaren
+     * skickar ofta fler händelser än skärmen visar.
+     */
+    const updateLasso = (points: Vec2[]) => {
+      if (!live) return
+      live.points = points
+      if (live.frame) return
+      live.frame = requestAnimationFrame(() => {
+        if (!live) return
+        live.frame = 0
+        pickLasso(live.points, true)
+      })
+    }
+
+    /**
+     * Valet är det som var valt före slingan plus alla delar slingan träffat: linjen har dragits över
+     * dem, eller de har legat innanför slingan (räknad som sluten). En träffad del stannar i valet
+     * tills man släpper, hur slingan än svänger. Den sist träffade blir den valda.
+     * thin: under dragningen räcker en glesare slinga för det som är innanför; 2000 delar mot 1000
+     * punkter tog 13 ms, nästan en hel bildruta. Släppet räknas med alla punkter.
+     */
+    const pickLasso = (points: Vec2[], thin: boolean) => {
+      if (!live) return
+      const l = live
+      const before = l.hit.length
+      const add = (id: string) => {
+        if (l.hitSet.has(id)) return
+        l.hitSet.add(id)
+        l.hit.push(id)
+      }
+      const line = (a: Vec2, b: Vec2) => {
+        const [x0, x1] = a[0] < b[0] ? [a[0], b[0]] : [b[0], a[0]]
+        const [y0, y1] = a[1] < b[1] ? [a[1], b[1]] : [b[1], a[1]]
+        for (const [id, o] of l.outlines)
+          if (!l.hitSet.has(id) && x1 >= o.box[0] && x0 <= o.box[2] && y1 >= o.box[1] && y0 <= o.box[3])
+            if (segmentHits(a, b, o.hull)) add(id)
+      }
+      // Linjen: de punkter som ligger kvar i slingan prövas en gång, sträckan till pekaren varje gång.
+      const kept = points.length - 1
+      for (let i = Math.max(1, l.done); i < kept; i++) line(points[i - 1]!, points[i]!)
+      l.done = Math.max(l.done, kept)
+      if (kept >= 1) line(points[kept - 1]!, points[kept]!)
+      // Innanför slingan.
+      const step = thin ? Math.ceil(points.length / LIVE_POINTS) : 1
+      const ring = step > 1 ? points.filter((_, i) => i % step === 0 || i === points.length - 1) : points
+      for (const id of lassoPick(l.centers, ring)) add(id)
+      if (l.hit.length === before) return
+      useDocumentStore.getState().selectBodies([...l.base.filter((id) => !l.hitSet.has(id)).reverse(), ...l.hit])
+    }
+
+    const finishLasso = (points: Vec2[]) => {
+      if (live?.frame) cancelAnimationFrame(live.frame)
+      // Släppet räknas direkt, så att valet är klart när trycket är slut.
+      pickLasso(points, false)
+      live = null
+    }
+
+    /** Avbruten slinga (ett finger till, eller pekaren tappad): valet blir som före den. */
+    const cancelLasso = () => {
+      useToolStore.getState().setLasso(null)
+      if (live?.frame) cancelAnimationFrame(live.frame)
+      if (live) useDocumentStore.getState().selectBodies([...live.base].reverse())
+      live = null
     }
 
     const onLeave = () => {
