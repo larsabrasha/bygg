@@ -121,11 +121,29 @@ describe('kopior (komponenter)', () => {
 
   it('länkad kopia hamnar bredvid och delar form', () => {
     const a = newPart()
+    // Utan vald sida: längs delens u (efter utdragningen är ovansidan vald, se nästa test).
+    s().select({ kind: 'body', id: a })
     const b = s().duplicateLinked(a)!
     const [ba, bb] = bodies()
     expect(bb!.defId).toBe(ba!.defId)
     expect(bb!.frame.origin).toEqual([850, 0, 0]) // 800 bred + 50 glapp
     expect(s().selection).toEqual({ kind: 'body', id: b })
+  })
+
+  it('länkad kopia hamnar utanför den valda sidan, och nästa fortsätter åt samma håll', () => {
+    const a = newPart()
+    const origin = (id: string) => bodies().find((b) => b.id === id)!.frame.origin
+    // u− är vänstersidan (x = 0): kopian hamnar till vänster.
+    s().select({ kind: 'body', id: a, face: 'u-' })
+    const b = s().duplicateLinked(a)!
+    expect(origin(b)).toEqual([-850, 0, 0])
+    expect(s().selection).toEqual({ kind: 'body', id: b, face: 'u-' })
+    const c = s().duplicateLinked(b)!
+    expect(origin(c)).toEqual([-1700, 0, 0])
+    // Ovansidan (n+, 22 tjock): kopian hamnar ovanpå, med glappet.
+    s().select({ kind: 'body', id: a, face: 'n+' })
+    const d = s().duplicateLinked(a)!
+    expect(origin(d)[1]).toBe(72)
   })
 
   it('push/pull på en kopia ändrar alla kopior', () => {

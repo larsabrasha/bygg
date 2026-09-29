@@ -72,6 +72,20 @@ describe('flera valda delar', () => {
     expect(new Set(copies.map(defOf))).toEqual(new Set([a, b].map(defOf)))
   })
 
+  it('kopierar alla åt den sida man valt på den valda delen', () => {
+    const [a, b] = [newPart(0), newPart(500)]
+    s().selectBodies([a, b])
+    // Sidan på den valda: v+ på golvets delar (v = −z) är baksidan.
+    useDocumentStore.setState({ selection: { kind: 'body', id: b, face: 'v+' } })
+    s().duplicateSelection()
+    const copies = selectedBodyIds(s())
+    const box = bodiesBox(bodies().filter((x) => copies.includes(x.id)))
+    // Hela gruppens djup (100) och glappet bakåt; i sidled står de kvar.
+    expect([box.min[2], box.max[2]]).toEqual([-250, -150])
+    expect([box.min[0], box.max[0]]).toEqual([0, 900])
+    expect(s().selection).toMatchObject({ face: 'v+' })
+  })
+
   it('byter material på alla, också på deras länkade kopior, i ett steg', () => {
     const [a, b] = [newPart(0), newPart(500)]
     const [twin] = s().addCopies(a, [{ ...GROUND_FRAME, origin: [0, 0, 500] }])

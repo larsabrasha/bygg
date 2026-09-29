@@ -11,7 +11,7 @@ import {
   sketchToPart,
   uniqueCopyName,
 } from '../model/geometry'
-import { mirrorFrame, rotateFrame } from '../model/frame'
+import { faceFrame, mirrorFrame, rotateFrame } from '../model/frame'
 import { bodiesBox } from '../model/geometry'
 import {
   carryTools,
@@ -521,14 +521,25 @@ export const useDocumentStore = create<DocumentState>()((set, get) => {
         return
       }
       const chosen = new Set(ids)
-      const bodies = resolveBodies(get().doc).filter((b) => chosen.has(b.id))
+      const all = resolveBodies(get().doc)
+      const bodies = all.filter((b) => chosen.has(b.id))
       if (bodies.length === 0) return
       const box = bodiesBox(bodies)
-      const offset: Vec3 = [box.max[0] - box.min[0] + DUPLICATE_GAP, 0, 0]
-      get().copyInstances(
+      // Åt den sida man valt på den valda delen, annars längs x: hela gruppens mått åt det hållet och glappet.
+      const { selection } = get()
+      const primary = selection?.kind === 'body' && selection.face ? all.find((b) => b.id === selection.id) : undefined
+      const dir: Vec3 =
+        primary && selection?.kind === 'body' && selection.face ? faceFrame(primary, selection.face).n : [1, 0, 0]
+      const size = [0, 1, 2].reduce((sum, k) => sum + Math.abs(dir[k]!) * (box.max[k]! - box.min[k]!), 0)
+      const offset = scale(dir, size + DUPLICATE_GAP)
+      const copies = get().copyInstances(
         bodies.map((b) => b.id),
         (f) => ({ ...f, origin: add(f.origin, offset) }),
       )
+      // Samma sida på den nya valda kopian: Kopia igen fortsätter åt samma håll.
+      const last = copies.at(-1)
+      if (last && selection?.kind === 'body' && selection.face)
+        set({ selection: { kind: 'body', id: last, face: selection.face } })
     },
 
     setAngle: (instanceId, axis, text) => {
@@ -566,7 +577,13 @@ export const useDocumentStore = create<DocumentState>()((set, get) => {
       if (!found) return null
       const { inst, def } = found
       const body = resolveBodies(get().doc).find((b) => b.id === instanceId)!
-      const offset = scale(inst.frame.u, bodyExtents(body)[0] + DUPLICATE_GAP)
+      // Åt den sida man valt på delen, så att man vet var kopian hamnar; utan vald sida längs delens u.
+      const sel = get().selection
+      const face = sel?.kind === 'body' && sel.id === instanceId ? sel.face : undefined
+      const [du, dv, dn] = bodyExtents(body)
+      const offset = face
+        ? scale(faceFrame(body, face).n, { u: du, v: dv, n: dn }[faceAxis(face)] + DUPLICATE_GAP)
+        : scale(inst.frame.u, du + DUPLICATE_GAP)
       const copy = {
         id: newId(),
         defId: def.id,
@@ -574,7 +591,13 @@ export const useDocumentStore = create<DocumentState>()((set, get) => {
         ...(inst.rest && { rest: inst.rest }),
       }
       const { doc } = get()
-      return commit({ ...doc, instances: [...doc.instances, copy] }, { kind: 'body', id: copy.id }) ? copy.id : null
+      // Samma sida på kopian: Kopia igen fortsätter åt samma håll.
+      return commit(
+        { ...doc, instances: [...doc.instances, copy] },
+        { kind: 'body', id: copy.id, ...(face && { face }) },
+      )
+        ? copy.id
+        : null
     },
 
     makeUnique: (instanceId) => {
